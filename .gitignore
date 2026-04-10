@@ -16,4 +16,3 @@ venv/
 report-screenshots/
 screenshots/
 *.log
-.github/workflows/
