@@ -1001,8 +1001,9 @@ async function loadForecast() {
                 + `<div class="fc-sun">${sunH}h</div>`
                 + `<div class="fc-wind${windDanger}" title="${t('wind')} ${windSpeed} km/h (${LANG === 'de' ? 'Böen' : 'gusts'} ${windGusts} km/h)">💨 ${windSpeed}<small>km/h</small></div>`
                 + `<div class="fc-ratio" title="Direct ${directPct}% / Diffuse ${100 - directPct}%">`
+                + `<div class="fc-ratio-icons"><span class="fc-ri-direct">☀</span><span class="fc-ri-diffuse">☁</span></div>`
                 + `<div class="fc-ratio-bar"><div class="fc-ratio-direct" style="width:${directPct}%"></div><div class="fc-ratio-diffuse" style="width:${100 - directPct}%"></div></div>`
-                + `<div class="fc-ratio-labels"><span class="fc-rl-direct">☀${directPct}%</span><span class="fc-rl-diffuse">${100 - directPct}%☁</span></div></div>`
+                + `<div class="fc-ratio-labels"><span class="fc-rl-direct">${directPct}%</span><span class="fc-rl-divider"></span><span class="fc-rl-diffuse">${100 - directPct}%</span></div></div>`
                 + `<div class="fc-uv ${uvClass}">UV ${uv}</div>`;
             grid.appendChild(div);
         }

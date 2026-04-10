@@ -911,6 +911,23 @@ header h1 {
     width: 90%;
 }
 
+.fc-ratio-icons {
+    display: flex;
+    justify-content: space-between;
+    font-size: 0.65rem;
+    line-height: 1;
+    margin-bottom: 2px;
+}
+
+.fc-ri-direct {
+    color: var(--solar);
+}
+
+.fc-ri-diffuse {
+    color: var(--blue);
+    opacity: 0.85;
+}
+
 .fc-ratio-bar {
     display: flex;
     height: 5px;
@@ -932,6 +949,7 @@ header h1 {
 .fc-ratio-labels {
     display: flex;
     justify-content: space-between;
+    align-items: center;
     font-size: 0.6rem;
     margin-top: 1px;
     line-height: 1.4;
@@ -942,8 +960,18 @@ header h1 {
     font-weight: 600;
 }
 
+.fc-rl-divider {
+    flex: 0 0 auto;
+    width: 1px;
+    height: 9px;
+    background: var(--text);
+    opacity: 0.35;
+    border-radius: 1px;
+}
+
 .fc-rl-diffuse {
     color: var(--blue);
+    font-weight: 600;
 }
 
 .fc-uv {
