@@ -1,0 +1,612 @@
+<!DOCTYPE html>
+<html lang="de">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+    <meta name="apple-mobile-web-app-capable" content="yes">
+    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+    <meta name="theme-color" content="#000000">
+    <link rel="manifest" href="/static/manifest.json">
+    <link rel="icon" href="/static/icon-192.png" type="image/png">
+    <link rel="apple-touch-icon" href="/static/apple-touch-icon.png">
+    <title>Solar Dashboard</title>
+    <link rel="stylesheet" href="/static/style.css?v=37">
+    <script src="https://cdn.jsdelivr.net/npm/chart.js@4"></script>
+</head>
+<body>
+    <div class="container">
+        <!-- Pull-to-refresh indicator -->
+        <div class="ptr-indicator" id="ptrIndicator">
+            <span class="ptr-spinner"></span>
+            <span class="ptr-text" data-i18n="refreshing">Aktualisieren...</span>
+        </div>
+
+        <!-- Offline banner -->
+        <div class="offline-banner" id="offlineBanner" style="display:none" data-i18n="offline">Offline - Daten aus Cache</div>
+
+        <header>
+            <h1>Anker Solix C1000 Gen 2</h1>
+            <div class="header-actions">
+                <button class="icon-btn" id="themeToggle" title="Dark/Light Mode">&#9790;</button>
+                <button class="icon-btn" id="notifToggle" data-i18n-title="notifications" title="Benachrichtigungen">&#128276;</button>
+                <div class="status">
+                    <span class="dot" id="statusDot"></span>
+                </div>
+            </div>
+        </header>
+
+        <!-- Dashboard Overview (Score + Savings + Weather unified) -->
+        <div class="dash-overview" id="dashOverview">
+            <div class="dash-top-row">
+                <div class="score-ring-wrap">
+                    <svg class="score-ring" viewBox="0 0 60 60">
+                        <circle cx="30" cy="30" r="26" fill="none" stroke="var(--card-border)" stroke-width="5"/>
+                        <circle cx="30" cy="30" r="26" fill="none" stroke="var(--solar)" stroke-width="5"
+                            stroke-dasharray="163.36" stroke-dashoffset="163.36" stroke-linecap="round"
+                            transform="rotate(-90 30 30)" id="scoreArc"/>
+                    </svg>
+                    <div class="score-pct" id="scorePct">--</div>
+                </div>
+                <div class="dash-info">
+                    <span id="scoreProduced" style="display:none">-- Wh</span>
+                    <span id="scorePotential" style="display:none">-- Wh</span>
+                    <div class="dash-grid">
+                        <span class="dg-item"><span id="weatherIcon">☁️</span> <span id="weatherTemp">--</span></span>
+                        <span class="dg-item"><span class="weather-uv" id="weatherUV"></span></span>
+                        <span class="dg-item dg-dim" id="weatherDesc">--</span>
+                        <span class="dg-item dg-dim weather-clouds" id="weatherClouds"></span>
+                        <span class="dg-item" id="sunRise">🌅 --:--</span>
+                        <span class="dg-item" id="sunSet">🌇 --:--</span>
+                    </div>
+                </div>
+                <div class="dash-side-stats">
+                    <div class="side-stat">
+                        <span class="side-icon">💰</span>
+                        <span class="side-val savings-value" id="savingsTickerValue">0,00 €</span>
+                    </div>
+                    <div class="side-stat">
+                        <span class="side-icon">🌱</span>
+                        <span class="side-val co2-val" id="co2TodayValue">0 kg</span>
+                        <span class="side-unit">CO₂</span>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+
+        <!-- Solar Forecast -->
+        <section class="today-box" id="forecastBox" style="display:none">
+            <h2 data-i18n="forecastTitle">Solar-Prognose (7 Tage)</h2>
+            <div class="forecast-source" data-i18n="forecastSource">Warschau · 240° SW · konkav 45°–75° · Open-Meteo</div>
+            <div class="forecast-grid" id="forecastGrid"></div>
+        </section>
+
+        <!-- Forecast vs. Reality Chart -->
+        <section class="chart-box" id="forecastVsRealBox" style="display:none">
+            <h3>
+                <span data-i18n="forecastVsReal">Prognose vs. Realität (7 Tage)</span>
+                <span class="forecast-accuracy-badge" id="forecastAccuracy" title="MAPE">--</span>
+            </h3>
+            <div class="chart-wrap"><canvas id="chart_forecast_vs_real"></canvas></div>
+        </section>
+
+        <!-- MQTT Ticker -->
+        <div class="ticker" id="ticker"></div>
+
+        <!-- Real-time cards -->
+        <section class="cards">
+            <div class="card solar">
+                <div class="card-label" data-i18n="solarInput">Solareingabe</div>
+                <div class="solar-visual">
+                    <div class="solar-panel">
+                        <div class="solar-fill" id="solarBar"></div>
+                        <div class="solar-grid-lines"></div>
+                        <div class="solar-val" id="solarWatts">--</div>
+                    </div>
+                    <div class="solar-sun" id="solarSun">☀</div>
+                </div>
+                <div class="card-sub" id="solarPct"></div>
+            </div>
+            <div class="card battery">
+                <div class="card-label" data-i18n="battery">Batterie</div>
+                <div class="bat-visual">
+                    <div class="bat-body">
+                        <div class="bat-fill" id="batteryBar"></div>
+                        <div class="bat-pct" id="batterySoc">--</div>
+                    </div>
+                    <div class="bat-tip"></div>
+                </div>
+                <div class="card-sub" id="batteryTime"></div>
+            </div>
+            <div class="card temp">
+                <div class="card-label" data-i18n="temperature">Temperatur</div>
+                <div class="temp-visual">
+                    <div class="temp-bar-wrap">
+                        <div class="temp-bar-track">
+                            <div class="temp-bar-fill" id="tempBar"></div>
+                        </div>
+                        <div class="temp-bulb" id="tempBulb"></div>
+                    </div>
+                    <div class="temp-val"><span id="temperature">--</span><small>°C</small></div>
+                </div>
+            </div>
+            <div class="card output">
+                <div class="card-label" data-i18n="totalOutput">Ausgang Gesamt</div>
+                <div class="output-visual">
+                    <div class="output-bar-wrap">
+                        <div class="output-bar-fill" id="outputBar"></div>
+                        <div class="output-val" id="totalOutput">--</div>
+                    </div>
+                </div>
+                <div class="card-sub" id="outputPct"></div>
+            </div>
+        </section>
+
+        <!-- Device Status Bar -->
+        <div class="device-status-bar" id="deviceStatusBar">
+            <div class="ds-item">
+                <span class="ds-dot" id="acSwitchDot"></span> AC
+            </div>
+            <div class="ds-item">
+                <span class="ds-dot" id="dcSwitchDot"></span> DC
+            </div>
+            <div class="ds-item" id="socLimitsItem">
+                🔋 <span id="socLimitsValue">--</span>
+            </div>
+            <div class="ds-item" id="acLimitItem">
+                ⚡ <span id="acLimitValue">--</span>
+            </div>
+        </div>
+
+        <!-- Power Flow (vertical) -->
+        <section class="today-box flow-box">
+            <h2 data-i18n="energyFlow">Energiefluss</h2>
+            <div class="pf-v">
+                <!-- Inputs row -->
+                <div class="pf-v-inputs">
+                    <div class="pf-node" id="flowSolar">
+                        <div class="pf-emoji">&#9728;&#65039;</div>
+                        <div class="pf-name">Solar</div>
+                        <div class="pf-watt" id="flowSolarVal">0 W</div>
+                    </div>
+                    <div class="pf-node" id="flowAcIn">
+                        <div class="pf-emoji">&#9889;</div>
+                        <div class="pf-name">AC In</div>
+                        <div class="pf-watt" id="flowAcInVal">0 W</div>
+                    </div>
+                </div>
+                <!-- Arrow down -->
+                <div class="pf-v-arrow pf-line pf-line-in" id="flowArrowIn"><span class="pf-dots">&#9660;</span></div>
+                <!-- Battery center -->
+                <div class="pf-v-bat">
+                    <div class="pf-bat-visual">
+                        <div class="pf-bat-body">
+                            <div class="pf-bat-fill" id="flowBatFill"></div>
+                            <div class="pf-bat-pct" id="flowBatSoc">--%</div>
+                        </div>
+                        <div class="pf-bat-tip"></div>
+                    </div>
+                </div>
+                <!-- Arrow down -->
+                <div class="pf-v-arrow pf-line pf-line-out" id="flowArrowOut"><span class="pf-dots">&#9660;</span></div>
+                <!-- Outputs grid -->
+                <div class="pf-v-outputs">
+                    <div class="pf-node" id="flowAcOut">
+                        <div class="pf-icon-txt pf-c-ac">AC</div>
+                        <div class="pf-name">230V</div>
+                        <div class="pf-watt" id="flowAcOutVal">0 W</div>
+                    </div>
+                    <div class="pf-node" id="flowUsbc1">
+                        <div class="pf-icon-txt pf-c-usbc">C1</div>
+                        <div class="pf-name">USB-C</div>
+                        <div class="pf-watt" id="flowUsbc1Val">0 W</div>
+                    </div>
+                    <div class="pf-node" id="flowUsbc2">
+                        <div class="pf-icon-txt pf-c-usbc">C2</div>
+                        <div class="pf-name">USB-C</div>
+                        <div class="pf-watt" id="flowUsbc2Val">0 W</div>
+                    </div>
+                    <div class="pf-node" id="flowUsbc3">
+                        <div class="pf-icon-txt pf-c-usbc">C3</div>
+                        <div class="pf-name">USB-C</div>
+                        <div class="pf-watt" id="flowUsbc3Val">0 W</div>
+                    </div>
+                    <div class="pf-node" id="flowUsba1">
+                        <div class="pf-icon-txt pf-c-usba">A</div>
+                        <div class="pf-name">USB-A</div>
+                        <div class="pf-watt" id="flowUsba1Val">0 W</div>
+                    </div>
+                    <div class="pf-node" id="flowDc12v">
+                        <div class="pf-icon-txt pf-c-dc">DC</div>
+                        <div class="pf-name">12V</div>
+                        <div class="pf-watt" id="flowDc12vVal">0 W</div>
+                    </div>
+                </div>
+            </div>
+        </section>
+
+        <!-- Energy & Savings Summary -->
+        <section class="today-box">
+            <h2><span data-i18n="energySavings">Energie &amp; Ersparnis</span> <span class="self-consumption-badge" id="selfConsumption" title="Self-consumption">--</span></h2>
+            <div class="energy-table-wrap">
+                <table class="energy-table">
+                    <thead>
+                        <tr>
+                            <th></th>
+                            <th data-i18n="today">Heute</th>
+                            <th data-i18n="week">Woche</th>
+                            <th data-i18n="month">Monat</th>
+                            <th data-i18n="total">Gesamt</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        <tr class="et-row-solar">
+                            <td class="et-label"><span class="e-dot e-solar"></span> <span data-i18n="solar">Solar</span></td>
+                            <td id="eToday">--</td>
+                            <td id="eWeek">--</td>
+                            <td id="eMonth">--</td>
+                            <td id="eTotal">--</td>
+                        </tr>
+                        <tr class="et-row-usage">
+                            <td class="et-label"><span class="e-dot e-usage"></span> <span data-i18n="consumption">Verbrauch</span></td>
+                            <td id="eOutToday">--</td>
+                            <td id="eOutWeek">--</td>
+                            <td id="eOutMonth">--</td>
+                            <td id="eOutTotal">--</td>
+                        </tr>
+                        <tr class="et-row-savings">
+                            <td class="et-label" data-i18n="savedEur">Gespart EUR</td>
+                            <td class="e-savings" id="sToday">--</td>
+                            <td class="e-savings" id="sWeek">--</td>
+                            <td class="e-savings" id="sMonth">--</td>
+                            <td class="e-savings" id="sTotal">--</td>
+                        </tr>
+                        <tr class="et-row-co2">
+                            <td class="et-label"><span class="e-dot e-co2"></span> CO₂</td>
+                            <td class="e-co2-val" id="co2Today">--</td>
+                            <td class="e-co2-val" id="co2Week">--</td>
+                            <td class="e-co2-val" id="co2Month">--</td>
+                            <td class="e-co2-val" id="co2Total">--</td>
+                        </tr>
+                    </tbody>
+                </table>
+            </div>
+        </section>
+
+        <!-- Period tabs -->
+        <section class="tabs-section">
+            <div class="tab-bar">
+                <button class="tab active" data-period="day" data-i18n="day">Tag</button>
+                <button class="tab" data-period="week" data-i18n="week">Woche</button>
+                <button class="tab" data-period="month" data-i18n="month">Monat</button>
+                <button class="tab" data-period="year" data-i18n="year">Jahr</button>
+            </div>
+        </section>
+
+        <!-- All charts -->
+        <section class="chart-box">
+            <h3>Solar (W)</h3>
+            <div class="chart-wrap"><canvas id="chart_solar_watts"></canvas></div>
+        </section>
+        <section class="chart-box">
+            <h3 data-i18n="batteryPct">Batterie (%)</h3>
+            <div class="chart-wrap"><canvas id="chart_battery_soc"></canvas></div>
+        </section>
+        <section class="chart-box">
+            <h3 data-i18n="temperatureC">Temperatur (C)</h3>
+            <div class="chart-wrap"><canvas id="chart_temperature"></canvas></div>
+        </section>
+        <section class="chart-box">
+            <h3 data-i18n="totalOutputW">Ausgang Gesamt (W)</h3>
+            <div class="chart-wrap"><canvas id="chart_total_output_watts"></canvas></div>
+        </section>
+        <section class="chart-box">
+            <h3>AC 230V (W)</h3>
+            <div class="chart-wrap"><canvas id="chart_ac_output_watts"></canvas></div>
+        </section>
+        <section class="chart-box">
+            <h3>USB-C 1 (W)</h3>
+            <div class="chart-wrap"><canvas id="chart_usbc_1_watts"></canvas></div>
+        </section>
+        <section class="chart-box">
+            <h3>USB-C 2 (W)</h3>
+            <div class="chart-wrap"><canvas id="chart_usbc_2_watts"></canvas></div>
+        </section>
+        <section class="chart-box">
+            <h3>USB-C 3 (W)</h3>
+            <div class="chart-wrap"><canvas id="chart_usbc_3_watts"></canvas></div>
+        </section>
+        <section class="chart-box">
+            <h3>USB-A (W)</h3>
+            <div class="chart-wrap"><canvas id="chart_usba_1_watts"></canvas></div>
+        </section>
+        <section class="chart-box">
+            <h3>DC 12V (W)</h3>
+            <div class="chart-wrap"><canvas id="chart_dc_12v_watts"></canvas></div>
+        </section>
+        <section class="chart-box">
+            <h3 data-i18n="acCharging">AC Laden (W)</h3>
+            <div class="chart-wrap"><canvas id="chart_ac_input_watts"></canvas></div>
+        </section>
+
+        <!-- Daily Solar Bar Chart -->
+        <section class="chart-box">
+            <h3 data-i18n="dailyProd">Tagesproduktion (kWh)</h3>
+            <div class="chart-wrap"><canvas id="chart_daily_bars"></canvas></div>
+        </section>
+
+        <!-- Heatmap Calendar -->
+        <section class="today-box" id="heatmapSection">
+            <h2 data-i18n="heatmapTitle">Solar-Kalender</h2>
+            <div class="heatmap-legend" id="heatmapLegend"></div>
+            <div class="heatmap-wrap" id="heatmapWrap"></div>
+        </section>
+
+        <!-- SOH Trend -->
+        <section class="chart-box">
+            <h3 data-i18n="batteryHealth">Batterie-Gesundheit (SOH %)</h3>
+            <div class="chart-wrap"><canvas id="chart_soh"></canvas></div>
+        </section>
+
+        <!-- Battery Cycle Tracker -->
+        <section class="today-box" id="batteryCycleSection">
+            <h2 data-i18n="batteryCycles">Batterie-Zyklen</h2>
+            <div class="amort-grid" id="cycleGrid">
+                <div class="stat-card">
+                    <div class="stat-label" data-i18n="totalCycles">Zyklen Gesamt</div>
+                    <div class="stat-value" id="cycleTotalCount">--</div>
+                    <div class="stat-unit" data-i18n="cycles">Zyklen</div>
+                </div>
+                <div class="stat-card">
+                    <div class="stat-label" data-i18n="todayCycles">Heute</div>
+                    <div class="stat-value" id="cycleTodayCount">--</div>
+                    <div class="stat-unit" data-i18n="cycles">Zyklen</div>
+                </div>
+                <div class="stat-card">
+                    <div class="stat-label" data-i18n="cycleHealth">Verbleibend</div>
+                    <div class="stat-value" id="cycleRemaining">--</div>
+                    <div class="stat-unit">/ 3000</div>
+                </div>
+            </div>
+            <div class="amort-progress-wrap">
+                <div class="amort-progress-bar"><div class="amort-progress-fill" id="cycleProgressFill" style="background:var(--blue)"></div></div>
+                <div class="amort-progress-label" id="cycleProgressLabel" style="color:var(--blue)">0%</div>
+            </div>
+            <div class="cycle-hint" id="cycleHint"></div>
+        </section>
+
+        <!-- Usage Patterns -->
+        <section class="today-box" id="usagePatternsSection">
+            <h2 data-i18n="usagePatterns">Verbrauchsmuster</h2>
+            <div id="usagePatternsContent"></div>
+        </section>
+
+        <!-- Daily Stats -->
+        <section class="today-box">
+            <h2 data-i18n="statistics">Statistiken</h2>
+            <div class="tab-bar stats-tabs">
+                <button class="tab active" data-stats="1" onclick="loadDailyStats(1)" data-i18n="today">Heute</button>
+                <button class="tab" data-stats="7" onclick="loadDailyStats(7)" data-i18n="days7">7 Tage</button>
+                <button class="tab" data-stats="30" onclick="loadDailyStats(30)" data-i18n="days30">30 Tage</button>
+                <button class="tab" data-stats="9999" onclick="loadDailyStats(9999)" data-i18n="all">Alle</button>
+            </div>
+            <div class="stats-grid" id="statsGrid">
+                <div class="stat-card">
+                    <div class="stat-label" data-i18n="peakSolar">Peak Solar</div>
+                    <div class="stat-value" id="statPeakSolar">--</div>
+                    <div class="stat-unit">W</div>
+                </div>
+                <div class="stat-card">
+                    <div class="stat-label" data-i18n="avgSolar">Ø Solar</div>
+                    <div class="stat-value" id="statAvgSolar">--</div>
+                    <div class="stat-unit">W</div>
+                </div>
+                <div class="stat-card">
+                    <div class="stat-label" data-i18n="avgTemp">Ø Temperatur</div>
+                    <div class="stat-value" id="statAvgTemp">--</div>
+                    <div class="stat-unit">&deg;C</div>
+                </div>
+                <div class="stat-card">
+                    <div class="stat-label" data-i18n="peakOutput">Peak Output</div>
+                    <div class="stat-value" id="statPeakOutput">--</div>
+                    <div class="stat-unit">W</div>
+                </div>
+                <div class="stat-card">
+                    <div class="stat-label" data-i18n="minBattery">Min Batterie</div>
+                    <div class="stat-value" id="statMinSoc">--</div>
+                    <div class="stat-unit">%</div>
+                </div>
+                <div class="stat-card">
+                    <div class="stat-label" data-i18n="maxBattery">Max Batterie</div>
+                    <div class="stat-value" id="statMaxSoc">--</div>
+                    <div class="stat-unit">%</div>
+                </div>
+            </div>
+        </section>
+
+        <!-- CSV Export -->
+        <section class="today-box">
+            <h2 data-i18n="dataExport">Daten Export (CSV)</h2>
+            <div class="export-row">
+                <button class="export-btn" onclick="downloadCSV(24)" data-i18n="today">Heute</button>
+                <button class="export-btn" onclick="downloadCSV(168)" data-i18n="week">Woche</button>
+                <button class="export-btn" onclick="downloadCSV(720)" data-i18n="month">Monat</button>
+                <button class="export-btn" onclick="downloadCSV(8760)" data-i18n="year">Jahr</button>
+            </div>
+        </section>
+
+        <!-- Combined Overview Chart -->
+        <section class="chart-box">
+            <h3 data-i18n="mqttOverview">MQTT Übersicht</h3>
+            <div class="tab-bar combined-tabs" id="combinedTabs">
+                <button class="tab active" data-combined="day" data-i18n="day">Tag</button>
+                <button class="tab" data-combined="week" data-i18n="week">Woche</button>
+                <button class="tab" data-combined="month" data-i18n="month">Monat</button>
+                <button class="tab" data-combined="year" data-i18n="year">Jahr</button>
+            </div>
+            <div class="chart-wrap chart-wrap-tall"><canvas id="chart_combined"></canvas></div>
+        </section>
+
+        <!-- Payback Calculator -->
+        <section class="today-box" id="amortSection">
+            <h2 data-i18n="paybackCalc">Amortisations-Rechner</h2>
+            <div class="amort-hero">
+                <div class="amort-ring-wrap">
+                    <svg class="amort-ring" viewBox="0 0 120 120">
+                        <circle cx="60" cy="60" r="52" fill="none" stroke="var(--card-border)" stroke-width="8"/>
+                        <circle cx="60" cy="60" r="52" fill="none" stroke="var(--green)" stroke-width="8"
+                            stroke-linecap="round" stroke-dasharray="326.73" stroke-dashoffset="326.73"
+                            id="amortRingFill" transform="rotate(-90 60 60)"/>
+                    </svg>
+                    <div class="amort-ring-inner">
+                        <div class="amort-ring-pct" id="amortProgressLabel">0%</div>
+                    </div>
+                </div>
+                <div class="amort-hero-stats">
+                    <div class="amort-hero-row">
+                        <span class="amort-hero-label" data-i18n="systemCost">Systemkosten</span>
+                        <span class="amort-hero-val" id="amortCost">941 €</span>
+                    </div>
+                    <div class="amort-hero-row amort-hero-green">
+                        <span class="amort-hero-label" data-i18n="savedSoFar">Gespart bisher</span>
+                        <span class="amort-hero-val" id="amortSaved">0 €</span>
+                    </div>
+                    <div class="amort-hero-divider"></div>
+                    <div class="amort-hero-row">
+                        <span class="amort-hero-label" data-i18n="daysUntilRoi">Tage bis ROI</span>
+                        <span class="amort-hero-val amort-hero-accent" id="roiDays">--</span>
+                    </div>
+                </div>
+            </div>
+            <div class="amort-payoff" id="amortPayoff"></div>
+            <div class="amort-cards">
+                <div class="amort-card">
+                    <div class="amort-card-icon">⚡</div>
+                    <div class="amort-card-val" id="totalKwhValue">0</div>
+                    <div class="amort-card-label">kWh <span data-i18n="totalProduced">erzeugt</span></div>
+                </div>
+                <div class="amort-card">
+                    <div class="amort-card-icon">🌱</div>
+                    <div class="amort-card-val" id="co2TotalValue">0</div>
+                    <div class="amort-card-label">kg CO₂ <span data-i18n="avoided">vermieden</span></div>
+                </div>
+            </div>
+            <details class="amort-details">
+                <summary data-i18n="showCostBreakdown">Kostenaufstellung anzeigen</summary>
+                <table class="amort-breakdown">
+                    <tr><td>Anker Solix C1000 Gen 2</td><td>598,07 €</td></tr>
+                    <tr><td data-i18n="costPanels">2× ECO-WORTHY 200W Panels</td><td>213,38 €</td></tr>
+                    <tr><td data-i18n="costMounts">2× Halterung Balkongeländer</td><td>81,18 €</td></tr>
+                    <tr><td data-i18n="costCableXt60">Solarkabel XT60i</td><td>28,54 €</td></tr>
+                    <tr><td data-i18n="costFeedthrough">Fensterdurchführung</td><td>10,99 €</td></tr>
+                    <tr><td data-i18n="costExtension">Verlängerungskabel 2m</td><td>9,03 €</td></tr>
+                    <tr class="amort-total"><td data-i18n="costTotal">Gesamt</td><td>941,19 €</td></tr>
+                </table>
+            </details>
+        </section>
+
+        <!-- Data Backup -->
+        <section class="today-box">
+            <h2 data-i18n="dataBackup">Daten-Backup</h2>
+            <div class="backup-row">
+                <button class="export-btn" onclick="downloadFullBackup()" data-i18n="downloadDb">DB-Export herunterladen</button>
+            </div>
+            <div class="backup-hint" id="backupHint"></div>
+        </section>
+
+        <!-- MQTT Log -->
+        <section class="today-box">
+            <h2><span data-i18n="mqttLog">MQTT Live-Log</span> <span class="mqtt-heartbeat" id="mqttHeartbeat"><span class="hb-dot"></span> <span id="mqttHbTime">--:--:--</span></span></h2>
+            <div class="log-table-wrap">
+                <table class="log-table" id="mqttLog">
+                    <thead>
+                        <tr>
+                            <th>#</th>
+                            <th data-i18n="time">Zeit</th>
+                            <th>Solar</th>
+                            <th>Bat</th>
+                            <th>Temp</th>
+                            <th>Out</th>
+                            <th>AC In</th>
+                        </tr>
+                    </thead>
+                    <tbody id="mqttLogBody"></tbody>
+                </table>
+            </div>
+            <div class="log-pager">
+                <button class="log-pager-btn" id="logPrev" onclick="logPrevPage()" disabled data-i18n="back">‹ Zurück</button>
+                <span class="log-pager-info" id="logPageInfo">Seite 1 / 1</span>
+                <button class="log-pager-btn" id="logNext" onclick="logNextPage()" disabled data-i18n="next">Weiter ›</button>
+            </div>
+        </section>
+
+        <!-- Device Info -->
+        <section class="today-box" id="deviceInfoSection">
+            <h2 data-i18n="deviceInfo">Geräte-Info</h2>
+            <div class="device-info-grid" id="deviceInfoGrid">
+                <div class="di-row">
+                    <span class="di-label" data-i18n="chargeLimits">Ladegrenzen</span>
+                    <span class="di-value" id="diChargeLimits">--</span>
+                </div>
+                <div class="di-row">
+                    <span class="di-label" data-i18n="acLimit">AC Limit</span>
+                    <span class="di-value" id="diAcLimit">--</span>
+                </div>
+                <div class="di-row">
+                    <span class="di-label">Display</span>
+                    <span class="di-value" id="diDisplay">--</span>
+                </div>
+                <div class="di-row">
+                    <span class="di-label">Modell</span>
+                    <span class="di-value" id="diModel">A1763</span>
+                </div>
+            </div>
+        </section>
+
+        <!-- Technical Specs -->
+        <section class="today-box" id="techSpecsSection">
+            <h2 data-i18n="techSpecs">Technische Daten</h2>
+            <div class="specs-grid">
+                <div class="specs-group">
+                    <h4 class="specs-group-title" data-i18n="specInput">Eingang</h4>
+                    <div class="di-row"><span class="di-label">AC</span><span class="di-value">220–240V, 50/60Hz</span></div>
+                    <div class="di-row"><span class="di-label" data-i18n="specAcCharge">AC Laden</span><span class="di-value">1200W (max)</span></div>
+                    <div class="di-row"><span class="di-label">UltraFast</span><span class="di-value">1600W</span></div>
+                    <div class="di-row"><span class="di-label">Solar MPPT</span><span class="di-value">600W, 11–60V</span></div>
+                    <div class="di-row"><span class="di-label" data-i18n="specChargeTime">Ladezeit</span><span class="di-value">49 min (Netz)</span></div>
+                </div>
+                <div class="specs-group">
+                    <h4 class="specs-group-title" data-i18n="specOutput">Ausgang</h4>
+                    <div class="di-row"><span class="di-label">AC</span><span class="di-value">2000W (3000W Peak)</span></div>
+                    <div class="di-row"><span class="di-label">USB-C</span><span class="di-value">3× 140W</span></div>
+                    <div class="di-row"><span class="di-label">USB-A</span><span class="di-value">1× 12W</span></div>
+                    <div class="di-row"><span class="di-label">DC 12V</span><span class="di-value">120W</span></div>
+                    <div class="di-row"><span class="di-label">UPS</span><span class="di-value">10 ms</span></div>
+                </div>
+                <div class="specs-group">
+                    <h4 class="specs-group-title" data-i18n="specBattery">Batterie</h4>
+                    <div class="di-row"><span class="di-label" data-i18n="specCapacity">Kapazität</span><span class="di-value">1024 Wh</span></div>
+                    <div class="di-row"><span class="di-label">Typ</span><span class="di-value">LiFePO₄</span></div>
+                    <div class="di-row"><span class="di-label" data-i18n="specCycles">Zyklen</span><span class="di-value">3000 (80%)</span></div>
+                </div>
+                <div class="specs-group">
+                    <h4 class="specs-group-title" data-i18n="specPhysical">Gehäuse</h4>
+                    <div class="di-row"><span class="di-label" data-i18n="specDimensions">Maße</span><span class="di-value">384 × 208 × 244 mm</span></div>
+                    <div class="di-row"><span class="di-label" data-i18n="specWeight">Gewicht</span><span class="di-value">11,3 kg</span></div>
+                    <div class="di-row"><span class="di-label">Display</span><span class="di-value">LCD</span></div>
+                    <div class="di-row"><span class="di-label" data-i18n="specExpandable">Erweiterbar</span><span class="di-value" data-i18n="specNo">Nein</span></div>
+                    <div class="di-row"><span class="di-label">Modell</span><span class="di-value">A1763</span></div>
+                </div>
+            </div>
+        </section>
+
+        <!-- Charge Equivalents -->
+        <section class="today-box" id="chargeEquivSection">
+            <h2 data-i18n="chargeEquiv">Ladezyklen-Äquivalent</h2>
+            <div id="chargeEquivContent"></div>
+        </section>
+    </div>
+
+    <script src="/static/app.js?v=37"></script>
+</body>
+</html>
