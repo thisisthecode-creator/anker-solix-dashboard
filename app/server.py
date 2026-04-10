@@ -21,6 +21,7 @@ from app.database import (
 )
 from app.accumulator import SolarAccumulator
 from app.anker_client import AnkerClient
+from app.battery_cycles import BatteryCycleTracker
 
 logger = logging.getLogger(__name__)
 STATIC = Path(__file__).parent / "static"
@@ -29,16 +30,26 @@ ARCHIVE_DIR = Path(__file__).resolve().parent.parent / "data" / "archive"
 # Shared state
 client = AnkerClient()
 accumulator = SolarAccumulator()
+battery_cycles = BatteryCycleTracker()
 ws_clients: set[WebSocket] = set()
 latest_data: dict = {}
-last_db_write: float = 0
+
+# === Disk-write dedup (fingerprint + heartbeat) ===
+# Every 3s MQTT message is scanned (for accumulator + battery cycles + live broadcast),
+# but we only write to archive/DB when a tracked value changes, or every 5 min as heartbeat.
+DISK_HEARTBEAT_S = 300   # force a row at least every 5 minutes when values are stable
+DAILY_UPSERT_S = 60      # refresh daily_solar at most once a minute
+CYCLE_SAVE_S = 60        # persist battery_cycles.json at most once a minute
+
+_last_write_fp: tuple = ()
+_last_disk_write: float = 0
+_last_daily_upsert: float = 0
+_last_cycle_save: float = 0
 
 # === CSV Archive (all 3s MQTT data) ===
 ARCHIVE_HEADER = "timestamp,solar_watts,battery_soc,battery_soh,ac_output_watts,dc_output_watts,dc_12v_watts,usbc_1_watts,usbc_2_watts,usbc_3_watts,usba_1_watts,total_output_watts,ac_input_watts,temperature\n"
 _archive_file = None
 _archive_date: str = ""
-_archive_last_values: tuple = ()
-_archive_last_write: float = 0
 
 ARCHIVE_FIELDS = [
     "solar_watts", "battery_soc", "battery_soh",
@@ -67,24 +78,14 @@ def _get_archive_file(date_str: str):
 
 
 def archive_reading(data: dict):
-    """Append MQTT reading to today's CSV — only if values changed or 5min heartbeat."""
-    global _archive_last_values, _archive_last_write
-
-    now = time.time()
-    current_values = tuple(data.get(k, 0) for k in ARCHIVE_FIELDS)
-
-    # Skip if identical to last write AND less than 5 min since last write
-    if current_values == _archive_last_values and (now - _archive_last_write) < 300:
-        return
-
+    """Append MQTT reading to today's CSV. Dedup happens at the call site."""
     tz = ZoneInfo(TIMEZONE)
     date_str = datetime.now(tz).strftime("%Y-%m-%d")
     f = _get_archive_file(date_str)
-    row = data.get("timestamp", "") + "," + ",".join(str(v) for v in current_values)
+    row = data.get("timestamp", "") + "," + ",".join(
+        str(data.get(k, 0)) for k in ARCHIVE_FIELDS
+    )
     f.write(row + "\n")
-
-    _archive_last_values = current_values
-    _archive_last_write = now
 
 
 def compress_old_archives():
@@ -175,68 +176,49 @@ def extract_data(raw: dict) -> dict:
 
 
 async def on_mqtt_data(raw: dict):
-    """Called for each MQTT status update."""
-    global latest_data, last_db_write
+    """Called for each MQTT status update (every ~3 s).
+
+    Flow:
+      1. ALWAYS scan the message: feed accumulator + battery cycles (RAM, cheap).
+      2. Skip 0-spike startup noise.
+      3. ALWAYS refresh latest_data for the WebSocket broadcast.
+      4. Dedup check: only write to disk (archive CSV + SQLite) if a tracked field
+         changed, or 5 min have passed since the last write (heartbeat).
+      5. daily_solar + battery_cycles.json are persisted on their own slower schedule.
+    """
+    global latest_data, _last_write_fp, _last_disk_write, _last_daily_upsert, _last_cycle_save
 
     data = extract_data(raw)
     now = time.time()
     tz = ZoneInfo(TIMEZONE)
     data["timestamp"] = datetime.now(tz).isoformat(timespec="seconds")
 
-    # Update accumulator
+    # --- 1. RAM trackers (every 3 s, no disk I/O) ---
     finalized = accumulator.update(
         solar_watts=data["solar_watts"],
         output_watts=data["total_output_watts"],
         charge_watts=data["ac_input_watts"],
         ts=now,
     )
+    battery_cycles.update(data.get("battery_soc", 0))
 
-    # If a day was finalized, persist it
+    # Day rollover: persist finalized day + monthly/yearly aggregates
     if finalized:
         await upsert_daily(
             finalized["date"], finalized["solar_kwh"], finalized["peak_watts"],
             finalized["solar_hours"], finalized["total_output_kwh"],
             finalized["total_charge_kwh"], finalized["samples"],
         )
-        month = finalized["date"][:7]
-        year = finalized["date"][:4]
-        await update_monthly(month)
-        await update_yearly(year)
+        await update_monthly(finalized["date"][:7])
+        await update_yearly(finalized["date"][:4])
+        battery_cycles.save(force=True)  # freeze the day's cycle state
 
-    # Skip pure 0-spike readings only at startup (no previous good data to fall back on)
+    # --- 2. Skip 0-spike startup readings ---
     if data.get("battery_soc", 0) == 0 and data.get("temperature", 0) == 0:
         return
 
-    # Archive every MQTT reading to daily CSV (dedup is inside archive_reading)
-    archive_reading(data)
-
-    # Save reading to SQLite every 60s (for live charts only)
-    if now - last_db_write >= 60:
-        await insert_reading(data)
-        today = accumulator.get_today()
-        if today["date"]:
-            await upsert_daily(
-                today["date"], today["solar_kwh"], today["peak_watts"],
-                today["solar_hours"], today["total_output_kwh"],
-                today["total_charge_kwh"], today["samples"],
-            )
-        last_db_write = now
-
-    # Merge accumulator data for broadcast
+    # --- 3. Refresh latest_data (every 3 s — used by WebSocket broadcast) ---
     today = accumulator.get_today()
-    latest_data = {
-        **data,
-        "daily_kwh": today["solar_kwh"],
-        "daily_peak_watts": today["peak_watts"],
-        "solar_hours": today["solar_hours"],
-        "daily_output_kwh": today["total_output_kwh"],
-        "daily_charge_kwh": today["total_charge_kwh"],
-        "daily_savings_eur": round(today["solar_kwh"] * ELECTRICITY_PRICE_EUR, 2),
-        "price_per_kwh": ELECTRICITY_PRICE_EUR,
-        "device_name": client.device_name,
-    }
-
-    # Battery time estimation
     soc = data["battery_soc"]
     charging = data["ac_input_watts"] + data["solar_watts"]
     discharging = data["total_output_watts"]
@@ -253,8 +235,46 @@ async def on_mqtt_data(raw: dict):
         battery_time = round(remaining_wh / net_watts, 1) if net_watts > 0 else None
         battery_charging = False
 
-    latest_data["battery_time_hours"] = battery_time
-    latest_data["battery_charging"] = battery_charging
+    latest_data = {
+        **data,
+        "daily_kwh": today["solar_kwh"],
+        "daily_peak_watts": today["peak_watts"],
+        "solar_hours": today["solar_hours"],
+        "daily_output_kwh": today["total_output_kwh"],
+        "daily_charge_kwh": today["total_charge_kwh"],
+        "daily_savings_eur": round(today["solar_kwh"] * ELECTRICITY_PRICE_EUR, 2),
+        "price_per_kwh": ELECTRICITY_PRICE_EUR,
+        "device_name": client.device_name,
+        "battery_time_hours": battery_time,
+        "battery_charging": battery_charging,
+        "battery_cycles_total": battery_cycles.total_cycles,
+        "battery_cycles_today": battery_cycles.today_cycles,
+    }
+
+    # --- 4. Disk writes — only on value change or 5-min heartbeat ---
+    current_fp = tuple(data.get(k, 0) for k in ARCHIVE_FIELDS)
+    fp_changed = current_fp != _last_write_fp
+    heartbeat_due = (now - _last_disk_write) >= DISK_HEARTBEAT_S
+
+    if fp_changed or heartbeat_due:
+        archive_reading(data)
+        await insert_reading(data)
+        _last_write_fp = current_fp
+        _last_disk_write = now
+
+    # --- 5. daily_solar (≤ once per minute) ---
+    if today["date"] and (now - _last_daily_upsert) >= DAILY_UPSERT_S:
+        await upsert_daily(
+            today["date"], today["solar_kwh"], today["peak_watts"],
+            today["solar_hours"], today["total_output_kwh"],
+            today["total_charge_kwh"], today["samples"],
+        )
+        _last_daily_upsert = now
+
+    # --- 6. battery_cycles.json (≤ once per minute, only if dirty) ---
+    if (now - _last_cycle_save) >= CYCLE_SAVE_S:
+        battery_cycles.save()
+        _last_cycle_save = now
 
 
 async def _background_reconnect():
@@ -345,6 +365,7 @@ async def lifespan(app: FastAPI):
     await init_db()
     await restore_accumulator()
     compress_old_archives()  # Gzip any leftover CSVs from before restart
+    battery_cycles.load()    # Load cycles state (backfills from archive on first run)
     # Load last reading as fallback so dashboard isn't empty on reload
     last = await get_latest_reading()
     if last:
@@ -364,6 +385,7 @@ async def lifespan(app: FastAPI):
     yield
     task.cancel()
     cleanup_task.cancel()
+    battery_cycles.save(force=True)  # persist on shutdown
     await client.close()
 
 
@@ -667,3 +689,10 @@ async def api_status():
         "device_name": client.device_name,
         "mqtt_active": client._mqtt_task is not None and not client._mqtt_task.done(),
     }
+
+
+@app.get("/api/battery-cycles")
+async def api_battery_cycles():
+    """Pre-computed battery cycle stats. Replaces the old client-side
+    calculation that fetched a full year of /api/readings on every load."""
+    return battery_cycles.stats()

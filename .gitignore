@@ -5,6 +5,7 @@ data/*.db
 data/*.db-journal
 data/authcache/
 data/archive/
+data/battery_cycles.json
 data/readings_dump.json*
 data/local_data.tar.gz
 .DS_Store

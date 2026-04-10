@@ -1695,32 +1695,17 @@ function updateForecastAccuracy(forecastData, actualData) {
 }
 
 // === Battery Cycle Tracker ===
+// Reads pre-computed cycle stats from the server (RAM-tracked every 3s,
+// persisted in data/battery_cycles.json). Replaces the old client-side
+// computation that fetched a full year of /api/readings on each page load.
 async function loadBatteryCycles() {
     try {
-        const res = await fetch('/api/readings?hours=8760');
-        const rows = await res.json();
-        if (!rows.length) return;
+        const res = await fetch('/api/battery-cycles');
+        if (!res.ok) return;
+        const s = await res.json();
 
-        // Count full equivalent cycles: sum of SOC deltas (both charge + discharge) / 200 (full cycle = 0->100->0 = 200%)
-        let totalDelta = 0;
-        let todayDelta = 0;
-        const todayStr = new Date().toISOString().slice(0, 10);
-        let prevSoc = rows[0].battery_soc || 0;
-
-        for (let i = 1; i < rows.length; i++) {
-            const soc = rows[i].battery_soc || 0;
-            const delta = Math.abs(soc - prevSoc);
-            if (delta > 0 && delta < 30) { // Filter out data gaps
-                totalDelta += delta;
-                if (rows[i].timestamp && rows[i].timestamp.startsWith(todayStr)) {
-                    todayDelta += delta;
-                }
-            }
-            prevSoc = soc;
-        }
-
-        const totalCycles = Math.round(totalDelta / 200 * 10) / 10;
-        const todayCycles = Math.round(todayDelta / 200 * 100) / 100;
+        const totalCycles = Math.round((s.total_cycles || 0) * 10) / 10;
+        const todayCycles = Math.round((s.today_cycles || 0) * 100) / 100;
         const remaining = Math.max(0, Math.round(3000 - totalCycles));
         const pct = Math.min(100, totalCycles / 3000 * 100);
 
@@ -1730,9 +1715,7 @@ async function loadBatteryCycles() {
         $('cycleProgressFill').style.width = pct + '%';
         $('cycleProgressLabel').textContent = fmt.format(pct) + '%';
 
-        // Estimate lifespan
-        const daysOfData = new Set(rows.map(r => r.timestamp ? r.timestamp.slice(0, 10) : '')).size;
-        const cyclesPerDay = daysOfData > 0 ? totalCycles / daysOfData : 0;
+        const cyclesPerDay = s.cycles_per_day || 0;
         const hint = $('cycleHint');
         if (hint && cyclesPerDay > 0) {
             const yearsLeft = remaining / cyclesPerDay / 365;

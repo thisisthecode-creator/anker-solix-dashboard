@@ -17,7 +17,11 @@ TIMEZONE = "Europe/Warsaw"
 MQTT_TRIGGER_TIMEOUT = 120
 WS_BROADCAST_INTERVAL = 3.0
 DB_SAMPLE_INTERVAL = 30
-GAP_THRESHOLD = 60
+# Max dt (s) for trapezoidal kWh integration. Must be ≥ DISK_HEARTBEAT_S (300 s)
+# + some buffer, because restore_accumulator replays deduped readings that can be
+# up to heartbeat_s apart when values were stable (integration is still exact
+# there — matching floats imply constant power).
+GAP_THRESHOLD = 600
 
 # Poland household electricity price in EUR/kWh (2025/2026)
 ELECTRICITY_PRICE_EUR = 0.25
