@@ -59,7 +59,7 @@ const I18N = {
         cycleHealth: 'Verbleibend', cycles: 'Zyklen',
         cycleLifetimeUsed: 'Lebensdauer verbraucht',
         cycleEstimate: 'Ø {kwh} kWh/Tag durch die Batterie · ~{years} Jahre Lebensdauer',
-        cycleEstimateNoData: 'Noch nicht genug Daten für eine Lebensdauer-Schätzung',
+        cycleEstimateNoData: 'Noch zu wenig Daten',
         cycleInfoTitle: 'Wie funktionieren Batterie-Zyklen?',
         cycleInfoBody:
             '<p>Ein <strong>voller Zyklus</strong> ist ein komplettes Entladen plus komplettes Aufladen — ' +
@@ -148,7 +148,7 @@ const I18N = {
         cycleHealth: 'Remaining', cycles: 'Cycles',
         cycleLifetimeUsed: 'Lifetime used',
         cycleEstimate: 'Avg {kwh} kWh/day through the battery · ~{years} years lifespan',
-        cycleEstimateNoData: 'Not enough data yet for a lifespan estimate',
+        cycleEstimateNoData: 'Not enough data yet',
         cycleInfoTitle: 'How do battery cycles work?',
         cycleInfoBody:
             '<p>One <strong>full cycle</strong> is a complete discharge plus a complete recharge — ' +

@@ -17,11 +17,12 @@ TIMEZONE = "Europe/Warsaw"
 MQTT_TRIGGER_TIMEOUT = 120
 WS_BROADCAST_INTERVAL = 3.0
 DB_SAMPLE_INTERVAL = 30
-# Max dt (s) for trapezoidal kWh integration. Must be ≥ DISK_HEARTBEAT_S (300 s)
-# + some buffer, because restore_accumulator replays deduped readings that can be
-# up to heartbeat_s apart when values were stable (integration is still exact
-# there — matching floats imply constant power).
-GAP_THRESHOLD = 600
+# Max dt (s) for trapezoidal kWh integration. Set generously high so the
+# accumulator tolerates long stable periods: disk writes only land on value
+# changes now, so restore_accumulator may replay readings hours apart when
+# nothing happened (e.g. overnight idle). The integration is still exact there
+# because identical fingerprints imply constant power × dt.
+GAP_THRESHOLD = 7200
 
 # Poland household electricity price in EUR/kWh (2025/2026)
 ELECTRICITY_PRICE_EUR = 0.25

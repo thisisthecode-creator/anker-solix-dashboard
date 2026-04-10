@@ -34,15 +34,16 @@ battery_cycles = BatteryCycleTracker()
 ws_clients: set[WebSocket] = set()
 latest_data: dict = {}
 
-# === Disk-write dedup (fingerprint + heartbeat) ===
+# === Disk-write dedup (pure fingerprint, no heartbeat) ===
 # Every 3s MQTT message is scanned (for accumulator + battery cycles + live broadcast),
-# but we only write to archive/DB when a tracked value changes, or every 5 min as heartbeat.
-DISK_HEARTBEAT_S = 300   # force a row at least every 5 minutes when values are stable
+# but we only write to archive/DB when a tracked value actually changes. Stable periods
+# produce zero rows. The accumulator keeps integrating kWh in RAM regardless — losing
+# disk writes doesn't lose energy data, because identical fingerprints mean 0 Wh was
+# added in that interval anyway (constant power × dt with power == 0 is 0).
 DAILY_UPSERT_S = 60      # refresh daily_solar at most once a minute
 CYCLE_SAVE_S = 60        # persist battery_cycles.json at most once a minute
 
 _last_write_fp: tuple = ()
-_last_disk_write: float = 0
 _last_daily_upsert: float = 0
 _last_cycle_save: float = 0
 
@@ -183,10 +184,10 @@ async def on_mqtt_data(raw: dict):
       2. Skip 0-spike startup noise.
       3. ALWAYS refresh latest_data for the WebSocket broadcast.
       4. Dedup check: only write to disk (archive CSV + SQLite) if a tracked field
-         changed, or 5 min have passed since the last write (heartbeat).
+         actually changed. Stable periods produce zero disk writes.
       5. daily_solar + battery_cycles.json are persisted on their own slower schedule.
     """
-    global latest_data, _last_write_fp, _last_disk_write, _last_daily_upsert, _last_cycle_save
+    global latest_data, _last_write_fp, _last_daily_upsert, _last_cycle_save
 
     data = extract_data(raw)
     now = time.time()
@@ -251,16 +252,12 @@ async def on_mqtt_data(raw: dict):
         "battery_cycles_today": battery_cycles.today_cycles,
     }
 
-    # --- 4. Disk writes — only on value change or 5-min heartbeat ---
+    # --- 4. Disk writes — only when a tracked field actually changes ---
     current_fp = tuple(data.get(k, 0) for k in ARCHIVE_FIELDS)
-    fp_changed = current_fp != _last_write_fp
-    heartbeat_due = (now - _last_disk_write) >= DISK_HEARTBEAT_S
-
-    if fp_changed or heartbeat_due:
+    if current_fp != _last_write_fp:
         archive_reading(data)
         await insert_reading(data)
         _last_write_fp = current_fp
-        _last_disk_write = now
 
     # --- 5. daily_solar (≤ once per minute) ---
     if today["date"] and (now - _last_daily_upsert) >= DAILY_UPSERT_S:
