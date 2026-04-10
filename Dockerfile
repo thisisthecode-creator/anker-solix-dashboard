@@ -15,7 +15,7 @@ RUN git clone https://github.com/thomluther/anker-solix-api.git /app/anker-solix
 # Copy app
 COPY app/ app/
 COPY run.py .
-COPY .env .
+# .env no longer baked in — credentials come from fly secrets as env vars
 
 # Data directory (persistent volume mount point)
 RUN mkdir -p /app/data
