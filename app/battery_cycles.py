@@ -11,7 +11,7 @@ from datetime import datetime
 from pathlib import Path
 from zoneinfo import ZoneInfo
 
-from app.config import TIMEZONE
+from app.config import TIMEZONE, BATTERY_CAPACITY_WH
 
 logger = logging.getLogger(__name__)
 
@@ -148,6 +148,10 @@ class BatteryCycleTracker:
     def stats(self) -> dict:
         days = self.days_tracked()
         cycles_per_day = (self.total_cycles / days) if days > 0 else 0.0
+        # Battery one-way throughput per day in kWh: total cycles × capacity ÷ days
+        # Industry-standard: 1 cycle ≡ 1 full capacity worth of energy in (or out).
+        capacity_kwh = BATTERY_CAPACITY_WH / 1000.0
+        avg_daily_kwh = (self.total_cycles * capacity_kwh / days) if days > 0 else 0.0
         return {
             "total_cycles": self.total_cycles,
             "today_cycles": self.today_cycles,
@@ -156,6 +160,8 @@ class BatteryCycleTracker:
             "days_tracked": days,
             "first_date": self.first_date,
             "cycles_per_day": round(cycles_per_day, 4),
+            "avg_daily_kwh": round(avg_daily_kwh, 4),
+            "battery_capacity_kwh": round(capacity_kwh, 3),
             "last_soc": self.last_soc,
         }
 

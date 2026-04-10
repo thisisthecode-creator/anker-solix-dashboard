@@ -351,15 +351,10 @@
         <!-- Battery Cycle Tracker -->
         <section class="today-box" id="batteryCycleSection">
             <h2 data-i18n="batteryCycles">Batterie-Zyklen</h2>
-            <div class="amort-grid" id="cycleGrid">
+            <div class="amort-grid cycle-grid-2" id="cycleGrid">
                 <div class="stat-card">
                     <div class="stat-label" data-i18n="totalCycles">Zyklen Gesamt</div>
                     <div class="stat-value" id="cycleTotalCount">--</div>
-                    <div class="stat-unit" data-i18n="cycles">Zyklen</div>
-                </div>
-                <div class="stat-card">
-                    <div class="stat-label" data-i18n="todayCycles">Heute</div>
-                    <div class="stat-value" id="cycleTodayCount">--</div>
                     <div class="stat-unit" data-i18n="cycles">Zyklen</div>
                 </div>
                 <div class="stat-card">
@@ -368,11 +363,18 @@
                     <div class="stat-unit">/ 3000</div>
                 </div>
             </div>
-            <div class="amort-progress-wrap">
-                <div class="amort-progress-bar"><div class="amort-progress-fill" id="cycleProgressFill" style="background:var(--blue)"></div></div>
-                <div class="amort-progress-label" id="cycleProgressLabel" style="color:var(--blue)">0%</div>
+            <div class="cycle-progress">
+                <div class="cycle-progress-head">
+                    <span class="cycle-progress-caption" data-i18n="cycleLifetimeUsed">Lebensdauer verbraucht</span>
+                    <span class="cycle-progress-label" id="cycleProgressLabel">0%</span>
+                </div>
+                <div class="cycle-progress-track"><div class="cycle-progress-fill" id="cycleProgressFill"></div></div>
             </div>
             <div class="cycle-hint" id="cycleHint"></div>
+            <details class="amort-details cycle-info">
+                <summary data-i18n="cycleInfoTitle">Wie funktionieren Batterie-Zyklen?</summary>
+                <div class="cycle-info-body" data-i18n-html="cycleInfoBody"></div>
+            </details>
         </section>
 
         <!-- Usage Patterns -->

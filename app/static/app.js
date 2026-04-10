@@ -55,9 +55,27 @@ const I18N = {
         solarScore: 'Solar-Score', todayVsYesterday: 'Heute vs. Gestern (Solar W)',
         heatmapTitle: 'Solar-Kalender', less: 'Weniger', more: 'Mehr',
         forecastAccuracyLabel: 'Prognose-Genauigkeit',
-        batteryCycles: 'Batterie-Zyklen', totalCycles: 'Zyklen Gesamt', todayCycles: 'Heute',
+        batteryCycles: 'Batterie-Zyklen', totalCycles: 'Zyklen Gesamt',
         cycleHealth: 'Verbleibend', cycles: 'Zyklen',
-        cycleEstimate: 'Bei {rate} Zyklen/Tag: ~{years} Jahre Lebensdauer',
+        cycleLifetimeUsed: 'Lebensdauer verbraucht',
+        cycleEstimate: 'Ø {kwh} kWh/Tag durch die Batterie · ~{years} Jahre Lebensdauer',
+        cycleEstimateNoData: 'Noch nicht genug Daten für eine Lebensdauer-Schätzung',
+        cycleInfoTitle: 'Wie funktionieren Batterie-Zyklen?',
+        cycleInfoBody:
+            '<p>Ein <strong>voller Zyklus</strong> ist ein komplettes Entladen plus komplettes Aufladen — ' +
+            'also 100 % raus und 100 % wieder rein. Das sind zusammen <strong>200 Prozentpunkte SOC-Bewegung</strong>.</p>' +
+            '<p>Der Tracker addiert jede Änderung des Ladezustands (State of Charge) auf, die Anker alle 3 Sekunden ' +
+            'per MQTT schickt. Laden und Entladen zählen beide gleich:</p>' +
+            '<span class="cycle-formula">Zyklen = Σ |ΔSOC| ÷ 200</span>' +
+            '<p>Beispiel: 80 % → 60 % → 90 % sind |20| + |30| = 50 %, also <strong>0,25 Zyklen</strong>. ' +
+            'Auch Teilentladungen zählen anteilig.</p>' +
+            '<p>Die Anker Solix C1000 Gen 2 hat LiFePO4-Zellen mit einer Herstellergarantie von ' +
+            '<strong>3000 vollen Zyklen</strong> bis die Kapazität auf 80 % gesunken ist. Die Lebensdauer-Schätzung ' +
+            'nimmt den durchschnittlichen Batterie-Durchsatz pro Tag (in kWh) und rechnet hoch, wann die 3000 ' +
+            'Zyklen erreicht wären.</p>' +
+            '<p>Sprünge über 30 % werden als Datenlücken verworfen (z. B. wenn der Server kurz offline war). ' +
+            'Die Berechnung läuft live im RAM, der Gesamtzähler wird in <code>data/battery_cycles.json</code> ' +
+            'auf dem persistenten Volume gespeichert.</p>',
         usagePatterns: 'Verbrauchsmuster', noPatterns: 'Noch nicht genug Daten für Muster.',
         avgWatts: '⌀ {w} W', regularUsage: 'Regelmäßiger Verbrauch',
         shareTitle: 'Mein Solar-Tag', shareText: 'Solar: {kwh} kWh ☀️ | Score: {score}%',
@@ -126,9 +144,26 @@ const I18N = {
         solarScore: 'Solar Score', todayVsYesterday: 'Today vs. Yesterday (Solar W)',
         heatmapTitle: 'Solar Calendar', less: 'Less', more: 'More',
         forecastAccuracyLabel: 'Forecast Accuracy',
-        batteryCycles: 'Battery Cycles', totalCycles: 'Total Cycles', todayCycles: 'Today',
+        batteryCycles: 'Battery Cycles', totalCycles: 'Total Cycles',
         cycleHealth: 'Remaining', cycles: 'Cycles',
-        cycleEstimate: 'At {rate} cycles/day: ~{years} years lifespan',
+        cycleLifetimeUsed: 'Lifetime used',
+        cycleEstimate: 'Avg {kwh} kWh/day through the battery · ~{years} years lifespan',
+        cycleEstimateNoData: 'Not enough data yet for a lifespan estimate',
+        cycleInfoTitle: 'How do battery cycles work?',
+        cycleInfoBody:
+            '<p>One <strong>full cycle</strong> is a complete discharge plus a complete recharge — ' +
+            '100 % out and 100 % back in. That adds up to <strong>200 percentage points of SOC movement</strong>.</p>' +
+            '<p>The tracker sums every change in state-of-charge that Anker reports via MQTT every 3 seconds. ' +
+            'Charging and discharging both count equally:</p>' +
+            '<span class="cycle-formula">cycles = Σ |ΔSOC| ÷ 200</span>' +
+            '<p>Example: 80 % → 60 % → 90 % is |20| + |30| = 50 %, which equals <strong>0.25 cycles</strong>. ' +
+            'Partial discharges count proportionally.</p>' +
+            '<p>The Anker Solix C1000 Gen 2 uses LiFePO4 cells rated for <strong>3000 full cycles</strong> ' +
+            'until capacity drops to 80 %. The lifespan estimate takes the average daily battery throughput ' +
+            '(in kWh) and extrapolates when the 3000-cycle limit would be reached.</p>' +
+            '<p>Jumps larger than 30 % are rejected as data gaps (for example if the server was briefly offline). ' +
+            'The calculation runs live in RAM; the lifetime counter is persisted in ' +
+            '<code>data/battery_cycles.json</code> on the persistent volume.</p>',
         usagePatterns: 'Usage Patterns', noPatterns: 'Not enough data for patterns yet.',
         avgWatts: 'Avg {w} W', regularUsage: 'Regular usage',
         shareTitle: 'My Solar Day', shareText: 'Solar: {kwh} kWh ☀️ | Score: {score}%',
@@ -154,12 +189,17 @@ const I18N = {
 
 function t(key) { return I18N[LANG][key] || I18N.de[key] || key; }
 
-// Apply translations to HTML elements with data-i18n attribute
+// Apply translations to HTML elements with data-i18n / data-i18n-html attribute
 function applyI18n() {
     document.querySelectorAll('[data-i18n]').forEach(el => {
         const key = el.dataset.i18n;
         const val = t(key);
         if (val) el.textContent = val;
+    });
+    document.querySelectorAll('[data-i18n-html]').forEach(el => {
+        const key = el.dataset.i18nHtml;
+        const val = t(key);
+        if (val) el.innerHTML = val;
     });
 }
 
@@ -1698,30 +1738,38 @@ function updateForecastAccuracy(forecastData, actualData) {
 // Reads pre-computed cycle stats from the server (RAM-tracked every 3s,
 // persisted in data/battery_cycles.json). Replaces the old client-side
 // computation that fetched a full year of /api/readings on each page load.
+const BATTERY_CAPACITY_KWH = 1.024;  // C1000 Gen 2
+
 async function loadBatteryCycles() {
     try {
         const res = await fetch('/api/battery-cycles');
         if (!res.ok) return;
         const s = await res.json();
 
-        const totalCycles = Math.round((s.total_cycles || 0) * 10) / 10;
-        const todayCycles = Math.round((s.today_cycles || 0) * 100) / 100;
-        const remaining = Math.max(0, Math.round(3000 - totalCycles));
+        const totalCycles = s.total_cycles || 0;
+        const remaining = Math.max(0, 3000 - totalCycles);
         const pct = Math.min(100, totalCycles / 3000 * 100);
 
-        $('cycleTotalCount').textContent = fmt.format(totalCycles);
-        $('cycleTodayCount').textContent = fmt2.format(todayCycles);
-        $('cycleRemaining').textContent = remaining.toLocaleString(locale);
+        $('cycleTotalCount').textContent = fmt2.format(totalCycles);
+        $('cycleRemaining').textContent = fmt.format(remaining);
         $('cycleProgressFill').style.width = pct + '%';
-        $('cycleProgressLabel').textContent = fmt.format(pct) + '%';
+        $('cycleProgressLabel').textContent = fmt2.format(pct) + '%';
 
-        const cyclesPerDay = s.cycles_per_day || 0;
+        // Lifespan estimate: based on average daily battery throughput (kWh)
+        // avg_daily_kwh = total_cycles × capacity / days_tracked
+        //   (one-way throughput — matches how the industry measures cycles)
+        // years = remaining_cycles × capacity / avg_daily_kwh / 365
         const hint = $('cycleHint');
-        if (hint && cyclesPerDay > 0) {
-            const yearsLeft = remaining / cyclesPerDay / 365;
+        if (!hint) return;
+        const avgDailyKwh = s.avg_daily_kwh
+            || (s.days_tracked > 0 ? totalCycles * BATTERY_CAPACITY_KWH / s.days_tracked : 0);
+        if (avgDailyKwh > 0.0001) {
+            const yearsLeft = remaining * BATTERY_CAPACITY_KWH / avgDailyKwh / 365;
             hint.textContent = t('cycleEstimate')
-                .replace('{rate}', fmt2.format(cyclesPerDay))
+                .replace('{kwh}', fmt2.format(avgDailyKwh))
                 .replace('{years}', fmt.format(yearsLeft));
+        } else {
+            hint.textContent = t('cycleEstimateNoData');
         }
     } catch (e) { console.warn('Battery cycles error:', e); }
 }

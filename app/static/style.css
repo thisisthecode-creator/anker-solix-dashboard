@@ -2187,11 +2187,105 @@ body.light-mode .log-table td {
 }
 
 /* Battery Cycle Tracker */
-.cycle-hint {
+.cycle-grid-2 {
+    grid-template-columns: 1fr 1fr;
+}
+
+.cycle-progress {
+    margin-top: 4px;
+    margin-bottom: 8px;
+}
+
+.cycle-progress-head {
+    display: flex;
+    justify-content: space-between;
+    align-items: baseline;
     font-size: 0.7rem;
+    margin-bottom: 5px;
+}
+
+.cycle-progress-caption {
+    color: var(--text-dim);
+    text-transform: uppercase;
+    letter-spacing: 0.04em;
+}
+
+.cycle-progress-label {
+    color: var(--blue);
+    font-weight: 700;
+    font-variant-numeric: tabular-nums;
+}
+
+.cycle-progress-track {
+    height: 8px;
+    background: var(--card-border);
+    border-radius: 4px;
+    overflow: hidden;
+}
+
+.cycle-progress-fill {
+    height: 100%;
+    background: var(--blue);
+    border-radius: 4px;
+    transition: width 0.6s ease;
+    min-width: 2px;
+}
+
+.cycle-hint {
+    font-size: 0.72rem;
     color: var(--text-dim);
     text-align: center;
-    margin-top: 6px;
+    margin-top: 8px;
+    line-height: 1.4;
+}
+
+.cycle-info {
+    margin-top: 10px;
+}
+
+.cycle-info summary {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 6px;
+}
+
+.cycle-info summary::before {
+    content: "ⓘ";
+    font-size: 0.85rem;
+    color: var(--blue);
+}
+
+.cycle-info-body {
+    font-size: 0.75rem;
+    color: var(--text-dim);
+    line-height: 1.55;
+    padding: 10px 4px 2px 4px;
+}
+
+.cycle-info-body p {
+    margin: 0 0 8px 0;
+}
+
+.cycle-info-body p:last-child {
+    margin-bottom: 0;
+}
+
+.cycle-info-body strong {
+    color: var(--text);
+    font-weight: 600;
+}
+
+.cycle-info-body .cycle-formula {
+    display: block;
+    margin: 6px 0;
+    padding: 6px 8px;
+    background: var(--card-border);
+    border-radius: 4px;
+    font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+    font-size: 0.72rem;
+    color: var(--text);
+    text-align: center;
 }
 
 /* Usage Patterns */
