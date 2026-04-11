@@ -687,8 +687,19 @@ async def get_readings(hours: int = 24) -> list[dict]:
     for r in archive_rows:
         merged[r["timestamp"]] = r
 
+    # DST-safe chronological sort. String sorting would break on the autumn
+    # DST fallback (last Sunday of October) because "02:30+01:00" sorts
+    # lexicographically BEFORE "02:30+02:00" even though the "+02:00" row
+    # happens earlier in real time. Parsing into tz-aware datetime objects
+    # restores true chronological order across the ambiguous hour.
+    def _ts_key(row: dict):
+        try:
+            return datetime.fromisoformat(row["timestamp"])
+        except (ValueError, TypeError):
+            return datetime.min.replace(tzinfo=_TZ)
+
     out = list(merged.values())
-    out.sort(key=lambda r: r["timestamp"])
+    out.sort(key=_ts_key)
     return out
 
 
@@ -732,6 +743,235 @@ async def get_stats(price_eur: float = 0.25) -> dict:
         "total_days": r[3],
         "total_savings_eur": round(total_kwh * price_eur, 2),
         "price_per_kwh": price_eur,
+    }
+
+
+# === Chart-specific aggregation helpers ======================================
+
+async def get_hourly_heatmap(days: int = 30) -> dict:
+    """Return a (hour × day) grid of average solar power for the last N days.
+
+    Aggregates directly from the CSV archive (the only store with sub-daily
+    resolution). Output shape:
+      {"days": ["2026-04-01", ...], "data": [[day_idx, hour, avg_w], ...]}
+    """
+    tz_now = _now_local()
+    cutoff_date = (tz_now - timedelta(days=days)).strftime("%Y-%m-%d")
+    ARCHIVE_DIR.mkdir(parents=True, exist_ok=True)
+
+    # (date, hour) -> [sum_w, count]
+    buckets: dict[tuple[str, int], list[float]] = {}
+
+    def _consume(line: str):
+        parts = line.strip().split(",")
+        if len(parts) < 14:
+            return
+        ts = parts[0]
+        if len(ts) < 13 or ts[:10] < cutoff_date:
+            return
+        date = ts[:10]
+        try:
+            hour = int(ts[11:13])
+            solar = float(parts[1] or 0)
+        except ValueError:
+            return
+        key = (date, hour)
+        bucket = buckets.get(key)
+        if bucket is None:
+            buckets[key] = [solar, 1]
+        else:
+            bucket[0] += solar
+            bucket[1] += 1
+
+    for p in sorted(ARCHIVE_DIR.glob("*.csv.gz")):
+        file_date = p.name.replace(".csv.gz", "")
+        if file_date < cutoff_date:
+            continue
+        try:
+            with gzip.open(p, "rt") as f:
+                next(f, None)
+                for line in f:
+                    _consume(line)
+        except Exception as e:
+            logger.warning("heatmap gz %s: %s", p, e)
+    for p in sorted(ARCHIVE_DIR.glob("*.csv")):
+        file_date = p.stem
+        if file_date < cutoff_date:
+            continue
+        try:
+            with open(p, "r") as f:
+                next(f, None)
+                for line in f:
+                    _consume(line)
+        except Exception as e:
+            logger.warning("heatmap csv %s: %s", p, e)
+
+    # Also fall back on legacy readings for days the archive is sparse
+    try:
+        db = await get_pool()
+        cur = await db.execute(
+            "SELECT date(timestamp), CAST(strftime('%H', timestamp) AS INTEGER), "
+            "AVG(solar_watts) "
+            "FROM readings WHERE date(timestamp) >= ? "
+            "  AND NOT (battery_soc = 0 AND temperature = 0) "
+            "GROUP BY date(timestamp), strftime('%H', timestamp)",
+            (cutoff_date,),
+        )
+        for d, h, avg_w in await cur.fetchall():
+            if d is None or h is None:
+                continue
+            key = (d, int(h))
+            if key not in buckets:  # don't override archive aggregates
+                buckets[key] = [avg_w * 60, 60]  # fake 60 samples for averaging
+    except Exception as e:
+        logger.warning("heatmap legacy: %s", e)
+
+    dates = sorted({k[0] for k in buckets})
+    data = []
+    for (date, hour), (sum_w, count) in buckets.items():
+        day_idx = dates.index(date)
+        avg_w = sum_w / max(1, count)
+        if avg_w > 0.5:
+            data.append([day_idx, hour, round(avg_w, 1)])
+    return {"days": dates, "data": data}
+
+
+async def get_monthly_distribution(months: int = 12) -> list[dict]:
+    """Daily solar kWh distribution per month (median, Q1, Q3, min, max, n).
+
+    Used by the monthly box-plot chart.
+    """
+    db = await get_pool()
+    cutoff = (_now_local() - timedelta(days=months * 31)).strftime("%Y-%m-%d")
+    cur = await db.execute(
+        "SELECT substr(date, 1, 7) as month, solar_kwh "
+        "FROM daily_solar WHERE date >= ? AND solar_kwh > 0 "
+        "ORDER BY date ASC",
+        (cutoff,),
+    )
+    by_month: dict[str, list[float]] = {}
+    for m, kwh in await cur.fetchall():
+        by_month.setdefault(m, []).append(float(kwh))
+
+    def _quantile(sorted_values: list[float], q: float) -> float:
+        if not sorted_values:
+            return 0
+        n = len(sorted_values)
+        pos = q * (n - 1)
+        lo = int(pos)
+        hi = min(lo + 1, n - 1)
+        frac = pos - lo
+        return sorted_values[lo] * (1 - frac) + sorted_values[hi] * frac
+
+    out = []
+    for month in sorted(by_month.keys()):
+        vals = sorted(by_month[month])
+        if not vals:
+            continue
+        out.append({
+            "month": month,
+            "n": len(vals),
+            "min": round(vals[0], 3),
+            "q1": round(_quantile(vals, 0.25), 3),
+            "median": round(_quantile(vals, 0.5), 3),
+            "q3": round(_quantile(vals, 0.75), 3),
+            "max": round(vals[-1], 3),
+        })
+    return out
+
+
+async def get_cumulative_production() -> dict:
+    """Cumulative daily kWh since first day + milestone crossings.
+
+    Output:
+      {
+        "series": [{"date": "...", "kwh": 0.5, "cumulative": 1.2}, ...],
+        "milestones": [{"threshold_kwh": 1, "date": "..."}, ...],
+        "total_kwh": 12.4
+      }
+    """
+    db = await get_pool()
+    cur = await db.execute(
+        "SELECT date, solar_kwh FROM daily_solar "
+        "WHERE solar_kwh >= 0 ORDER BY date ASC"
+    )
+    rows = await cur.fetchall()
+    series: list[dict] = []
+    cumulative = 0.0
+    milestones_set = [0.1, 1, 5, 10, 25, 50, 100, 250, 500, 1000, 2500, 5000, 10000]
+    reached: dict[float, str] = {}
+    for r in rows:
+        kwh = float(r[1] or 0)
+        if kwh < 0:
+            continue
+        prev = cumulative
+        cumulative += kwh
+        for m in milestones_set:
+            if prev < m <= cumulative and m not in reached:
+                reached[m] = r[0]
+        series.append({
+            "date": r[0], "kwh": round(kwh, 3), "cumulative": round(cumulative, 3),
+        })
+    milestones = [
+        {"threshold_kwh": m, "date": reached[m]}
+        for m in milestones_set if m in reached
+    ]
+    return {
+        "series": series,
+        "milestones": milestones,
+        "total_kwh": round(cumulative, 3),
+    }
+
+
+async def get_sankey_flows(days: int = 1) -> dict:
+    """Return solar / battery / grid / load flows over the last N days for the
+    Sankey energy-flow diagram.
+
+    Uses daily_solar which has the phase-detected breakdown (direct_use,
+    battery_in, battery_out, grid_in, total_output).
+    """
+    db = await get_pool()
+    cutoff = (_now_local() - timedelta(days=days)).strftime("%Y-%m-%d")
+    cur = await db.execute(
+        """SELECT
+              COALESCE(SUM(solar_kwh), 0),
+              COALESCE(SUM(direct_use_kwh), 0),
+              COALESCE(SUM(battery_in_kwh), 0),
+              COALESCE(SUM(battery_out_kwh), 0),
+              COALESCE(SUM(total_charge_kwh), 0),
+              COALESCE(SUM(total_output_kwh), 0),
+              COUNT(*)
+           FROM daily_solar
+           WHERE date >= ?""",
+        (cutoff,),
+    )
+    r = await cur.fetchone()
+    if not r:
+        return {"days": 0, "nodes": [], "flows": []}
+    solar, direct, bat_in, bat_out, grid_in, output, n = r
+    # Conservation check (not enforced, just for debugging)
+    # solar + grid_in = output + (bat_in - bat_out); residual goes into "verlust"
+    solar_to_battery = max(0.0, solar - direct)
+    grid_to_load = max(0.0, output - direct - bat_out)
+    grid_to_battery = max(0.0, grid_in - grid_to_load)
+    loss = max(0.0, bat_in - bat_out)  # self-discharge/efficiency loss
+    return {
+        "days": n,
+        "totals": {
+            "solar_kwh": round(solar, 3),
+            "grid_in_kwh": round(grid_in, 3),
+            "load_kwh": round(output, 3),
+            "battery_in_kwh": round(bat_in, 3),
+            "battery_out_kwh": round(bat_out, 3),
+        },
+        "flows": [
+            {"from": "solar", "to": "load", "kwh": round(direct, 3)},
+            {"from": "solar", "to": "battery", "kwh": round(solar_to_battery, 3)},
+            {"from": "battery", "to": "load", "kwh": round(bat_out, 3)},
+            {"from": "grid", "to": "load", "kwh": round(grid_to_load, 3)},
+            {"from": "grid", "to": "battery", "kwh": round(grid_to_battery, 3)},
+            {"from": "battery", "to": "loss", "kwh": round(loss, 3)},
+        ],
     }
 
 

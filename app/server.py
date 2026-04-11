@@ -27,6 +27,8 @@ from app.database import (
     get_soh_trend, get_daily_stats, cleanup_old_readings,
     cleanup_old_forecasts,
     get_cumulative_savings, insert_forecast, get_forecast_accuracy,
+    get_hourly_heatmap, get_monthly_distribution,
+    get_cumulative_production, get_sankey_flows,
 )
 from app.accumulator import SolarAccumulator
 from app.anker_client import AnkerClient
@@ -931,6 +933,30 @@ async def api_battery_cycles():
 async def api_break_even():
     """Cumulative savings vs system cost + linear projection to break-even."""
     return await get_cumulative_savings(ELECTRICITY_PRICE_EUR, SYSTEM_COST_EUR)
+
+
+@app.get("/api/hourly-heatmap")
+async def api_hourly_heatmap(days: int = Query(30, ge=1, le=365)):
+    """Hour-of-day × day grid of average solar power for the heatmap chart."""
+    return await get_hourly_heatmap(days)
+
+
+@app.get("/api/monthly-distribution")
+async def api_monthly_distribution(months: int = Query(12, ge=1, le=60)):
+    """Monthly daily-kWh distribution (median/Q1/Q3/min/max) for box-plot."""
+    return await get_monthly_distribution(months)
+
+
+@app.get("/api/cumulative-production")
+async def api_cumulative_production():
+    """Cumulative daily kWh since day 1 plus milestone crossings."""
+    return await get_cumulative_production()
+
+
+@app.get("/api/sankey")
+async def api_sankey(days: int = Query(1, ge=1, le=365)):
+    """Energy flows (solar→direct, solar→battery, battery→load, grid→…)."""
+    return await get_sankey_flows(days)
 
 
 @app.get("/api/forecast-accuracy")
