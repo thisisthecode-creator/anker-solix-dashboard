@@ -25,6 +25,7 @@ from app.database import (
     update_yearly, get_daily, get_monthly, get_yearly,
     get_readings, get_latest_reading, get_stats, get_energy_summary,
     get_soh_trend, get_daily_stats, cleanup_old_readings,
+    cleanup_old_forecasts,
     get_cumulative_savings, insert_forecast, get_forecast_accuracy,
 )
 from app.accumulator import SolarAccumulator
@@ -377,10 +378,14 @@ async def cleanup_loop():
             gz_count = compress_old_archives()
             if gz_count:
                 logger.info("Archive: compressed %d daily CSV files to .gz", gz_count)
-            # Thin out legacy readings rows
+            # Thin out legacy readings rows (safety net; main path is migration)
             count = await cleanup_old_readings()
             if count:
-                logger.info("DB cleanup: compressed %d legacy readings", count)
+                logger.info("DB cleanup: removed %d legacy readings rows", count)
+            # Prune old forecast_log entries (> 400 days)
+            fc = await cleanup_old_forecasts()
+            if fc:
+                logger.info("DB cleanup: removed %d old forecast_log rows", fc)
         except Exception as e:
             logger.error("Cleanup error: %s", e)
 
@@ -448,15 +453,25 @@ async def daily_forecast_loop():
 async def lifespan(app: FastAPI):
     global latest_data
     await init_db()
-    # One-shot: copy legacy `readings` rows into daily archive CSVs where
-    # no archive file exists yet. Idempotent — marker file on the volume.
+    # One-shot (v2): consolidate legacy readings into the archive. For each
+    # date where readings has strictly more rows than the existing archive,
+    # rebuild the archive from readings. Then delete the migrated rows +
+    # VACUUM the DB. Idempotent via a v2 marker file.
     try:
         from app.migrate_readings_to_archive import migrate_readings_to_archive
-        migrated = await migrate_readings_to_archive()
-        if migrated:
-            logger.info("Readings → archive migration: %d rows", migrated)
+        summary = await migrate_readings_to_archive()
+        logger.info("Readings → archive migration: %s", summary)
     except Exception as e:
         logger.warning("Readings migration failed (non-fatal): %s", e)
+    # One-shot: rebuild daily_solar stats from the consolidated archive so
+    # old days show direct_use_pct / autarkie_pct / RTE / avg_temp / min-max_soc
+    # instead of zeroes.
+    try:
+        from app.backfill_daily_solar import backfill_daily_solar
+        bf = await backfill_daily_solar()
+        logger.info("daily_solar backfill: %s", bf)
+    except Exception as e:
+        logger.warning("daily_solar backfill failed (non-fatal): %s", e)
     await restore_accumulator()
     compress_old_archives()  # Gzip any leftover CSVs from before restart
     battery_cycles.load()    # Load cycles state (backfills from archive on first run)

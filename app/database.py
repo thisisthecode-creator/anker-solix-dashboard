@@ -459,11 +459,11 @@ async def get_daily_stats(days: int = 30):
 async def cleanup_old_readings():
     """Prune the legacy readings table.
 
-    Retention bumped 2 → 60 days so the historical data (pre-dedup era) stays
-    available as fallback for get_readings/get_soh_trend/get_daily_stats while
-    we gradually migrate it into the archive. Once every old row has been
-    copied into a corresponding daily archive CSV, this retention can come
-    back down — or the readings table can be dropped entirely.
+    Now that migrate_readings_to_archive consolidates rows into the daily
+    archive on every startup, the readings table is expected to drain naturally
+    (it's no longer being written to by on_mqtt_data). Retention is kept at
+    60 days as a safety net so anything that slipped past the migration still
+    has a chance to surface in /api/readings before being deleted.
     """
     db = await get_pool()
     cutoff = (_now_local() - timedelta(days=60)).strftime("%Y-%m-%d")
@@ -477,6 +477,24 @@ async def cleanup_old_readings():
             await db.execute("VACUUM")
         except Exception as e:
             logger.warning("VACUUM failed: %s", e)
+    return count
+
+
+async def cleanup_old_forecasts(days_keep: int = 400) -> int:
+    """Prune forecast_log rows older than days_keep.
+
+    Forecasts + training-weather entries have long-term value for model
+    accuracy analysis, but rows much older than a year add zero signal
+    (weather patterns shift, the panel hasn't aged that much yet). Default
+    retention: 400 days so we keep at least a full 365-day comparison window.
+    """
+    db = await get_pool()
+    cutoff = (_now_local() - timedelta(days=days_keep)).strftime("%Y-%m-%d")
+    cur = await db.execute(
+        "DELETE FROM forecast_log WHERE date < ?", (cutoff,)
+    )
+    count = cur.rowcount
+    await db.commit()
     return count
 
 
