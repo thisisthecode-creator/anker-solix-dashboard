@@ -56,17 +56,32 @@ _last_write_fp: tuple = ()
 _last_daily_upsert: float = 0
 _last_cycle_save: float = 0
 
-# === CSV Archive (all 3s MQTT data) ===
-ARCHIVE_HEADER = "timestamp,solar_watts,battery_soc,battery_soh,ac_output_watts,dc_output_watts,dc_12v_watts,usbc_1_watts,usbc_2_watts,usbc_3_watts,usba_1_watts,total_output_watts,ac_input_watts,temperature\n"
-_archive_file = None
-_archive_date: str = ""
-
+# === CSV Archive (every changed MQTT field) ===
+# The archive captures ALL 24 fields that extract_data() pulls from the
+# Anker MQTT payload. The dedup fingerprint compares all 24, so any change
+# in any tracked field — power, SOC, SOH, temperature, switches, mode,
+# port statuses, charge limits — triggers a new archive row.
+#
+# Format: 25 columns total (timestamp + 24 fields).
+#
+# Backwards compatibility: legacy archive files written before this expansion
+# have 14 columns (timestamp + 13 numeric fields). Readers detect column
+# count via len(parts) and default the missing columns to 0/100/etc.
 ARCHIVE_FIELDS = [
+    # 13 numeric fields (legacy v1 schema)
     "solar_watts", "battery_soc", "battery_soh",
     "ac_output_watts", "dc_output_watts", "dc_12v_watts",
     "usbc_1_watts", "usbc_2_watts", "usbc_3_watts", "usba_1_watts",
     "total_output_watts", "ac_input_watts", "temperature",
+    # 11 status / config fields (added in v2 schema)
+    "ac_switch", "dc_switch",
+    "max_soc", "min_soc", "ac_input_limit",
+    "display_switch", "display_mode",
+    "usbc_1_status", "usbc_2_status", "usbc_3_status", "usba_1_status",
 ]
+ARCHIVE_HEADER = "timestamp," + ",".join(ARCHIVE_FIELDS) + "\n"
+_archive_file = None
+_archive_date: str = ""
 
 
 def _get_archive_file(date_str: str):
@@ -744,8 +759,14 @@ async def _cached_readings(hours: int) -> list:
 
 
 @app.get("/api/readings")
-async def api_readings(hours: int = Query(24, ge=1, le=8760)):
-    """Chart readings straight from the CSV archive, cached for 60 s."""
+async def api_readings(hours: int = Query(24, ge=1, le=87600)):
+    """Chart readings from the CSV archive + legacy readings table.
+
+    Cached for 60 s. The max window is 10 years (87600 h) so the MQTT
+    Live-Log "show all history" mode can request the full archive in one go.
+    Dedup means even decade-long ranges stay JSON-payload-friendly (a year of
+    deduped data is ~300 KB of CSV → ~1–3 MB of JSON).
+    """
     return await _cached_readings(hours)
 
 

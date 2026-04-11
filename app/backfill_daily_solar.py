@@ -25,22 +25,9 @@ ARCHIVE_DIR = Path(__file__).resolve().parent.parent / "data" / "archive"
 MARKER = Path(__file__).resolve().parent.parent / "data" / ".daily_solar_backfill_v1"
 
 
-def _parse_row(parts):
-    try:
-        return {
-            "timestamp": parts[0],
-            "solar_watts": float(parts[1] or 0),
-            "battery_soc": int(float(parts[2] or 0)),
-            "battery_soh": int(float(parts[3] or 0)),
-            "total_output_watts": float(parts[11] or 0),
-            "ac_input_watts": float(parts[12] or 0),
-            "temperature": float(parts[13] or 0),
-        }
-    except (ValueError, IndexError):
-        return None
-
-
 def _iter_archive_rows(path: Path):
+    """Yield parsed archive rows. Handles both 14-col legacy and 25-col v2."""
+    from app.database import _parse_archive_row
     opener = (lambda: gzip.open(path, "rt")) if path.suffix == ".gz" else (lambda: open(path, "r"))
     try:
         with opener() as f:
@@ -49,7 +36,7 @@ def _iter_archive_rows(path: Path):
                 parts = line.strip().split(",")
                 if len(parts) < 14:
                     continue
-                r = _parse_row(parts)
+                r = _parse_archive_row(parts)
                 if r and not (r["battery_soc"] == 0 and r["temperature"] == 0):
                     yield r
     except Exception as e:

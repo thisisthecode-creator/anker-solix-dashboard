@@ -883,51 +883,70 @@ function addTicker(d) {
     if (hbTime) hbTime.textContent = time;
     if (hbDot) { hbDot.classList.remove('inactive'); hbDot.style.animation = 'none'; void hbDot.offsetWidth; hbDot.style.animation = ''; }
 
-    // MQTT Live-Log: always show latest live data as first row, add new row on value change
+    // MQTT Live-Log: dedup over the same 24 fields the archive uses, so a
+    // change in ac_switch / display_mode / port status appends a new row too.
     const solar = d.solar_watts || 0;
     const out = d.total_output_watts || 0;
     const acIn = d.ac_input_watts || 0;
-    const fp = `${solar}|${d.battery_soc}|${d.temperature}|${out}|${acIn}`;
+    const fp = _logFingerprint(d);
 
     if (fp !== _lastLogFingerprint) {
-        // Values changed → add new row
         LOG_ROWS.unshift(makeLogRow(tickerCount, dateTime, solar, d.battery_soc, d.temperature, out, acIn));
         _lastLogFingerprint = fp;
     } else if (_historicLoaded && LOG_ROWS.length > 0) {
-        // Same values → update time on first row to show system is alive
+        // No change → just refresh the timestamp so the heartbeat stays visible
         LOG_ROWS[0] = makeLogRow(tickerCount, dateTime, solar, d.battery_soc, d.temperature, out, acIn);
     }
     if (logPage === 0) renderLogPage();
 }
 
+// Load EVERY historical change from the archive (up to 10 years).
+// Dedup uses the full 24-field fingerprint when available so the log captures
+// not just power/SOC/temp changes but also config changes (ac_switch, dc_switch,
+// charge limits, AC input limit, display mode, port statuses).
+const LOG_FP_FIELDS = [
+    'solar_watts', 'battery_soc', 'battery_soh',
+    'ac_output_watts', 'dc_output_watts', 'dc_12v_watts',
+    'usbc_1_watts', 'usbc_2_watts', 'usbc_3_watts', 'usba_1_watts',
+    'total_output_watts', 'ac_input_watts', 'temperature',
+    'ac_switch', 'dc_switch',
+    'max_soc', 'min_soc', 'ac_input_limit',
+    'display_switch', 'display_mode',
+    'usbc_1_status', 'usbc_2_status', 'usbc_3_status', 'usba_1_status',
+];
+
+function _logFingerprint(r) {
+    return LOG_FP_FIELDS.map(k => (k in r ? r[k] : '')).join('|');
+}
+
 async function loadHistoricLog() {
     try {
-        const res = await fetch('/api/readings?hours=24');
+        // hours=87600 → up to 10 years; the archive cache + dedup keep the
+        // payload small (typical year of deduped data ~1–3 MB JSON).
+        const res = await fetch('/api/readings?hours=87600');
         const rows = await res.json();
-        // Clear any early live entries
         LOG_ROWS.length = 0;
-        // Show only changes (dedup) + filter 0-spikes
         let lastFp = '';
         let num = 0;
         for (let i = 0; i < rows.length; i++) {
             const r = rows[i];
-            const solar = r.solar_watts || 0;
             const bat = r.battery_soc || 0;
             const temp = r.temperature || 0;
-            const out = r.total_output_watts || 0;
-            const acIn = r.ac_input_watts || 0;
-            // Skip 0-spike rows (invalid MQTT data)
+            // Filter 0-spike rows (invalid MQTT data at session start)
             if (bat === 0 && temp === 0) continue;
-            const fp = `${solar}|${bat}|${temp}|${out}|${acIn}`;
-            if (fp === lastFp) continue; // Skip duplicates
+            const fp = _logFingerprint(r);
+            if (fp === lastFp) continue;
             lastFp = fp;
             num++;
             const d = new Date(r.timestamp);
             const dateStr = String(d.getDate()).padStart(2, '0') + '.' + String(d.getMonth() + 1).padStart(2, '0') + '.';
             const time = dateStr + ' ' + d.getHours() + ':' + String(d.getMinutes()).padStart(2, '0') + ':' + String(d.getSeconds()).padStart(2, '0');
+            const solar = r.solar_watts || 0;
+            const out = r.total_output_watts || 0;
+            const acIn = r.ac_input_watts || 0;
             LOG_ROWS.push(makeLogRow(num, time, solar, bat, temp, out, acIn));
         }
-        // Reverse so newest is first
+        // Reverse so newest entries land at the top
         LOG_ROWS.reverse();
         tickerCount = num;
         _lastLogFingerprint = lastFp;

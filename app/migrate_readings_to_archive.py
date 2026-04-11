@@ -30,6 +30,11 @@ logger = logging.getLogger(__name__)
 ARCHIVE_DIR = Path(__file__).resolve().parent.parent / "data" / "archive"
 MARKER_V2 = Path(__file__).resolve().parent.parent / "data" / ".readings_migration_v2"
 
+# Migrated rows from the legacy readings table only have the 14-column
+# (timestamp + 13 numeric fields) schema. We write them in that format —
+# the v2 readers in database.py handle both 14-col and 25-col archives via
+# len(parts) detection. Newer days written by the live MQTT loop will use
+# the full 25-column format from server.ARCHIVE_HEADER.
 ARCHIVE_HEADER = "timestamp,solar_watts,battery_soc,battery_soh,ac_output_watts,dc_output_watts,dc_12v_watts,usbc_1_watts,usbc_2_watts,usbc_3_watts,usba_1_watts,total_output_watts,ac_input_watts,temperature\n"
 
 

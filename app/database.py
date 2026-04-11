@@ -498,6 +498,52 @@ async def cleanup_old_forecasts(days_keep: int = 400) -> int:
     return count
 
 
+def _parse_archive_row(parts: list[str]) -> dict | None:
+    """Parse one archive CSV row. Handles both legacy (14 col) and v2 (25 col).
+
+    Legacy format: timestamp + 13 numeric fields.
+    v2 format: timestamp + 13 numeric + 11 status/config fields.
+    """
+    if len(parts) < 14:
+        return None
+    try:
+        row = {
+            "timestamp": parts[0],
+            "solar_watts": float(parts[1] or 0),
+            "battery_soc": int(float(parts[2] or 0)),
+            "battery_soh": int(float(parts[3] or 0)),
+            "ac_output_watts": float(parts[4] or 0),
+            "dc_output_watts": float(parts[5] or 0),
+            "dc_12v_watts": float(parts[6] or 0),
+            "usbc_1_watts": float(parts[7] or 0),
+            "usbc_2_watts": float(parts[8] or 0),
+            "usbc_3_watts": float(parts[9] or 0),
+            "usba_1_watts": float(parts[10] or 0),
+            "total_output_watts": float(parts[11] or 0),
+            "ac_input_watts": float(parts[12] or 0),
+            "temperature": float(parts[13] or 0),
+        }
+    except (ValueError, IndexError):
+        return None
+    # v2 columns (status / config) — only present if archive has them
+    if len(parts) >= 25:
+        try:
+            row["ac_switch"] = int(float(parts[14] or 0))
+            row["dc_switch"] = int(float(parts[15] or 0))
+            row["max_soc"] = int(float(parts[16] or 100))
+            row["min_soc"] = int(float(parts[17] or 0))
+            row["ac_input_limit"] = int(float(parts[18] or 0))
+            row["display_switch"] = int(float(parts[19] or 0))
+            row["display_mode"] = int(float(parts[20] or 0))
+            row["usbc_1_status"] = int(float(parts[21] or 0))
+            row["usbc_2_status"] = int(float(parts[22] or 0))
+            row["usbc_3_status"] = int(float(parts[23] or 0))
+            row["usba_1_status"] = int(float(parts[24] or 0))
+        except (ValueError, IndexError):
+            pass  # silently fall back to legacy fields only
+    return row
+
+
 async def get_latest_reading() -> dict | None:
     """Return the most recent archive row as a dict (or None).
 
@@ -509,28 +555,7 @@ async def get_latest_reading() -> dict | None:
     gz_files = sorted(ARCHIVE_DIR.glob("*.csv.gz"), reverse=True)
 
     def _parse(line: str) -> dict | None:
-        parts = line.strip().split(",")
-        if len(parts) < 14:
-            return None
-        try:
-            return {
-                "timestamp": parts[0],
-                "solar_watts": float(parts[1] or 0),
-                "battery_soc": int(float(parts[2] or 0)),
-                "battery_soh": int(float(parts[3] or 0)),
-                "ac_output_watts": float(parts[4] or 0),
-                "dc_output_watts": float(parts[5] or 0),
-                "dc_12v_watts": float(parts[6] or 0),
-                "usbc_1_watts": float(parts[7] or 0),
-                "usbc_2_watts": float(parts[8] or 0),
-                "usbc_3_watts": float(parts[9] or 0),
-                "usba_1_watts": float(parts[10] or 0),
-                "total_output_watts": float(parts[11] or 0),
-                "ac_input_watts": float(parts[12] or 0),
-                "temperature": float(parts[13] or 0),
-            }
-        except ValueError:
-            return None
+        return _parse_archive_row(line.strip().split(","))
 
     for csv_path in csv_files:
         try:
@@ -581,27 +606,6 @@ async def get_readings(hours: int = 24) -> list[dict]:
 
     ARCHIVE_DIR.mkdir(parents=True, exist_ok=True)
 
-    def _parse_row(parts):
-        try:
-            return {
-                "timestamp": parts[0],
-                "solar_watts": float(parts[1] or 0),
-                "battery_soc": int(float(parts[2] or 0)),
-                "battery_soh": int(float(parts[3] or 0)),
-                "ac_output_watts": float(parts[4] or 0),
-                "dc_output_watts": float(parts[5] or 0),
-                "dc_12v_watts": float(parts[6] or 0),
-                "usbc_1_watts": float(parts[7] or 0),
-                "usbc_2_watts": float(parts[8] or 0),
-                "usbc_3_watts": float(parts[9] or 0),
-                "usba_1_watts": float(parts[10] or 0),
-                "total_output_watts": float(parts[11] or 0),
-                "ac_input_watts": float(parts[12] or 0),
-                "temperature": float(parts[13] or 0),
-            }
-        except (ValueError, IndexError):
-            return None
-
     # --- Archive (newer source of truth) ---
     archive_rows: list[dict] = []
     for gz_path in sorted(ARCHIVE_DIR.glob("*.csv.gz")):
@@ -617,7 +621,7 @@ async def get_readings(hours: int = 24) -> list[dict]:
                         continue
                     if parts[0] < cutoff_str:
                         continue
-                    r = _parse_row(parts)
+                    r = _parse_archive_row(parts)
                     if r and not (r["battery_soc"] == 0 and r["temperature"] == 0):
                         archive_rows.append(r)
         except Exception as e:
@@ -636,7 +640,7 @@ async def get_readings(hours: int = 24) -> list[dict]:
                         continue
                     if parts[0] < cutoff_str:
                         continue
-                    r = _parse_row(parts)
+                    r = _parse_archive_row(parts)
                     if r and not (r["battery_soc"] == 0 and r["temperature"] == 0):
                         archive_rows.append(r)
         except Exception as e:
