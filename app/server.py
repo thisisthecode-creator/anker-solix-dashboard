@@ -1,23 +1,31 @@
 import asyncio
+import functools
 import gzip
+import hashlib
+import hmac
 import json
 import logging
+import os
 import time
 from contextlib import asynccontextmanager
 from datetime import datetime, timedelta
 from zoneinfo import ZoneInfo
 
-from fastapi import FastAPI, WebSocket, WebSocketDisconnect, Query
-from fastapi.responses import FileResponse, Response
+from fastapi import FastAPI, WebSocket, WebSocketDisconnect, Query, Request, HTTPException
+from fastapi.responses import FileResponse, Response, RedirectResponse, JSONResponse
 from fastapi.staticfiles import StaticFiles
 from pathlib import Path
 
-from app.config import TIMEZONE, WS_BROADCAST_INTERVAL, ELECTRICITY_PRICE_EUR, BATTERY_CAPACITY_WH
+from app.config import (
+    TIMEZONE, WS_BROADCAST_INTERVAL, ELECTRICITY_PRICE_EUR,
+    BATTERY_CAPACITY_WH, SYSTEM_COST_EUR, DASHBOARD_PASSWORD,
+)
 from app.database import (
-    init_db, insert_reading, upsert_daily, update_monthly,
+    init_db, close_pool, upsert_daily, update_monthly,
     update_yearly, get_daily, get_monthly, get_yearly,
     get_readings, get_latest_reading, get_stats, get_energy_summary,
     get_soh_trend, get_daily_stats, cleanup_old_readings,
+    get_cumulative_savings, insert_forecast, get_forecast_accuracy,
 )
 from app.accumulator import SolarAccumulator
 from app.anker_client import AnkerClient
@@ -200,16 +208,15 @@ async def on_mqtt_data(raw: dict):
         output_watts=data["total_output_watts"],
         charge_watts=data["ac_input_watts"],
         ts=now,
+        soc=data.get("battery_soc"),
+        soh=data.get("battery_soh"),
+        temp=data.get("temperature"),
     )
     battery_cycles.update(data.get("battery_soc", 0))
 
     # Day rollover: persist finalized day + monthly/yearly aggregates
     if finalized:
-        await upsert_daily(
-            finalized["date"], finalized["solar_kwh"], finalized["peak_watts"],
-            finalized["solar_hours"], finalized["total_output_kwh"],
-            finalized["total_charge_kwh"], finalized["samples"],
-        )
+        await upsert_daily(finalized["date"], finalized)
         await update_monthly(finalized["date"][:7])
         await update_yearly(finalized["date"][:4])
         battery_cycles.save(force=True)  # freeze the day's cycle state
@@ -243,6 +250,12 @@ async def on_mqtt_data(raw: dict):
         "solar_hours": today["solar_hours"],
         "daily_output_kwh": today["total_output_kwh"],
         "daily_charge_kwh": today["total_charge_kwh"],
+        "daily_direct_use_kwh": today.get("direct_use_kwh", 0),
+        "daily_battery_in_kwh": today.get("battery_in_kwh", 0),
+        "daily_battery_out_kwh": today.get("battery_out_kwh", 0),
+        "direct_use_pct": today.get("direct_use_pct", 0),
+        "autarkie_pct": today.get("autarkie_pct", 0),
+        "rte_pct": today.get("rte_pct", 0),
         "daily_savings_eur": round(today["solar_kwh"] * ELECTRICITY_PRICE_EUR, 2),
         "price_per_kwh": ELECTRICITY_PRICE_EUR,
         "device_name": client.device_name,
@@ -256,16 +269,11 @@ async def on_mqtt_data(raw: dict):
     current_fp = tuple(data.get(k, 0) for k in ARCHIVE_FIELDS)
     if current_fp != _last_write_fp:
         archive_reading(data)
-        await insert_reading(data)
         _last_write_fp = current_fp
 
     # --- 5. daily_solar (≤ once per minute) ---
     if today["date"] and (now - _last_daily_upsert) >= DAILY_UPSERT_S:
-        await upsert_daily(
-            today["date"], today["solar_kwh"], today["peak_watts"],
-            today["solar_hours"], today["total_output_kwh"],
-            today["total_charge_kwh"], today["samples"],
-        )
+        await upsert_daily(today["date"], today)
         _last_daily_upsert = now
 
     # --- 6. battery_cycles.json (≤ once per minute, only if dirty) ---
@@ -313,30 +321,51 @@ async def broadcast_loop():
 
 
 async def restore_accumulator():
-    """Restore today's accumulator state from DB readings."""
+    """Restore today's accumulator state by replaying today's archive CSV.
+
+    The archive is now the single source of truth — deduped readings are
+    replayed with their stored timestamps, and the trapezoidal integrator
+    fills in the energy totals exactly (identical fingerprints ≡ constant
+    power × dt, so spanning gaps is fine).
+    """
     tz = ZoneInfo(TIMEZONE)
     today = datetime.now(tz).strftime("%Y-%m-%d")
-    db = await import_module_get_db()
+    csv_path = ARCHIVE_DIR / f"{today}.csv"
+    if not csv_path.exists():
+        return
+    count = 0
     try:
-        rows = await db.execute_fetchall(
-            "SELECT timestamp, solar_watts, total_output_watts, ac_input_watts "
-            "FROM readings WHERE timestamp LIKE ? ORDER BY timestamp ASC",
-            (today + "%",),
-        )
-        if not rows:
-            return
-        for row in rows:
-            ts_str, solar, output, charge = row[0], row[1], row[2], row[3]
-            ts = datetime.fromisoformat(ts_str).timestamp()
-            accumulator.update(solar, output, charge, ts)
-        logger.info("Restored accumulator from %d readings for %s", len(rows), today)
-    finally:
-        await db.close()
-
-
-async def import_module_get_db():
-    from app.database import get_db
-    return await get_db()
+        with open(csv_path, "r") as f:
+            next(f, None)  # header
+            for line in f:
+                parts = line.strip().split(",")
+                if len(parts) < 14:
+                    continue
+                try:
+                    ts = datetime.fromisoformat(parts[0]).timestamp()
+                    solar = float(parts[1] or 0)
+                    soc = int(float(parts[2] or 0))
+                    soh = int(float(parts[3] or 0))
+                    output = float(parts[11] or 0)
+                    charge = float(parts[12] or 0)
+                    temp = float(parts[13] or 0)
+                except (ValueError, IndexError):
+                    continue
+                accumulator.update(
+                    solar_watts=solar,
+                    output_watts=output,
+                    charge_watts=charge,
+                    ts=ts,
+                    soc=soc,
+                    soh=soh,
+                    temp=temp,
+                )
+                count += 1
+    except Exception as e:
+        logger.warning("restore_accumulator read failed: %s", e)
+        return
+    if count:
+        logger.info("Restored accumulator from %d archive rows for %s", count, today)
 
 
 async def cleanup_loop():
@@ -348,12 +377,71 @@ async def cleanup_loop():
             gz_count = compress_old_archives()
             if gz_count:
                 logger.info("Archive: compressed %d daily CSV files to .gz", gz_count)
-            # Thin out SQLite readings (only needed for charts)
+            # Thin out legacy readings rows
             count = await cleanup_old_readings()
             if count:
-                logger.info("DB cleanup: compressed %d readings", count)
+                logger.info("DB cleanup: compressed %d legacy readings", count)
         except Exception as e:
             logger.error("Cleanup error: %s", e)
+
+
+async def daily_forecast_loop():
+    """Once a day (around 01:00 local) persist an Open-Meteo forecast snapshot
+    for tomorrow's solar production. Feeds /api/forecast-accuracy over time.
+
+    Also retrains the solar + load ML models and saves a prediction for
+    tomorrow under source='ml_solar' / 'ml_load'.
+    """
+    from app.forecast import fetch_openmeteo_daily_kwh
+    from app.ml_models import retrain_and_save, predict_tomorrow_internal
+    tz = ZoneInfo(TIMEZONE)
+    while True:
+        now = datetime.now(tz)
+        # Schedule next run at 01:07 local (off-minute to avoid fleet collisions)
+        next_run = now.replace(hour=1, minute=7, second=0, microsecond=0)
+        if next_run <= now:
+            next_run += timedelta(days=1)
+        sleep_s = (next_run - now).total_seconds()
+        try:
+            await asyncio.sleep(sleep_s)
+        except asyncio.CancelledError:
+            return
+        try:
+            tomorrow = (datetime.now(tz) + timedelta(days=1)).strftime("%Y-%m-%d")
+            om = await fetch_openmeteo_daily_kwh(tomorrow)
+            if om is not None:
+                await insert_forecast(
+                    date=tomorrow,
+                    source="openmeteo",
+                    predicted_kwh=om.get("predicted_kwh", 0),
+                    features_json=json.dumps(om.get("features", {})),
+                )
+                logger.info(
+                    "Forecast saved: openmeteo %s = %.2f kWh",
+                    tomorrow, om.get("predicted_kwh", 0),
+                )
+            # Retrain local ML on all historical (features, actuals) and save
+            try:
+                await retrain_and_save()
+                ml_pred = await predict_tomorrow_internal()
+                if ml_pred:
+                    if "solar_kwh" in ml_pred:
+                        await insert_forecast(
+                            date=tomorrow, source="ml_solar",
+                            predicted_kwh=ml_pred["solar_kwh"],
+                            features_json=json.dumps(ml_pred.get("features", {})),
+                        )
+                    if "load_kwh" in ml_pred:
+                        await insert_forecast(
+                            date=tomorrow, source="ml_load",
+                            predicted_kwh=0,
+                            predicted_load_kwh=ml_pred["load_kwh"],
+                        )
+                    logger.info("ML forecast saved: %s", ml_pred)
+            except Exception as e:
+                logger.warning("ML retrain/predict failed: %s", e)
+        except Exception as e:
+            logger.error("daily_forecast_loop error: %s", e)
 
 
 @asynccontextmanager
@@ -379,14 +467,118 @@ async def lifespan(app: FastAPI):
 
     task = asyncio.create_task(broadcast_loop())
     cleanup_task = asyncio.create_task(cleanup_loop())
+    forecast_task = asyncio.create_task(daily_forecast_loop())
     yield
     task.cancel()
     cleanup_task.cancel()
-    battery_cycles.save(force=True)  # persist on shutdown
+    forecast_task.cancel()
+    # Final snapshot: persist today's stats so a deploy doesn't lose live state
+    try:
+        today = accumulator.get_today()
+        if today.get("date"):
+            await upsert_daily(today["date"], today)
+    except Exception as e:
+        logger.warning("Final upsert_daily on shutdown failed: %s", e)
+    battery_cycles.save(force=True)
+    try:
+        if _archive_file and not _archive_file.closed:
+            _archive_file.flush()
+            _archive_file.close()
+    except Exception:
+        pass
+    await close_pool()
     await client.close()
 
 
 app = FastAPI(lifespan=lifespan)
+
+
+# === Auth ====================================================================
+# When DASHBOARD_PASSWORD is empty, the dashboard stays public (backwards
+# compatible). When set, /api/* and / require a session cookie issued by
+# POST /auth/login with that password. /static/*, /auth/*, /api/health, and
+# /metrics stay open so the login page can load and fly.io health checks work.
+AUTH_SECRET = os.getenv("DASHBOARD_AUTH_SECRET", "") or (DASHBOARD_PASSWORD or "anker-dev-secret")
+SESSION_COOKIE = "anker_session"
+SESSION_TTL_S = 60 * 60 * 24 * 30  # 30 days
+
+OPEN_PATHS = {"/api/health", "/metrics", "/auth/login", "/auth/logout", "/favicon.ico"}
+
+
+def _sign_session() -> str:
+    expiry = int(time.time()) + SESSION_TTL_S
+    payload = f"ok:{expiry}"
+    sig = hmac.new(AUTH_SECRET.encode(), payload.encode(), hashlib.sha256).hexdigest()
+    return f"{payload}:{sig}"
+
+
+def _verify_session(cookie: str | None) -> bool:
+    if not cookie:
+        return False
+    try:
+        parts = cookie.split(":")
+        if len(parts) != 3:
+            return False
+        payload = f"{parts[0]}:{parts[1]}"
+        expected = hmac.new(AUTH_SECRET.encode(), payload.encode(), hashlib.sha256).hexdigest()
+        if not hmac.compare_digest(expected, parts[2]):
+            return False
+        expiry = int(parts[1])
+        return time.time() < expiry
+    except Exception:
+        return False
+
+
+@app.middleware("http")
+async def auth_middleware(request: Request, call_next):
+    # No auth configured → fully open
+    if not DASHBOARD_PASSWORD:
+        return await call_next(request)
+    path = request.url.path
+    if (
+        path in OPEN_PATHS
+        or path.startswith("/static/")
+        or path.startswith("/auth/")
+    ):
+        return await call_next(request)
+    cookie = request.cookies.get(SESSION_COOKIE)
+    if _verify_session(cookie):
+        return await call_next(request)
+    # API requests → 401 JSON; navigations → redirect to login
+    if path.startswith("/api/") or path == "/ws":
+        return JSONResponse({"error": "unauthorized"}, status_code=401)
+    return RedirectResponse(url="/auth/login", status_code=302)
+
+
+@app.get("/auth/login")
+async def auth_login_page():
+    if not DASHBOARD_PASSWORD:
+        return RedirectResponse(url="/", status_code=302)
+    return FileResponse(STATIC / "login.html")
+
+
+@app.post("/auth/login")
+async def auth_login_submit(request: Request):
+    if not DASHBOARD_PASSWORD:
+        return RedirectResponse(url="/", status_code=302)
+    form = await request.form()
+    password = form.get("password", "")
+    if not hmac.compare_digest(password, DASHBOARD_PASSWORD):
+        return JSONResponse({"error": "wrong_password"}, status_code=401)
+    resp = JSONResponse({"ok": True})
+    resp.set_cookie(
+        SESSION_COOKIE, _sign_session(),
+        max_age=SESSION_TTL_S, httponly=True, samesite="lax",
+        secure=True, path="/",
+    )
+    return resp
+
+
+@app.get("/auth/logout")
+async def auth_logout():
+    resp = RedirectResponse(url="/auth/login", status_code=302)
+    resp.delete_cookie(SESSION_COOKIE, path="/")
+    return resp
 
 
 @app.get("/")
@@ -505,37 +697,32 @@ def _read_archive_rows(cutoff_str: str, before_str: str) -> list[dict]:
     return rows
 
 
+# === Archive cache ==========================================================
+# Cache parsed archive rows by coarse hour-bucket so /api/readings reloads
+# don't re-scan the whole gzip tree. Hot buckets (24h, 168h) stay in RAM.
+_archive_cache: dict[tuple[int, int], tuple[float, list]] = {}
+_ARCHIVE_CACHE_TTL = 60  # seconds — fresh rows land in today's CSV regardless
+
+
+async def _cached_readings(hours: int) -> list:
+    # Round timestamp to the nearest 5-minute boundary so the cache key is
+    # stable across many requests in a short window but still refreshes
+    # quickly enough to pick up new data.
+    bucket = int(time.time() // _ARCHIVE_CACHE_TTL)
+    key = (hours, bucket)
+    cached = _archive_cache.get(key)
+    if cached:
+        return cached[1]
+    rows = await get_readings(hours)
+    _archive_cache.clear()  # keep cache small: one live entry at a time
+    _archive_cache[key] = (time.time(), rows)
+    return rows
+
+
 @app.get("/api/readings")
 async def api_readings(hours: int = Query(24, ge=1, le=8760)):
-    """Return chart readings combining DB (last 2 days, high-res) + CSV archive (older, delta storage)."""
-    tz = ZoneInfo(TIMEZONE)
-    now = datetime.now(tz)
-    cutoff = now - timedelta(hours=hours)
-    cutoff_str = cutoff.isoformat(timespec="seconds")
-
-    # DB has high-res data for last 2 days
-    db_cutoff = now - timedelta(days=2)
-    db_rows = await get_readings(min(hours, 48))
-
-    # If we need older data, read from archive
-    archive_rows: list[dict] = []
-    if hours > 48:
-        archive_before = db_cutoff.isoformat(timespec="seconds")
-        archive_rows = _read_archive_rows(cutoff_str, archive_before)
-
-    # Merge: archive (older) first, then DB (newer)
-    merged = archive_rows + db_rows
-    # Dedupe by timestamp (DB wins over archive)
-    seen = set()
-    out: list[dict] = []
-    for r in reversed(merged):  # process newest first
-        ts = r.get("timestamp")
-        if ts in seen:
-            continue
-        seen.add(ts)
-        out.append(r)
-    out.reverse()
-    return out
+    """Chart readings straight from the CSV archive, cached for 60 s."""
+    return await _cached_readings(hours)
 
 
 @app.get("/api/stats")
@@ -693,3 +880,122 @@ async def api_battery_cycles():
     """Pre-computed battery cycle stats. Replaces the old client-side
     calculation that fetched a full year of /api/readings on every load."""
     return battery_cycles.stats()
+
+
+@app.get("/api/break-even")
+async def api_break_even():
+    """Cumulative savings vs system cost + linear projection to break-even."""
+    return await get_cumulative_savings(ELECTRICITY_PRICE_EUR, SYSTEM_COST_EUR)
+
+
+@app.get("/api/forecast-accuracy")
+async def api_forecast_accuracy(days: int = Query(60, ge=7, le=365)):
+    """Per-source forecast accuracy over the last N days (MAE/MAPE/RMSE)."""
+    return await get_forecast_accuracy(days)
+
+
+@app.get("/api/anomaly")
+async def api_anomaly():
+    """Z-score anomaly snapshot for current hour vs weekday baseline."""
+    from app.anomaly import current_anomaly
+    return await current_anomaly()
+
+
+@app.get("/api/ml-forecast")
+async def api_ml_forecast(target: str = Query("solar", pattern="^(solar|load)$")):
+    """Local ML forecast for tomorrow, returns both Open-Meteo + local prediction."""
+    from app.ml_models import predict_tomorrow
+    return await predict_tomorrow(target)
+
+
+@app.get("/api/health")
+async def api_health():
+    """Runtime + storage health for fly.io health-check + dashboards."""
+    import os
+    import resource
+    ARCHIVE_DIR.mkdir(parents=True, exist_ok=True)
+    gz_files = list(ARCHIVE_DIR.glob("*.csv.gz"))
+    csv_files = list(ARCHIVE_DIR.glob("*.csv"))
+    archive_mb = round(
+        (sum(f.stat().st_size for f in gz_files)
+         + sum(f.stat().st_size for f in csv_files)) / 1024 / 1024, 2
+    )
+    try:
+        db_mb = round(os.path.getsize(str(client.device_sn and client.device_sn or "")) / 1024 / 1024, 2) if False else 0.0
+    except Exception:
+        db_mb = 0.0
+    try:
+        from app.config import DB_PATH
+        db_mb = round(os.path.getsize(str(DB_PATH)) / 1024 / 1024, 2)
+    except Exception:
+        pass
+    # Memory (RSS in KB on Linux, bytes on macOS — normalise to MB)
+    try:
+        rss = resource.getrusage(resource.RUSAGE_SELF).ru_maxrss
+        if os.uname().sysname == "Darwin":
+            memory_mb = round(rss / 1024 / 1024, 1)
+        else:
+            memory_mb = round(rss / 1024, 1)
+    except Exception:
+        memory_mb = 0.0
+    last_mqtt_s = round(time.time() - _last_mqtt_time, 1) if _last_mqtt_time else None
+    status_code = 200 if (last_mqtt_s is None or last_mqtt_s < 600) else 503
+    body = {
+        "status": "ok" if status_code == 200 else "stale",
+        "archive_days": len(gz_files) + len(csv_files),
+        "archive_mb": archive_mb,
+        "db_mb": db_mb,
+        "ws_clients": len(ws_clients),
+        "last_mqtt_s": last_mqtt_s,
+        "memory_mb": memory_mb,
+        "mqtt_connected": bool(client.device_sn),
+        "battery_cycles_total": battery_cycles.total_cycles,
+    }
+    from fastapi import Response as FastAPIResponse
+    return FastAPIResponse(
+        content=json.dumps(body),
+        media_type="application/json",
+        status_code=status_code,
+    )
+
+
+@app.get("/metrics")
+async def prometheus_metrics():
+    """Prometheus exposition — scrape-friendly plain text."""
+    lines: list[str] = []
+
+    def gauge(name: str, value, help_text: str, labels: dict | None = None):
+        lines.append(f"# HELP {name} {help_text}")
+        lines.append(f"# TYPE {name} gauge")
+        if labels:
+            lbl = ",".join(f'{k}="{v}"' for k, v in labels.items())
+            lines.append(f"{name}{{{lbl}}} {value}")
+        else:
+            lines.append(f"{name} {value}")
+
+    ld = latest_data or {}
+    gauge("anker_solar_watts", ld.get("solar_watts", 0), "Current solar power in W")
+    gauge("anker_output_watts", ld.get("total_output_watts", 0), "Current load draw in W")
+    gauge("anker_ac_input_watts", ld.get("ac_input_watts", 0), "Current AC grid input in W")
+    gauge("anker_battery_soc_pct", ld.get("battery_soc", 0), "Battery state of charge in %")
+    gauge("anker_battery_soh_pct", ld.get("battery_soh", 0), "Battery state of health in %")
+    gauge("anker_temperature_c", ld.get("temperature", 0), "Device temperature in °C")
+    gauge("anker_daily_solar_kwh", ld.get("daily_kwh", 0), "Today's solar energy in kWh")
+    gauge("anker_daily_output_kwh", ld.get("daily_output_kwh", 0), "Today's load energy in kWh")
+    gauge("anker_daily_direct_use_kwh", ld.get("daily_direct_use_kwh", 0), "Today's direct-use solar in kWh")
+    gauge("anker_daily_battery_in_kwh", ld.get("daily_battery_in_kwh", 0), "Today's battery charge in kWh")
+    gauge("anker_daily_battery_out_kwh", ld.get("daily_battery_out_kwh", 0), "Today's battery discharge in kWh")
+    gauge("anker_autarkie_pct", ld.get("autarkie_pct", 0), "Today's autarky percentage")
+    gauge("anker_direct_use_pct", ld.get("direct_use_pct", 0), "Today's direct-use percentage")
+    gauge("anker_rte_pct", ld.get("rte_pct", 0), "Today's battery round-trip efficiency")
+    gauge("anker_battery_cycles_total", battery_cycles.total_cycles, "Lifetime battery cycles")
+    gauge("anker_battery_cycles_today", battery_cycles.today_cycles, "Today's battery cycles")
+    gauge("anker_ws_clients", len(ws_clients), "Connected WebSocket clients")
+    gauge("anker_mqtt_connected", 1 if client.device_sn else 0, "MQTT connection status")
+    gauge(
+        "anker_last_mqtt_age_seconds",
+        round(time.time() - _last_mqtt_time, 1) if _last_mqtt_time else 0,
+        "Seconds since last MQTT message",
+    )
+
+    return Response(content="\n".join(lines) + "\n", media_type="text/plain; version=0.0.4")

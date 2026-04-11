@@ -1,0 +1,103 @@
+<!DOCTYPE html>
+<html lang="de">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+    <meta name="theme-color" content="#0a0a0a">
+    <title>Login · Anker Solix Dashboard</title>
+    <link rel="stylesheet" href="/static/style.css">
+    <style>
+        body { display: flex; align-items: center; justify-content: center; min-height: 100vh; padding: 20px; }
+        .login-card {
+            background: var(--card-bg);
+            border: 1px solid var(--card-border);
+            border-radius: 14px;
+            padding: 32px 28px;
+            max-width: 360px;
+            width: 100%;
+            box-shadow: 0 10px 30px rgba(0, 0, 0, 0.25);
+        }
+        .login-card h1 {
+            font-size: 1.3rem;
+            margin: 0 0 6px 0;
+            color: var(--text);
+        }
+        .login-card p {
+            font-size: 0.85rem;
+            color: var(--text-dim);
+            margin: 0 0 20px 0;
+        }
+        .login-card input[type="password"] {
+            width: 100%;
+            padding: 12px 14px;
+            background: var(--card-bg);
+            border: 1px solid var(--card-border);
+            border-radius: 8px;
+            color: var(--text);
+            font-size: 1rem;
+            box-sizing: border-box;
+        }
+        .login-card input[type="password"]:focus {
+            outline: none;
+            border-color: var(--solar);
+        }
+        .login-card button {
+            width: 100%;
+            padding: 12px;
+            margin-top: 12px;
+            background: var(--solar);
+            color: #111;
+            border: none;
+            border-radius: 8px;
+            font-weight: 600;
+            font-size: 0.95rem;
+            cursor: pointer;
+        }
+        .login-card button:hover { filter: brightness(1.05); }
+        .login-card .error {
+            color: #ef4444;
+            font-size: 0.8rem;
+            margin-top: 10px;
+            min-height: 18px;
+        }
+        .login-card .brand {
+            text-align: center;
+            font-size: 2rem;
+            margin-bottom: 12px;
+        }
+    </style>
+</head>
+<body>
+    <div class="login-card">
+        <div class="brand">⚡️</div>
+        <h1>Anker Solix Dashboard</h1>
+        <p>Passwort eingeben, um das Dashboard zu öffnen.</p>
+        <form id="loginForm">
+            <input type="password" name="password" id="password" autofocus required autocomplete="current-password" placeholder="Passwort">
+            <button type="submit">Einloggen</button>
+            <div class="error" id="errMsg"></div>
+        </form>
+    </div>
+    <script>
+        document.getElementById('loginForm').addEventListener('submit', async (e) => {
+            e.preventDefault();
+            const pw = document.getElementById('password').value;
+            const errEl = document.getElementById('errMsg');
+            errEl.textContent = '';
+            try {
+                const fd = new FormData();
+                fd.append('password', pw);
+                const res = await fetch('/auth/login', { method: 'POST', body: fd });
+                if (res.ok) {
+                    window.location.href = '/';
+                } else {
+                    errEl.textContent = 'Falsches Passwort';
+                    document.getElementById('password').select();
+                }
+            } catch (err) {
+                errEl.textContent = 'Fehler beim Login';
+            }
+        });
+    </script>
+</body>
+</html>

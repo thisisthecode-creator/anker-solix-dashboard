@@ -28,6 +28,20 @@ GAP_THRESHOLD = 7200
 ELECTRICITY_PRICE_EUR = 0.25
 
 BATTERY_CAPACITY_WH = 1024  # C1000 Gen 2 capacity
+# System cost in EUR (4011 PLN ÷ 4.2623 NBP rate 2026-04-08)
+SYSTEM_COST_EUR = 941
 # Location: Warsaw, Poland (52°11'34"N 21°0'37"E, 120m, SW facing 245°)
 LATITUDE = 52.1928
 LONGITUDE = 21.0103
+# Panel orientation (SW 245°) and nominal peak power (2× 220 W)
+PANEL_AZIMUTH_DEG = 245
+PANEL_PEAK_KW = 0.44
+
+# Anomaly-detection baseline: how many days back to build the per-hour
+# weekday baseline from, and how many sigmas above mean triggers an alert.
+ANOMALY_BASELINE_DAYS = 30
+ANOMALY_SIGMA_THRESHOLD = 2.0
+
+# Auth (optional): when set, /api/* + / require a signed session cookie
+# obtained from POST /auth/login with this password. Empty = public (no auth).
+DASHBOARD_PASSWORD = os.getenv("DASHBOARD_PASSWORD", "")
