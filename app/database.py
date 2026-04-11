@@ -12,10 +12,19 @@ import gzip
 import logging
 from datetime import datetime, timedelta
 from pathlib import Path
+from zoneinfo import ZoneInfo
 
 import aiosqlite
 
-from app.config import DB_PATH
+from app.config import DB_PATH, TIMEZONE
+
+_TZ = ZoneInfo(TIMEZONE)
+
+
+def _now_local() -> datetime:
+    """Always return a TZ-aware local datetime so cutoff strings match the
+    archive / daily_solar date format regardless of container TZ env var."""
+    return datetime.now(_TZ)
 
 logger = logging.getLogger(__name__)
 
@@ -357,7 +366,7 @@ async def get_daily_stats(days: int = 30):
             "FROM daily_solar ORDER BY date DESC"
         )
     else:
-        cutoff = (datetime.now() - timedelta(days=days)).strftime("%Y-%m-%d")
+        cutoff = (_now_local() - timedelta(days=days)).strftime("%Y-%m-%d")
         cur = await db.execute(
             "SELECT date, avg_solar_w, peak_watts, avg_temp, min_temp, max_temp, "
             "min_soc, max_soc, avg_output_w, peak_output_w "
@@ -385,7 +394,7 @@ async def get_daily_stats(days: int = 30):
 async def cleanup_old_readings():
     """Prune the legacy readings table. Run from the cleanup loop."""
     db = await get_pool()
-    cutoff = (datetime.now() - timedelta(days=2)).strftime("%Y-%m-%d")
+    cutoff = (_now_local() - timedelta(days=2)).strftime("%Y-%m-%d")
     cur = await db.execute(
         "DELETE FROM readings WHERE timestamp < ?", (cutoff,)
     )
@@ -468,9 +477,11 @@ async def get_readings(hours: int = 24) -> list[dict]:
     The old behaviour (query `readings` table) is kept as a fallback only
     if the archive turns up empty.
     """
-    tz_now = datetime.now()
+    tz_now = _now_local()
     cutoff = tz_now - timedelta(hours=hours)
-    cutoff_str = cutoff.isoformat(timespec="seconds")
+    # Strip tz offset from isoformat so it matches the archive timestamps
+    # (which store "2026-04-11T14:30:00" without offset).
+    cutoff_str = cutoff.strftime("%Y-%m-%dT%H:%M:%S")
     cutoff_date = cutoff.strftime("%Y-%m-%d")
 
     rows: list[dict] = []
@@ -662,7 +673,7 @@ async def get_forecast_accuracy(days: int = 60) -> dict:
     source (e.g. "openmeteo", "ml_solar") with MAE, MAPE, bias, n.
     """
     db = await get_pool()
-    cutoff = (datetime.now() - timedelta(days=days)).strftime("%Y-%m-%d")
+    cutoff = (_now_local() - timedelta(days=days)).strftime("%Y-%m-%d")
     cur = await db.execute(
         """SELECT fl.source, fl.date, fl.predicted_kwh, ds.solar_kwh
            FROM forecast_log fl

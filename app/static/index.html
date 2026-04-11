@@ -377,6 +377,111 @@
             </details>
         </section>
 
+        <!-- Energy Flow: Direct use / Autarky / RTE -->
+        <section class="today-box" id="energyFlowSection" aria-labelledby="efTitle">
+            <h2 id="efTitle" data-i18n="energyFlowTitle">Energie-Fluss (heute)</h2>
+            <div class="amort-grid ef-grid">
+                <div class="stat-card">
+                    <div class="stat-label" data-i18n="directUseKwh">Direkt verbraucht</div>
+                    <div class="stat-value" id="efDirectUse">--</div>
+                    <div class="stat-unit">kWh</div>
+                </div>
+                <div class="stat-card">
+                    <div class="stat-label" data-i18n="batteryInKwh">In Akku</div>
+                    <div class="stat-value" id="efBatteryIn">--</div>
+                    <div class="stat-unit">kWh</div>
+                </div>
+                <div class="stat-card">
+                    <div class="stat-label" data-i18n="batteryOutKwh">Aus Akku</div>
+                    <div class="stat-value" id="efBatteryOut">--</div>
+                    <div class="stat-unit">kWh</div>
+                </div>
+            </div>
+            <div class="ef-metric-row">
+                <div class="ef-metric">
+                    <div class="ef-metric-label" data-i18n="directUsePctLabel">Direkt-Eigenverbrauch</div>
+                    <div class="ef-metric-bar"><div class="ef-metric-fill ef-fill-solar" id="efDirectFill"></div></div>
+                    <div class="ef-metric-value" id="efDirectVal">--%</div>
+                </div>
+                <div class="ef-metric">
+                    <div class="ef-metric-label" data-i18n="autarkiePctLabel">Autarkie-Grad</div>
+                    <div class="ef-metric-bar"><div class="ef-metric-fill ef-fill-green" id="efAutFill"></div></div>
+                    <div class="ef-metric-value" id="efAutVal">--%</div>
+                </div>
+                <div class="ef-metric">
+                    <div class="ef-metric-label" data-i18n="rtePctLabel">Round-Trip Efficiency</div>
+                    <div class="ef-metric-bar"><div class="ef-metric-fill ef-fill-blue" id="efRteFill"></div></div>
+                    <div class="ef-metric-value" id="efRteVal">--%</div>
+                </div>
+            </div>
+            <div class="cycle-hint" id="efRteHint" data-i18n="rteHint">Mindestens 10 Wh Akku-Umsatz nötig</div>
+            <details class="amort-details cycle-info">
+                <summary data-i18n="efInfoTitle">Was bedeuten diese Kennzahlen?</summary>
+                <div class="cycle-info-body" data-i18n-html="efInfoBody"></div>
+            </details>
+        </section>
+
+        <!-- Break-Even Live -->
+        <section class="today-box" id="breakEvenSection" aria-labelledby="beTitle">
+            <h2 id="beTitle" data-i18n="breakEvenTitle">Break-Even Live</h2>
+            <div class="amort-grid">
+                <div class="stat-card">
+                    <div class="stat-label" data-i18n="breakEvenSaved">Gespart gesamt</div>
+                    <div class="stat-value" id="beSaved">--</div>
+                    <div class="stat-unit">€</div>
+                </div>
+                <div class="stat-card">
+                    <div class="stat-label" data-i18n="breakEvenAmortised">Amortisiert</div>
+                    <div class="stat-value" id="bePct">--</div>
+                    <div class="stat-unit">%</div>
+                </div>
+                <div class="stat-card">
+                    <div class="stat-label" data-i18n="breakEvenRemaining">Verbleibend</div>
+                    <div class="stat-value" id="beRemaining">--</div>
+                    <div class="stat-unit">€</div>
+                </div>
+            </div>
+            <div class="cycle-progress">
+                <div class="cycle-progress-head">
+                    <span class="cycle-progress-caption" data-i18n="breakEvenAmortised">Amortisiert</span>
+                    <span class="cycle-progress-label" id="beProgressLabel">0%</span>
+                </div>
+                <div class="cycle-progress-track"><div class="cycle-progress-fill ef-fill-solar" id="beProgressFill"></div></div>
+            </div>
+            <div class="cycle-hint" id="beHint">--</div>
+        </section>
+
+        <!-- Consumption Anomaly -->
+        <section class="today-box" id="anomalySection" aria-labelledby="anTitle">
+            <h2 id="anTitle" data-i18n="anomalyTitle">Verbrauchs-Anomalie</h2>
+            <div class="anomaly-badge" id="anomalyBadge">
+                <span class="anomaly-dot" id="anomalyDot"></span>
+                <span id="anomalyStatus" data-i18n="anomalyNoData">Noch nicht genug Baseline-Daten</span>
+            </div>
+            <div class="cycle-hint" id="anomalyDetail"></div>
+        </section>
+
+        <!-- Forecast Comparison: Open-Meteo vs Local ML -->
+        <section class="today-box" id="forecastCompareSection" aria-labelledby="fcTitle">
+            <h2 id="fcTitle" data-i18n="forecastCompareTitle">Prognose-Vergleich (morgen)</h2>
+            <div class="fc-compare-row">
+                <div class="fc-compare-card">
+                    <div class="fc-compare-label" data-i18n="forecastOpenMeteo">Open-Meteo</div>
+                    <div class="fc-compare-value" id="fcOpenmeteoVal">--</div>
+                    <div class="fc-compare-unit">kWh</div>
+                </div>
+                <div class="fc-compare-card">
+                    <div class="fc-compare-label" data-i18n="forecastLocal">Eigenes Modell</div>
+                    <div class="fc-compare-value" id="fcLocalVal">--</div>
+                    <div class="fc-compare-unit">kWh</div>
+                </div>
+            </div>
+            <h3 class="fc-acc-title" data-i18n="forecastAccuracy">Genauigkeit (letzte 30 Tage)</h3>
+            <div class="fc-acc-table" id="fcAccTable">
+                <div class="fc-acc-empty" data-i18n="forecastAccNoData">Noch keine Accuracy-Daten — Modelle werden nachts trainiert.</div>
+            </div>
+        </section>
+
         <!-- Usage Patterns -->
         <section class="today-box" id="usagePatternsSection">
             <h2 data-i18n="usagePatterns">Verbrauchsmuster</h2>

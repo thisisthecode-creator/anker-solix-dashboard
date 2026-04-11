@@ -94,6 +94,42 @@ const I18N = {
         deviceInfo: 'Geräte-Info', displayOn: 'Display An', displayOff: 'Display Aus',
         ledMode: 'LED', expansionPacks: 'Erweiterungen',
         weatherCodes: { 0: 'Klar', 1: 'Heiter', 2: 'Teilw. bewölkt', 3: 'Bewölkt', 45: 'Nebel', 48: 'Nebel', 51: 'Niesel', 53: 'Niesel', 55: 'Regen', 61: 'Regen', 63: 'Regen', 65: 'Starkregen', 71: 'Schnee', 73: 'Schnee', 75: 'Schnee', 80: 'Schauer', 81: 'Schauer', 82: 'Gewitter', 95: 'Gewitter', 96: 'Hagel' },
+        // Phase 2-4 additions
+        energyFlowTitle: 'Energie-Fluss (heute)',
+        directUseKwh: 'Direkt verbraucht', batteryInKwh: 'In Akku', batteryOutKwh: 'Aus Akku',
+        directUsePctLabel: 'Direkt-Eigenverbrauch', autarkiePctLabel: 'Autarkie-Grad',
+        rtePctLabel: 'Round-Trip Efficiency', rteHint: 'Mindestens 10 Wh Akku-Umsatz nötig',
+        efInfoTitle: 'Was bedeuten diese Kennzahlen?',
+        efInfoBody:
+            '<p><strong>Direkt-Eigenverbrauch</strong> ist der Anteil der Solarerzeugung, der sofort vom Verbraucher ' +
+            'genutzt wird — Rest geht in den Akku oder wird verworfen. Formel: <code>min(Solar, Last) / Solar</code>.</p>' +
+            '<p><strong>Autarkie-Grad</strong> ist der Anteil deines Verbrauchs, der nicht aus dem Netz kommt. ' +
+            'Formel: <code>(Last − AC-Eingang) / Last</code>. 100 % heißt: keine Kilowattstunde aus der Steckdose.</p>' +
+            '<p><strong>Round-Trip Efficiency (RTE)</strong> vergleicht, wie viel Energie aus dem Akku herauskommt mit dem, ' +
+            'was reingegangen ist. LiFePO4 liegt typischerweise bei <strong>92–98 %</strong>. Fallen unter 90 % über mehrere Tage ' +
+            'ist ein früherer Indikator für Zelldegradation als die SOH-Anzeige.</p>' +
+            '<p>Alle drei Werte werden aus der Energie-Erhaltungsgleichung berechnet: ' +
+            '<code>Solar + Netz = Last + Akku</code>. Vorzeichen von <code>Akku</code> entscheidet Laden vs. Entladen.</p>',
+
+        breakEvenTitle: 'Break-Even Live',
+        breakEvenAmortised: 'Amortisiert', breakEvenRemaining: 'Verbleibend',
+        breakEvenSaved: 'Gespart gesamt', breakEvenProjection: 'Break-Even voraussichtlich',
+        breakEvenAvgDay: 'Ø {kwh} kWh/Tag (letzte 30 Tage)',
+        breakEvenPaidOff: 'System ist amortisiert! 🎉',
+
+        anomalyTitle: 'Verbrauchs-Anomalie',
+        anomalyNormal: 'Verbrauch im Normalbereich',
+        anomalyHigh: 'Verbrauch höher als gewöhnlich',
+        anomalyLow: 'Verbrauch niedriger als gewöhnlich',
+        anomalyNoData: 'Noch nicht genug Baseline-Daten',
+        anomalyDetail: '{current} W · Baseline {mean} W ± {sigma} W · z={z}',
+
+        forecastCompareTitle: 'Prognose-Vergleich (morgen)',
+        forecastOpenMeteo: 'Open-Meteo', forecastLocal: 'Eigenes Modell',
+        forecastAccuracy: 'Genauigkeit (letzte 30 Tage)',
+        forecastAccMae: 'MAE', forecastAccMape: 'MAPE', forecastAccBias: 'Bias', forecastAccN: 'n',
+        forecastAccNoData: 'Noch keine Accuracy-Daten — Modelle werden nachts trainiert.',
+
         dayNames: ['So', 'Mo', 'Di', 'Mi', 'Do', 'Fr', 'Sa'],
         monthNames: ['Jan', 'Feb', 'Mar', 'Apr', 'Mai', 'Jun', 'Jul', 'Aug', 'Sep', 'Okt', 'Nov', 'Dez'],
     },
@@ -182,6 +218,42 @@ const I18N = {
         deviceInfo: 'Device Info', displayOn: 'Display On', displayOff: 'Display Off',
         ledMode: 'LED', expansionPacks: 'Expansions',
         weatherCodes: { 0: 'Clear', 1: 'Fair', 2: 'Partly cloudy', 3: 'Overcast', 45: 'Fog', 48: 'Fog', 51: 'Drizzle', 53: 'Drizzle', 55: 'Rain', 61: 'Rain', 63: 'Rain', 65: 'Heavy rain', 71: 'Snow', 73: 'Snow', 75: 'Snow', 80: 'Showers', 81: 'Showers', 82: 'Thunderstorm', 95: 'Thunderstorm', 96: 'Hail' },
+        // Phase 2-4 additions
+        energyFlowTitle: 'Energy Flow (today)',
+        directUseKwh: 'Direct used', batteryInKwh: 'Into battery', batteryOutKwh: 'From battery',
+        directUsePctLabel: 'Direct self-consumption', autarkiePctLabel: 'Autarky',
+        rtePctLabel: 'Round-trip efficiency', rteHint: 'Needs at least 10 Wh battery cycling',
+        efInfoTitle: 'What do these metrics mean?',
+        efInfoBody:
+            '<p><strong>Direct self-consumption</strong> is the share of solar generation used by the load immediately — ' +
+            'the rest goes into the battery or is wasted. Formula: <code>min(solar, load) / solar</code>.</p>' +
+            '<p><strong>Autarky</strong> is the share of your consumption that did not come from the grid. ' +
+            'Formula: <code>(load − AC input) / load</code>. 100 % means no kilowatt-hour came from the wall outlet.</p>' +
+            '<p><strong>Round-trip efficiency (RTE)</strong> compares energy out of the battery vs energy in. ' +
+            'LiFePO4 cells typically hover at <strong>92–98 %</strong>. Dropping below 90 % over several days is an ' +
+            'earlier indicator of cell degradation than the SOH reading.</p>' +
+            '<p>All three metrics derive from energy conservation: <code>solar + grid = load + battery</code>. ' +
+            'The sign of <code>battery</code> determines charging vs discharging.</p>',
+
+        breakEvenTitle: 'Break-Even Live',
+        breakEvenAmortised: 'Amortised', breakEvenRemaining: 'Remaining',
+        breakEvenSaved: 'Saved so far', breakEvenProjection: 'Projected break-even',
+        breakEvenAvgDay: 'Avg {kwh} kWh/day (last 30 days)',
+        breakEvenPaidOff: 'System is paid off! 🎉',
+
+        anomalyTitle: 'Consumption Anomaly',
+        anomalyNormal: 'Consumption in normal range',
+        anomalyHigh: 'Consumption higher than usual',
+        anomalyLow: 'Consumption lower than usual',
+        anomalyNoData: 'Not enough baseline data yet',
+        anomalyDetail: '{current} W · baseline {mean} W ± {sigma} W · z={z}',
+
+        forecastCompareTitle: 'Forecast Comparison (tomorrow)',
+        forecastOpenMeteo: 'Open-Meteo', forecastLocal: 'Local model',
+        forecastAccuracy: 'Accuracy (last 30 days)',
+        forecastAccMae: 'MAE', forecastAccMape: 'MAPE', forecastAccBias: 'Bias', forecastAccN: 'n',
+        forecastAccNoData: 'No accuracy data yet — models train overnight.',
+
         dayNames: ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'],
         monthNames: ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'],
     }
@@ -653,6 +725,9 @@ function updateUI(d) {
     $('eToday').textContent = fmtWh(d.daily_kwh || 0);
     $('eOutToday').textContent = fmtWh(d.daily_output_kwh || 0);
     $('sToday').textContent = fmtEur.format(d.daily_savings_eur || 0) + ' \u20ac';
+
+    // Energy-Flow section (direct-use / autarky / RTE) updates live from WS
+    try { updateEnergyFlowFromLatest(d); } catch (e) {}
 
     const solar = d.solar_watts || 0;
     const output = d.total_output_watts || 0;
@@ -1776,6 +1851,156 @@ async function loadBatteryCycles() {
 
 loadBatteryCycles();
 
+// === Energy-Flow: Direct-use / Autarky / RTE ===
+// All three come from the live latest_data (WebSocket broadcast) so the
+// section refreshes every 3s without an extra fetch.
+function updateEnergyFlowFromLatest(d) {
+    if (!d) return;
+    const $u = (id, val) => { const el = $(id); if (el) el.textContent = val; };
+    const $w = (id, pct) => {
+        const el = $(id);
+        if (!el) return;
+        const clipped = Math.max(0, Math.min(100, pct || 0));
+        el.style.width = clipped + '%';
+    };
+    $u('efDirectUse', fmt2.format(d.daily_direct_use_kwh || 0));
+    $u('efBatteryIn', fmt2.format(d.daily_battery_in_kwh || 0));
+    $u('efBatteryOut', fmt2.format(d.daily_battery_out_kwh || 0));
+
+    const dup = d.direct_use_pct || 0;
+    const aut = d.autarkie_pct || 0;
+    const rte = d.rte_pct || 0;
+    $u('efDirectVal', fmt.format(dup) + '%');
+    $u('efAutVal', fmt.format(aut) + '%');
+    $u('efRteVal', rte > 0 ? fmt.format(rte) + '%' : '--');
+    $w('efDirectFill', dup);
+    $w('efAutFill', aut);
+    $w('efRteFill', rte);
+
+    const hint = $('efRteHint');
+    if (hint) {
+        hint.style.display = (rte > 0) ? 'none' : 'block';
+    }
+}
+
+// === Break-Even Live ===
+async function loadBreakEven() {
+    try {
+        const res = await fetch('/api/break-even');
+        if (!res.ok) return;
+        const d = await res.json();
+        $('beSaved').textContent = fmtEur.format(d.total_savings_eur || 0);
+        $('bePct').textContent = fmt2.format(d.percent_amortised || 0);
+        const remaining = Math.max(0, (d.system_cost_eur || 0) - (d.total_savings_eur || 0));
+        $('beRemaining').textContent = fmtEur.format(remaining);
+
+        const pct = Math.min(100, d.percent_amortised || 0);
+        $('beProgressFill').style.width = pct + '%';
+        $('beProgressLabel').textContent = fmt2.format(pct) + '%';
+
+        const hint = $('beHint');
+        if (hint) {
+            if (d.total_savings_eur >= d.system_cost_eur) {
+                hint.textContent = t('breakEvenPaidOff');
+            } else if (d.break_even_date && d.avg_daily_kwh_last30 > 0) {
+                const line1 = t('breakEvenAvgDay').replace('{kwh}', fmt2.format(d.avg_daily_kwh_last30));
+                const line2 = t('breakEvenProjection') + ': ' + d.break_even_date;
+                hint.innerHTML = line1 + ' · ' + line2;
+            } else {
+                hint.textContent = '—';
+            }
+        }
+    } catch (e) { console.warn('Break-even error:', e); }
+}
+loadBreakEven();
+
+// === Consumption Anomaly ===
+async function loadAnomaly() {
+    try {
+        const res = await fetch('/api/anomaly');
+        if (!res.ok) return;
+        const d = await res.json();
+        const statusEl = $('anomalyStatus');
+        const dot = $('anomalyDot');
+        const detail = $('anomalyDetail');
+        if (!statusEl || !dot) return;
+        // Reset dot classes
+        dot.classList.remove('anomaly-normal', 'anomaly-high', 'anomaly-low');
+        if (d.status === 'insufficient_data') {
+            statusEl.textContent = t('anomalyNoData');
+            if (detail) detail.textContent = '';
+            return;
+        }
+        dot.classList.add('anomaly-' + d.status);
+        if (d.status === 'high') statusEl.textContent = t('anomalyHigh');
+        else if (d.status === 'low') statusEl.textContent = t('anomalyLow');
+        else statusEl.textContent = t('anomalyNormal');
+        if (detail) {
+            detail.textContent = t('anomalyDetail')
+                .replace('{current}', fmt.format(d.current_avg_w || 0))
+                .replace('{mean}', fmt.format(d.baseline_mean_w || 0))
+                .replace('{sigma}', fmt.format(d.baseline_sigma_w || 0))
+                .replace('{z}', fmt2.format(d.z_score || 0));
+        }
+    } catch (e) { console.warn('Anomaly error:', e); }
+}
+loadAnomaly();
+
+// === Forecast comparison: Open-Meteo vs local ML ===
+async function loadForecastCompare() {
+    try {
+        const [mlRes, accRes] = await Promise.all([
+            fetch('/api/ml-forecast?target=solar'),
+            fetch('/api/forecast-accuracy?days=30'),
+        ]);
+        if (mlRes.ok) {
+            const d = await mlRes.json();
+            $('fcOpenmeteoVal').textContent =
+                (d.openmeteo_kwh != null) ? fmt2.format(d.openmeteo_kwh) : '--';
+            $('fcLocalVal').textContent =
+                (d.ml_kwh != null) ? fmt2.format(d.ml_kwh) : '--';
+        }
+        if (accRes.ok) {
+            const acc = await accRes.json();
+            const table = $('fcAccTable');
+            if (!table) return;
+            const keys = Object.keys(acc);
+            if (!keys.length) {
+                table.innerHTML = '<div class="fc-acc-empty">'
+                    + t('forecastAccNoData') + '</div>';
+                return;
+            }
+            // Winner: lowest MAE among sources that have at least 3 data points
+            let winner = null;
+            let winnerMae = Infinity;
+            for (const k of keys) {
+                if (acc[k].n >= 3 && acc[k].mae_kwh < winnerMae) {
+                    winnerMae = acc[k].mae_kwh;
+                    winner = k;
+                }
+            }
+            table.innerHTML = keys.map(k => {
+                const a = acc[k];
+                const label = k === 'openmeteo' ? t('forecastOpenMeteo')
+                    : (k === 'ml_solar' ? t('forecastLocal') : k);
+                const winCls = (k === winner) ? ' fc-acc-winner' : '';
+                return '<div class="fc-acc-row' + winCls + '">'
+                    + '<div class="fc-acc-source">' + label + '</div>'
+                    + '<div class="fc-acc-stat"><div class="fc-acc-stat-label">' + t('forecastAccN') + '</div>'
+                    + '<div class="fc-acc-stat-value">' + a.n + '</div></div>'
+                    + '<div class="fc-acc-stat"><div class="fc-acc-stat-label">' + t('forecastAccMae') + '</div>'
+                    + '<div class="fc-acc-stat-value">' + fmt2.format(a.mae_kwh) + '</div></div>'
+                    + '<div class="fc-acc-stat"><div class="fc-acc-stat-label">' + t('forecastAccMape') + '</div>'
+                    + '<div class="fc-acc-stat-value">' + fmt.format(a.mape_pct) + '%</div></div>'
+                    + '<div class="fc-acc-stat"><div class="fc-acc-stat-label">' + t('forecastAccBias') + '</div>'
+                    + '<div class="fc-acc-stat-value">' + fmt2.format(a.bias_kwh) + '</div></div>'
+                    + '</div>';
+            }).join('');
+        }
+    } catch (e) { console.warn('Forecast compare error:', e); }
+}
+loadForecastCompare();
+
 // === Usage Pattern Detection ===
 async function loadUsagePatterns() {
     try {
@@ -1935,3 +2160,34 @@ function checkWeeklyReport() {
 // Check weekly report every 30 minutes
 setInterval(checkWeeklyReport, 1800000);
 checkWeeklyReport();
+
+// === Keyboard shortcuts (accessibility) ===
+// Press `h` → heatmap, `s` → stats, `c` → cycle tracker, `f` → forecast compare,
+// `e` → energy flow, `b` → break-even, `?` → show list of shortcuts.
+document.addEventListener('keydown', (e) => {
+    // Ignore when typing in an input / textarea / contenteditable
+    const tag = (e.target && e.target.tagName) || '';
+    if (tag === 'INPUT' || tag === 'TEXTAREA' || e.target.isContentEditable) return;
+    if (e.ctrlKey || e.metaKey || e.altKey) return;
+
+    const targetId = {
+        'h': 'heatmapWrap',
+        's': 'statsGrid',
+        'c': 'batteryCycleSection',
+        'e': 'energyFlowSection',
+        'b': 'breakEvenSection',
+        'f': 'forecastCompareSection',
+        'a': 'anomalySection',
+    }[e.key.toLowerCase()];
+
+    if (targetId) {
+        const el = document.getElementById(targetId);
+        if (el) {
+            e.preventDefault();
+            el.scrollIntoView({ block: 'center', behavior: 'smooth' });
+        }
+    } else if (e.key === '?') {
+        e.preventDefault();
+        alert('Shortcuts:\n  h — Heatmap\n  s — Statistics\n  c — Battery cycles\n  e — Energy flow\n  b — Break-even\n  f — Forecast compare\n  a — Anomaly');
+    }
+});

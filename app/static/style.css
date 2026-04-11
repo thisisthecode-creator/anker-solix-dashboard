@@ -2186,6 +2186,197 @@ body.light-mode .log-table td {
     text-align: center;
 }
 
+/* === Energy flow (RTE / autarky / direct-use) === */
+.ef-grid { grid-template-columns: 1fr 1fr 1fr; }
+
+.ef-metric-row {
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+    margin-top: 14px;
+    margin-bottom: 8px;
+}
+
+.ef-metric {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) auto;
+    column-gap: 10px;
+    row-gap: 3px;
+    align-items: center;
+}
+
+.ef-metric-label {
+    grid-column: 1 / 2;
+    font-size: 0.7rem;
+    color: var(--text-dim);
+    text-transform: uppercase;
+    letter-spacing: 0.04em;
+}
+
+.ef-metric-value {
+    grid-column: 2 / 3;
+    grid-row: 1 / 3;
+    align-self: center;
+    font-size: 0.95rem;
+    font-weight: 700;
+    font-variant-numeric: tabular-nums;
+    color: var(--text);
+    text-align: right;
+    min-width: 50px;
+}
+
+.ef-metric-bar {
+    grid-column: 1 / 2;
+    height: 7px;
+    background: var(--card-border);
+    border-radius: 4px;
+    overflow: hidden;
+}
+
+.ef-metric-fill {
+    height: 100%;
+    border-radius: 4px;
+    transition: width 0.6s ease;
+    min-width: 2px;
+}
+
+.ef-fill-solar { background: var(--solar); }
+.ef-fill-green { background: #22c55e; }
+.ef-fill-blue  { background: var(--blue); }
+
+/* === Break-Even === */
+#breakEvenSection .cycle-progress {
+    margin-top: 12px;
+    margin-bottom: 8px;
+}
+
+/* === Anomaly === */
+.anomaly-badge {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    padding: 12px 14px;
+    background: var(--card-bg);
+    border: 1px solid var(--card-border);
+    border-radius: 10px;
+    font-size: 0.85rem;
+    margin-bottom: 8px;
+}
+
+.anomaly-dot {
+    display: inline-block;
+    width: 10px;
+    height: 10px;
+    border-radius: 50%;
+    background: var(--text-dim);
+    flex-shrink: 0;
+}
+
+.anomaly-dot.anomaly-normal { background: #22c55e; }
+.anomaly-dot.anomaly-high { background: #ef4444; }
+.anomaly-dot.anomaly-low { background: var(--blue); }
+
+/* === Forecast Comparison === */
+.fc-compare-row {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 10px;
+    margin-bottom: 16px;
+}
+
+.fc-compare-card {
+    text-align: center;
+    padding: 14px 12px;
+    background: var(--card-bg);
+    border: 1px solid var(--card-border);
+    border-radius: 10px;
+}
+
+.fc-compare-label {
+    font-size: 0.7rem;
+    color: var(--text-dim);
+    text-transform: uppercase;
+    letter-spacing: 0.04em;
+    margin-bottom: 5px;
+}
+
+.fc-compare-value {
+    font-size: 1.6rem;
+    font-weight: 700;
+    color: var(--solar);
+    font-variant-numeric: tabular-nums;
+}
+
+.fc-compare-unit {
+    font-size: 0.7rem;
+    color: var(--text-dim);
+    margin-top: 1px;
+}
+
+.fc-acc-title {
+    font-size: 0.75rem;
+    color: var(--text-dim);
+    text-transform: uppercase;
+    letter-spacing: 0.04em;
+    margin: 6px 0 8px 0;
+    font-weight: 600;
+}
+
+.fc-acc-table {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+}
+
+.fc-acc-row {
+    display: grid;
+    grid-template-columns: auto repeat(4, 1fr);
+    gap: 8px;
+    align-items: baseline;
+    padding: 8px 10px;
+    background: var(--card-bg);
+    border: 1px solid var(--card-border);
+    border-radius: 8px;
+    font-size: 0.7rem;
+}
+
+.fc-acc-source {
+    font-weight: 600;
+    color: var(--text);
+    font-size: 0.75rem;
+}
+
+.fc-acc-stat {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 2px;
+}
+
+.fc-acc-stat-label {
+    color: var(--text-dim);
+    text-transform: uppercase;
+    font-size: 0.55rem;
+    letter-spacing: 0.05em;
+}
+
+.fc-acc-stat-value {
+    color: var(--text);
+    font-weight: 700;
+    font-variant-numeric: tabular-nums;
+    font-size: 0.78rem;
+}
+
+.fc-acc-empty {
+    font-size: 0.72rem;
+    color: var(--text-dim);
+    text-align: center;
+    padding: 12px 4px;
+}
+
+.fc-acc-row.fc-acc-winner { border-color: var(--solar); }
+.fc-acc-row.fc-acc-winner .fc-acc-source { color: var(--solar); }
+
 /* Battery Cycle Tracker */
 .cycle-grid-2 {
     grid-template-columns: 1fr 1fr;
