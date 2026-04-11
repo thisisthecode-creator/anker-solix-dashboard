@@ -2063,115 +2063,15 @@ loadForecastCompare();
 // Curve · Monthly Box-Plots
 // ============================================================================
 
-// === 1b: Live Power Flow animation (updates from WS latest_data) ===
-// Uses SVG paths as tracks and spawns animated particles along them.
-// Each particle is an SVG circle that animates along the path via
-// `animateMotion` — no external libs, pure SVG.
-const PF_PATHS = {
-    solar_load: 'pfPathSolarLoad',
-    solar_bat: 'pfPathSolarBat',
-    bat_load: 'pfPathBatLoad',
-    grid_load: 'pfPathGridLoad',
-    grid_bat: 'pfPathGridBat',
-};
-
-function _pfSpawnParticle(pathId, color, duration) {
-    const container = $('pfParticles');
-    if (!container) return;
-    const svgNs = 'http://www.w3.org/2000/svg';
-    const circle = document.createElementNS(svgNs, 'circle');
-    circle.setAttribute('r', '2.2');
-    circle.setAttribute('fill', color);
-    circle.classList.add('pf-particle');
-    const anim = document.createElementNS(svgNs, 'animateMotion');
-    anim.setAttribute('dur', duration + 's');
-    anim.setAttribute('repeatCount', '1');
-    anim.setAttribute('fill', 'freeze');
-    const mpath = document.createElementNS(svgNs, 'mpath');
-    mpath.setAttributeNS('http://www.w3.org/1999/xlink', 'href', '#' + pathId);
-    anim.appendChild(mpath);
-    circle.appendChild(anim);
-    container.appendChild(circle);
-    // Clean up after animation finishes
-    setTimeout(() => { try { circle.remove(); } catch (e) {} }, duration * 1000 + 200);
-    // Start animation immediately (Safari/WebKit workaround)
-    if (typeof anim.beginElement === 'function') {
-        try { anim.beginElement(); } catch (e) {}
-    }
-}
-
-let _pfTickInterval = null;
-
-function _pfActivateWire(pathId, active) {
-    const el = document.getElementById(pathId);
-    if (!el) return;
-    el.classList.toggle('pf-active', active);
-}
-
+// === 1b: Power Flow updates (vertical layout, no SVG animation) ===
+// Updates the total "Verbraucher" label at the top of the port grid on
+// every WS tick. The individual port cards (AC, USB-C 1-3, USB-A, DC 12V)
+// are updated by updateUI/updateDeviceStatus elsewhere using the same
+// flowXxxVal element IDs the old layout had.
 function updatePowerFlow(d) {
     if (!d) return;
-    const solar = d.solar_watts || 0;
-    const load = d.total_output_watts || 0;
-    const grid = d.ac_input_watts || 0;
-    const soc = d.battery_soc || 0;
-
-    // Conservation: battery_net = solar + grid - load
-    const batteryNet = solar + grid - load;
-    const batteryIn = Math.max(0, batteryNet);
-    const batteryOut = Math.max(0, -batteryNet);
-
-    // Flow split when solar is producing
-    const solarDirect = Math.min(solar, load);
-    const solarToBat = Math.max(0, solar - load);
-    const gridToLoad = Math.min(grid, Math.max(0, load - solar));
-    const gridToBat = Math.max(0, grid - gridToLoad);
-
-    // Activate/deactivate wires based on non-zero flow
-    _pfActivateWire(PF_PATHS.solar_load, solarDirect > 1);
-    _pfActivateWire(PF_PATHS.solar_bat, solarToBat > 1);
-    _pfActivateWire(PF_PATHS.bat_load, batteryOut > 1);
-    _pfActivateWire(PF_PATHS.grid_load, gridToLoad > 1);
-    _pfActivateWire(PF_PATHS.grid_bat, gridToBat > 1);
-
-    // Live values
-    const set = (id, v) => { const el = $(id); if (el) el.textContent = v; };
-    set('pfValSolar', fmt.format(solar) + ' W');
-    set('pfValBat', soc + '%');
-    set('pfValLoad', fmt.format(load) + ' W');
-    set('pfValGrid', fmt.format(grid) + ' W');
-
-    // Legend captions
-    const legSolar = $('pfLegSolar');
-    if (legSolar) legSolar.textContent = solar > 1
-        ? 'Solar → ' + (solarDirect > solarToBat ? t('pfLoad') : t('pfBattery'))
-        : 'Solar idle';
-    const legBat = $('pfLegBat');
-    if (legBat) legBat.textContent = batteryOut > 1 ? t('pfBattery') + ' → ' + t('pfLoad')
-        : (batteryIn > 1 ? '→ ' + t('pfBattery') : t('pfBattery') + ' idle');
-    const legGrid = $('pfLegGrid');
-    if (legGrid) legGrid.textContent = grid > 1 ? t('pfGrid') + ' → ' + t('pfLoad') : t('pfGrid') + ' idle';
-
-    // Schedule particle spawns proportional to power (more watts = more particles)
-    if (_pfTickInterval == null) {
-        _pfTickInterval = setInterval(() => {
-            // On each tick, spawn 0-1 particles per active wire.
-            // particle rate ≈ watts / 200, capped at 3/tick.
-            const rates = [
-                [PF_PATHS.solar_load, solarDirect, 'var(--solar)', 1.4],
-                [PF_PATHS.solar_bat, solarToBat, 'var(--solar)', 1.8],
-                [PF_PATHS.bat_load, batteryOut, 'var(--blue)', 1.4],
-                [PF_PATHS.grid_load, gridToLoad, '#aaa', 1.6],
-                [PF_PATHS.grid_bat, gridToBat, '#aaa', 1.8],
-            ];
-            for (const [pathId, watts, color, duration] of rates) {
-                if (watts < 1) continue;
-                const count = Math.min(3, Math.floor(watts / 200) + 1);
-                for (let i = 0; i < count; i++) {
-                    setTimeout(() => _pfSpawnParticle(pathId, color, duration), i * 200);
-                }
-            }
-        }, 1500);
-    }
+    const totalEl = $('flowTotalOutVal');
+    if (totalEl) totalEl.textContent = fmt.format(d.total_output_watts || 0) + ' W';
 }
 
 // === 1a: Sankey Energy-Flow diagram ===

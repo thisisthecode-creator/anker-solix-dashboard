@@ -23,6 +23,10 @@
     --safe-right: env(safe-area-inset-right, 0px);
 }
 
+html, body {
+    overflow-x: hidden;
+    max-width: 100%;
+}
 body {
     font-family: -apple-system, BlinkMacSystemFont, 'SF Pro Display', 'Segoe UI', system-ui, sans-serif;
     background: var(--bg);
@@ -914,7 +918,7 @@ header h1 {
 .fc-ratio-icons {
     display: flex;
     justify-content: space-between;
-    font-size: 0.65rem;
+    font-size: 0.55rem;
     line-height: 1;
     margin-bottom: 2px;
 }
@@ -950,9 +954,9 @@ header h1 {
     display: flex;
     justify-content: space-between;
     align-items: center;
-    font-size: 0.6rem;
+    font-size: 0.52rem;
     margin-top: 1px;
-    line-height: 1.4;
+    line-height: 1.2;
 }
 
 .fc-rl-direct {
@@ -2186,6 +2190,52 @@ body.light-mode .log-table td {
     text-align: center;
 }
 
+/* === Phase 1 · Battery label + "Verbraucher" header === */
+.pf-bat-label {
+    text-align: center;
+    font-size: 0.68rem;
+    color: var(--text-dim);
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+    font-weight: 600;
+    margin-bottom: 4px;
+}
+
+/* Hide the battery % overlay until real data arrives — don't show placeholder */
+.pf-bat-pct:empty { display: none; }
+
+.pf-v-load-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 8px 14px;
+    margin: 6px 0 10px;
+    background: var(--card-bg);
+    border: 1px solid var(--card-border);
+    border-radius: 10px;
+}
+.pf-v-load-label {
+    font-size: 0.72rem;
+    color: var(--text-dim);
+    text-transform: uppercase;
+    letter-spacing: 0.06em;
+    font-weight: 600;
+    display: flex;
+    align-items: center;
+    gap: 6px;
+}
+.pf-v-load-label::before {
+    content: "\26A1"; /* lightning bolt */
+    font-size: 0.95rem;
+    color: var(--solar);
+}
+.pf-v-load-total {
+    font-size: 1rem;
+    color: var(--text);
+    font-weight: 700;
+    font-variant-numeric: tabular-nums;
+}
+
 /* === Phase 1 charts: Power Flow animation === */
 .power-flow-svg {
     width: 100%;
@@ -2223,12 +2273,12 @@ body.light-mode .log-table td {
 .pf-box-grid { stroke: #888; }
 
 .pf-icon {
-    font-size: 16px;
+    font-size: 15px;
     text-anchor: middle;
     fill: var(--text);
 }
 .pf-label {
-    font-size: 8px;
+    font-size: 7px;
     text-anchor: middle;
     fill: var(--text-dim);
     text-transform: uppercase;
@@ -2241,6 +2291,7 @@ body.light-mode .log-table td {
     font-variant-numeric: tabular-nums;
     font-weight: 700;
 }
+.pf-node-g { cursor: default; }
 .pf-watts-solar { fill: var(--solar); }
 .pf-watts-bat { fill: var(--blue); }
 .pf-watts-load { fill: #22c55e; }
@@ -2373,13 +2424,13 @@ body.light-mode .log-table td {
 
 /* === Hourly Heatmap === */
 .hh-wrap {
-    overflow-x: auto;
     margin: 10px 0;
+    overflow: hidden;
 }
 .hh-svg {
     width: 100%;
-    min-width: 340px;
     height: auto;
+    display: block;
 }
 .hh-cell {
     stroke: var(--card-border);
@@ -2416,13 +2467,13 @@ body.light-mode .log-table td {
 
 /* === Box Plot Distribution === */
 .dist-wrap {
-    overflow-x: auto;
     margin: 10px 0;
+    overflow: hidden;
 }
 .dist-svg {
     width: 100%;
-    min-width: 340px;
     height: auto;
+    display: block;
 }
 .dist-box {
     fill: var(--solar);

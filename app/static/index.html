@@ -74,67 +74,6 @@
         </div>
 
 
-        <!-- Live Power Flow Animation -->
-        <section class="today-box" id="powerFlowSection" aria-labelledby="pfTitle">
-            <h2 id="pfTitle" data-i18n="powerFlowTitle">Energiefluss Live</h2>
-            <svg class="power-flow-svg" viewBox="0 0 340 240" preserveAspectRatio="xMidYMid meet">
-                <!-- Gradients for flow lines -->
-                <defs>
-                    <linearGradient id="pfGradSolar" x1="0" x2="1" y1="0" y2="0">
-                        <stop offset="0%" stop-color="var(--solar)" stop-opacity="0.9"/>
-                        <stop offset="100%" stop-color="var(--solar)" stop-opacity="0.1"/>
-                    </linearGradient>
-                    <linearGradient id="pfGradBat" x1="0" x2="1" y1="0" y2="0">
-                        <stop offset="0%" stop-color="var(--blue)" stop-opacity="0.9"/>
-                        <stop offset="100%" stop-color="var(--blue)" stop-opacity="0.1"/>
-                    </linearGradient>
-                    <linearGradient id="pfGradGrid" x1="0" x2="1" y1="0" y2="0">
-                        <stop offset="0%" stop-color="#888" stop-opacity="0.8"/>
-                        <stop offset="100%" stop-color="#888" stop-opacity="0.1"/>
-                    </linearGradient>
-                </defs>
-                <!-- Paths (invisible lines used as animation tracks) -->
-                <path id="pfPathSolarLoad" class="pf-wire pf-solar-wire" d="M 60 45 C 140 45, 200 120, 280 120" fill="none"/>
-                <path id="pfPathSolarBat" class="pf-wire pf-solar-wire" d="M 60 45 C 140 45, 90 195, 170 195" fill="none"/>
-                <path id="pfPathBatLoad" class="pf-wire pf-bat-wire" d="M 170 195 C 230 195, 260 160, 280 120" fill="none"/>
-                <path id="pfPathGridLoad" class="pf-wire pf-grid-wire" d="M 60 195 C 140 195, 200 170, 280 120" fill="none"/>
-                <path id="pfPathGridBat" class="pf-wire pf-grid-wire" d="M 60 195 C 110 195, 130 195, 170 195" fill="none"/>
-                <!-- Nodes: colored rounded boxes with icons + values -->
-                <g class="pf-node pf-node-solar" transform="translate(20 20)">
-                    <rect width="80" height="50" rx="10" class="pf-box pf-box-solar"/>
-                    <text x="40" y="20" class="pf-icon">☀</text>
-                    <text x="40" y="40" class="pf-label" data-i18n="pfSolar">Solar</text>
-                </g>
-                <g class="pf-node pf-node-bat" transform="translate(130 170)">
-                    <rect width="80" height="50" rx="10" class="pf-box pf-box-bat"/>
-                    <text x="40" y="20" class="pf-icon">🔋</text>
-                    <text x="40" y="40" class="pf-label" data-i18n="pfBattery">Akku</text>
-                </g>
-                <g class="pf-node pf-node-load" transform="translate(240 95)">
-                    <rect width="80" height="50" rx="10" class="pf-box pf-box-load"/>
-                    <text x="40" y="20" class="pf-icon">⚡</text>
-                    <text x="40" y="40" class="pf-label" data-i18n="pfLoad">Verbraucher</text>
-                </g>
-                <g class="pf-node pf-node-grid" transform="translate(20 170)">
-                    <rect width="80" height="50" rx="10" class="pf-box pf-box-grid"/>
-                    <text x="40" y="20" class="pf-icon">🏠</text>
-                    <text x="40" y="40" class="pf-label" data-i18n="pfGrid">Netz</text>
-                </g>
-                <!-- Animated particles container -->
-                <g id="pfParticles"></g>
-                <!-- Live value labels -->
-                <text x="60" y="88" class="pf-watts pf-watts-solar" id="pfValSolar">0 W</text>
-                <text x="170" y="238" class="pf-watts pf-watts-bat" id="pfValBat">0%</text>
-                <text x="280" y="163" class="pf-watts pf-watts-load" id="pfValLoad">0 W</text>
-                <text x="60" y="238" class="pf-watts pf-watts-grid" id="pfValGrid">0 W</text>
-            </svg>
-            <div class="pf-legend">
-                <span class="pf-legend-item"><span class="pf-dot pf-dot-solar"></span><span id="pfLegSolar">Solar → ...</span></span>
-                <span class="pf-legend-item"><span class="pf-dot pf-dot-bat"></span><span id="pfLegBat">Akku → ...</span></span>
-                <span class="pf-legend-item"><span class="pf-dot pf-dot-grid"></span><span id="pfLegGrid">Netz → ...</span></span>
-            </div>
-        </section>
-
         <!-- Solar Forecast -->
         <section class="today-box" id="forecastBox" style="display:none">
             <h2 data-i18n="forecastTitle">Solar-Prognose (7 Tage)</h2>
@@ -219,11 +158,11 @@
             </div>
         </div>
 
-        <!-- Power Flow (vertical) -->
-        <section class="today-box flow-box">
-            <h2 data-i18n="energyFlow">Energiefluss</h2>
+        <!-- Power Flow (vertical: Solar + Netz → Akku → 6 Ports) -->
+        <section class="today-box flow-box" id="powerFlowSection" aria-labelledby="pfTitle">
+            <h2 id="pfTitle" data-i18n="energyFlow">Energiefluss</h2>
             <div class="pf-v">
-                <!-- Inputs row -->
+                <!-- Inputs row: Solar + Netz -->
                 <div class="pf-v-inputs">
                     <div class="pf-node" id="flowSolar">
                         <div class="pf-emoji">&#9728;&#65039;</div>
@@ -231,26 +170,32 @@
                         <div class="pf-watt" id="flowSolarVal">0 W</div>
                     </div>
                     <div class="pf-node" id="flowAcIn">
-                        <div class="pf-emoji">&#9889;</div>
-                        <div class="pf-name">AC In</div>
+                        <div class="pf-emoji">&#127968;</div>
+                        <div class="pf-name">Netz</div>
                         <div class="pf-watt" id="flowAcInVal">0 W</div>
                     </div>
                 </div>
                 <!-- Arrow down -->
                 <div class="pf-v-arrow pf-line pf-line-in" id="flowArrowIn"><span class="pf-dots">&#9660;</span></div>
-                <!-- Battery center -->
+                <!-- Battery center (Akku) -->
                 <div class="pf-v-bat">
+                    <div class="pf-bat-label">Akku</div>
                     <div class="pf-bat-visual">
                         <div class="pf-bat-body">
                             <div class="pf-bat-fill" id="flowBatFill"></div>
-                            <div class="pf-bat-pct" id="flowBatSoc">--%</div>
+                            <div class="pf-bat-pct" id="flowBatSoc"></div>
                         </div>
                         <div class="pf-bat-tip"></div>
                     </div>
                 </div>
                 <!-- Arrow down -->
                 <div class="pf-v-arrow pf-line pf-line-out" id="flowArrowOut"><span class="pf-dots">&#9660;</span></div>
-                <!-- Outputs grid -->
+                <!-- Aggregate "Verbraucher" header (styled like a section divider) -->
+                <div class="pf-v-load-header">
+                    <span class="pf-v-load-label">Verbraucher</span>
+                    <span class="pf-v-load-total" id="flowTotalOutVal">0 W</span>
+                </div>
+                <!-- Outputs grid (6 ports) -->
                 <div class="pf-v-outputs">
                     <div class="pf-node" id="flowAcOut">
                         <div class="pf-icon-txt pf-c-ac">AC</div>
