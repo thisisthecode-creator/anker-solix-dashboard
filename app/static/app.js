@@ -94,6 +94,24 @@ const I18N = {
         deviceInfo: 'Geräte-Info', displayOn: 'Display An', displayOff: 'Display Aus',
         ledMode: 'LED', expansionPacks: 'Erweiterungen',
         weatherCodes: { 0: 'Klar', 1: 'Heiter', 2: 'Teilw. bewölkt', 3: 'Bewölkt', 45: 'Nebel', 48: 'Nebel', 51: 'Niesel', 53: 'Niesel', 55: 'Regen', 61: 'Regen', 63: 'Regen', 65: 'Starkregen', 71: 'Schnee', 73: 'Schnee', 75: 'Schnee', 80: 'Schauer', 81: 'Schauer', 82: 'Gewitter', 95: 'Gewitter', 96: 'Hagel' },
+        // Phase 1 chart additions
+        powerFlowTitle: 'Energiefluss Live',
+        pfSolar: 'Solar', pfBattery: 'Akku', pfLoad: 'Verbraucher', pfGrid: 'Netz',
+        sankeyTitle: 'Energie-Sankey-Diagramm',
+        sankeyToday: 'Heute', sankeyYesterday: 'Gestern', sankey7d: '7 Tage', sankey30d: '30 Tage',
+        sankeyLoss: 'Verluste',
+        sankeyDirect: 'Direkt', sankeyStore: 'Gespeichert',
+        hourlyHeatmapTitle: 'Tages-Heatmap (Stunde \u00d7 Tag)',
+        hourlyHeatmapHint: 'Durchschnittliche Solar-Leistung pro Stunde',
+        hhHour: 'Uhrzeit',
+        cumulativeTitle: 'Kumulative Gesamterzeugung',
+        cumulativeMilestone: 'Meilenstein',
+        cumulativeTotal: 'Gesamt',
+        cumulativeNoData: 'Noch keine Daten',
+        distributionTitle: 'Monats-Verteilung (kWh pro Tag)',
+        distributionLegend: 'Min \u2013 Q1 \u2013 Median \u2013 Q3 \u2013 Max',
+        distributionNoData: 'Ben\u00f6tigt mindestens einen Monat Daten',
+
         // Phase 2-4 additions
         energyFlowTitle: 'Energie-Fluss (heute)',
         directUseKwh: 'Direkt verbraucht', batteryInKwh: 'In Akku', batteryOutKwh: 'Aus Akku',
@@ -218,6 +236,24 @@ const I18N = {
         deviceInfo: 'Device Info', displayOn: 'Display On', displayOff: 'Display Off',
         ledMode: 'LED', expansionPacks: 'Expansions',
         weatherCodes: { 0: 'Clear', 1: 'Fair', 2: 'Partly cloudy', 3: 'Overcast', 45: 'Fog', 48: 'Fog', 51: 'Drizzle', 53: 'Drizzle', 55: 'Rain', 61: 'Rain', 63: 'Rain', 65: 'Heavy rain', 71: 'Snow', 73: 'Snow', 75: 'Snow', 80: 'Showers', 81: 'Showers', 82: 'Thunderstorm', 95: 'Thunderstorm', 96: 'Hail' },
+        // Phase 1 chart additions
+        powerFlowTitle: 'Live Power Flow',
+        pfSolar: 'Solar', pfBattery: 'Battery', pfLoad: 'Load', pfGrid: 'Grid',
+        sankeyTitle: 'Energy Sankey Diagram',
+        sankeyToday: 'Today', sankeyYesterday: 'Yesterday', sankey7d: '7 days', sankey30d: '30 days',
+        sankeyLoss: 'Losses',
+        sankeyDirect: 'Direct', sankeyStore: 'Stored',
+        hourlyHeatmapTitle: 'Hourly Heatmap (hour \u00d7 day)',
+        hourlyHeatmapHint: 'Average solar power per hour',
+        hhHour: 'Hour',
+        cumulativeTitle: 'Cumulative Total Production',
+        cumulativeMilestone: 'Milestone',
+        cumulativeTotal: 'Total',
+        cumulativeNoData: 'No data yet',
+        distributionTitle: 'Monthly Distribution (kWh per day)',
+        distributionLegend: 'Min \u2013 Q1 \u2013 Median \u2013 Q3 \u2013 Max',
+        distributionNoData: 'Needs at least one month of data',
+
         // Phase 2-4 additions
         energyFlowTitle: 'Energy Flow (today)',
         directUseKwh: 'Direct used', batteryInKwh: 'Into battery', batteryOutKwh: 'From battery',
@@ -728,6 +764,8 @@ function updateUI(d) {
 
     // Energy-Flow section (direct-use / autarky / RTE) updates live from WS
     try { updateEnergyFlowFromLatest(d); } catch (e) {}
+    // Live power-flow animation (Solar / Battery / Load / Grid icons + particles)
+    try { if (typeof updatePowerFlow === 'function') updatePowerFlow(d); } catch (e) {}
 
     const solar = d.solar_watts || 0;
     const output = d.total_output_watts || 0;
@@ -2019,6 +2057,426 @@ async function loadForecastCompare() {
     } catch (e) { console.warn('Forecast compare error:', e); }
 }
 loadForecastCompare();
+
+// ============================================================================
+// Phase 1 charts: Power-Flow animation · Sankey · Hourly Heatmap · Cumulative
+// Curve · Monthly Box-Plots
+// ============================================================================
+
+// === 1b: Live Power Flow animation (updates from WS latest_data) ===
+// Uses SVG paths as tracks and spawns animated particles along them.
+// Each particle is an SVG circle that animates along the path via
+// `animateMotion` — no external libs, pure SVG.
+const PF_PATHS = {
+    solar_load: 'pfPathSolarLoad',
+    solar_bat: 'pfPathSolarBat',
+    bat_load: 'pfPathBatLoad',
+    grid_load: 'pfPathGridLoad',
+    grid_bat: 'pfPathGridBat',
+};
+
+function _pfSpawnParticle(pathId, color, duration) {
+    const container = $('pfParticles');
+    if (!container) return;
+    const svgNs = 'http://www.w3.org/2000/svg';
+    const circle = document.createElementNS(svgNs, 'circle');
+    circle.setAttribute('r', '2.2');
+    circle.setAttribute('fill', color);
+    circle.classList.add('pf-particle');
+    const anim = document.createElementNS(svgNs, 'animateMotion');
+    anim.setAttribute('dur', duration + 's');
+    anim.setAttribute('repeatCount', '1');
+    anim.setAttribute('fill', 'freeze');
+    const mpath = document.createElementNS(svgNs, 'mpath');
+    mpath.setAttributeNS('http://www.w3.org/1999/xlink', 'href', '#' + pathId);
+    anim.appendChild(mpath);
+    circle.appendChild(anim);
+    container.appendChild(circle);
+    // Clean up after animation finishes
+    setTimeout(() => { try { circle.remove(); } catch (e) {} }, duration * 1000 + 200);
+    // Start animation immediately (Safari/WebKit workaround)
+    if (typeof anim.beginElement === 'function') {
+        try { anim.beginElement(); } catch (e) {}
+    }
+}
+
+let _pfTickInterval = null;
+
+function _pfActivateWire(pathId, active) {
+    const el = document.getElementById(pathId);
+    if (!el) return;
+    el.classList.toggle('pf-active', active);
+}
+
+function updatePowerFlow(d) {
+    if (!d) return;
+    const solar = d.solar_watts || 0;
+    const load = d.total_output_watts || 0;
+    const grid = d.ac_input_watts || 0;
+    const soc = d.battery_soc || 0;
+
+    // Conservation: battery_net = solar + grid - load
+    const batteryNet = solar + grid - load;
+    const batteryIn = Math.max(0, batteryNet);
+    const batteryOut = Math.max(0, -batteryNet);
+
+    // Flow split when solar is producing
+    const solarDirect = Math.min(solar, load);
+    const solarToBat = Math.max(0, solar - load);
+    const gridToLoad = Math.min(grid, Math.max(0, load - solar));
+    const gridToBat = Math.max(0, grid - gridToLoad);
+
+    // Activate/deactivate wires based on non-zero flow
+    _pfActivateWire(PF_PATHS.solar_load, solarDirect > 1);
+    _pfActivateWire(PF_PATHS.solar_bat, solarToBat > 1);
+    _pfActivateWire(PF_PATHS.bat_load, batteryOut > 1);
+    _pfActivateWire(PF_PATHS.grid_load, gridToLoad > 1);
+    _pfActivateWire(PF_PATHS.grid_bat, gridToBat > 1);
+
+    // Live values
+    const set = (id, v) => { const el = $(id); if (el) el.textContent = v; };
+    set('pfValSolar', fmt.format(solar) + ' W');
+    set('pfValBat', soc + '%');
+    set('pfValLoad', fmt.format(load) + ' W');
+    set('pfValGrid', fmt.format(grid) + ' W');
+
+    // Legend captions
+    const legSolar = $('pfLegSolar');
+    if (legSolar) legSolar.textContent = solar > 1
+        ? 'Solar → ' + (solarDirect > solarToBat ? t('pfLoad') : t('pfBattery'))
+        : 'Solar idle';
+    const legBat = $('pfLegBat');
+    if (legBat) legBat.textContent = batteryOut > 1 ? t('pfBattery') + ' → ' + t('pfLoad')
+        : (batteryIn > 1 ? '→ ' + t('pfBattery') : t('pfBattery') + ' idle');
+    const legGrid = $('pfLegGrid');
+    if (legGrid) legGrid.textContent = grid > 1 ? t('pfGrid') + ' → ' + t('pfLoad') : t('pfGrid') + ' idle';
+
+    // Schedule particle spawns proportional to power (more watts = more particles)
+    if (_pfTickInterval == null) {
+        _pfTickInterval = setInterval(() => {
+            // On each tick, spawn 0-1 particles per active wire.
+            // particle rate ≈ watts / 200, capped at 3/tick.
+            const rates = [
+                [PF_PATHS.solar_load, solarDirect, 'var(--solar)', 1.4],
+                [PF_PATHS.solar_bat, solarToBat, 'var(--solar)', 1.8],
+                [PF_PATHS.bat_load, batteryOut, 'var(--blue)', 1.4],
+                [PF_PATHS.grid_load, gridToLoad, '#aaa', 1.6],
+                [PF_PATHS.grid_bat, gridToBat, '#aaa', 1.8],
+            ];
+            for (const [pathId, watts, color, duration] of rates) {
+                if (watts < 1) continue;
+                const count = Math.min(3, Math.floor(watts / 200) + 1);
+                for (let i = 0; i < count; i++) {
+                    setTimeout(() => _pfSpawnParticle(pathId, color, duration), i * 200);
+                }
+            }
+        }, 1500);
+    }
+}
+
+// === 1a: Sankey Energy-Flow diagram ===
+let _sankeyDaysSelected = 1;
+
+function _sankeyLayout(flows, totals) {
+    // 3 columns: sources (left), center nodes, sinks (right)
+    // Fixed positions for simplicity, colors per flow type.
+    const W = 400, H = 260;
+    const LEFT_X = 30, MID_X = 180, RIGHT_X = 350;
+    const NODE_W = 18;
+    const svg = $('sankeySvg');
+    if (!svg) return;
+
+    const nodeDefs = {
+        solar: { x: LEFT_X, label: t('pfSolar'), color: 'var(--solar)', kwh: totals.solar_kwh },
+        grid: { x: LEFT_X, label: t('pfGrid'), color: '#888', kwh: totals.grid_in_kwh },
+        battery: { x: MID_X, label: t('pfBattery'), color: 'var(--blue)',
+                   kwh: (totals.battery_in_kwh + totals.battery_out_kwh) / 2 },
+        load: { x: RIGHT_X, label: t('pfLoad'), color: '#22c55e', kwh: totals.load_kwh },
+        loss: { x: RIGHT_X, label: t('sankeyLoss'), color: '#ef4444',
+                kwh: (flows.find(f => f.to === 'loss') || {}).kwh || 0 },
+    };
+
+    // Compute max kwh for scaling
+    const maxKwh = Math.max(0.01, totals.solar_kwh, totals.load_kwh,
+                            totals.grid_in_kwh || 0.01);
+    const scale = (H - 60) / maxKwh;  // px per kWh
+
+    // Stack source heights proportional to kwh
+    let solarY = 20;
+    let gridY = solarY + Math.max(20, totals.solar_kwh * scale) + 20;
+    let loadY = 20;
+    let lossY = H - 60;
+    let batteryY = 80;
+
+    nodeDefs.solar.y = solarY;
+    nodeDefs.solar.h = Math.max(18, totals.solar_kwh * scale);
+    nodeDefs.grid.y = gridY;
+    nodeDefs.grid.h = Math.max(18, totals.grid_in_kwh * scale);
+    nodeDefs.load.y = loadY;
+    nodeDefs.load.h = Math.max(18, totals.load_kwh * scale);
+    nodeDefs.battery.y = batteryY;
+    nodeDefs.battery.h = Math.max(18, Math.max(totals.battery_in_kwh, totals.battery_out_kwh) * scale);
+    nodeDefs.loss.y = lossY;
+    nodeDefs.loss.h = Math.max(14, ((flows.find(f => f.to === 'loss') || {}).kwh || 0) * scale);
+
+    // Build SVG content
+    const parts = [];
+
+    // Flows: bezier curves from source right edge to target left edge
+    const curve = (x1, y1, x2, y2, width, color) => {
+        const mx = (x1 + x2) / 2;
+        return `<path class="sankey-flow" d="M ${x1} ${y1 - width / 2} C ${mx} ${y1 - width / 2}, ${mx} ${y2 - width / 2}, ${x2} ${y2 - width / 2} L ${x2} ${y2 + width / 2} C ${mx} ${y2 + width / 2}, ${mx} ${y1 + width / 2}, ${x1} ${y1 + width / 2} Z" fill="${color}"/>`;
+    };
+
+    // Map flow name → (source node, target node, color)
+    const flowDefs = [
+        { from: 'solar', to: 'load', color: 'var(--solar)' },
+        { from: 'solar', to: 'battery', color: 'var(--solar)' },
+        { from: 'battery', to: 'load', color: 'var(--blue)' },
+        { from: 'grid', to: 'load', color: '#888' },
+        { from: 'grid', to: 'battery', color: '#888' },
+        { from: 'battery', to: 'loss', color: '#ef4444' },
+    ];
+
+    // Allocate Y positions along each node's vertical extent per outgoing/incoming flow
+    for (const fd of flowDefs) {
+        const flow = flows.find(f => f.from === fd.from && f.to === fd.to);
+        if (!flow || flow.kwh < 0.001) continue;
+        const src = nodeDefs[fd.from];
+        const dst = nodeDefs[fd.to];
+        if (!src || !dst) continue;
+        const width = Math.max(2, flow.kwh * scale);
+        const x1 = src.x + NODE_W;
+        const x2 = dst.x;
+        const y1 = src.y + src.h / 2;
+        const y2 = dst.y + dst.h / 2;
+        parts.push(curve(x1, y1, x2, y2, width, fd.color));
+    }
+
+    // Nodes (on top of flows)
+    for (const key of ['solar', 'grid', 'battery', 'load', 'loss']) {
+        const n = nodeDefs[key];
+        if (n.kwh < 0.001 && key !== 'battery') continue;
+        parts.push(`<rect class="sankey-node-rect" x="${n.x}" y="${n.y}" width="${NODE_W}" height="${n.h}" fill="${n.color}"/>`);
+        const lx = (n.x < 100) ? n.x : (n.x > 300 ? n.x + NODE_W : n.x + NODE_W / 2);
+        const anchor = (n.x < 100) ? 'start' : (n.x > 300 ? 'end' : 'middle');
+        parts.push(`<text class="sankey-node-label" x="${lx}" y="${n.y - 6}" text-anchor="${anchor}">${n.label}</text>`);
+        parts.push(`<text class="sankey-node-value" x="${lx}" y="${n.y + n.h + 10}" text-anchor="${anchor}">${fmt2.format(n.kwh)} kWh</text>`);
+    }
+
+    svg.innerHTML = parts.join('');
+
+    // Render totals row
+    const totEl = $('sankeyTotals');
+    if (totEl) {
+        const items = [
+            ['☀', totals.solar_kwh, t('pfSolar')],
+            ['🏠', totals.grid_in_kwh, t('pfGrid')],
+            ['🔋↓', totals.battery_out_kwh, t('pfBattery') + ' out'],
+            ['🔋↑', totals.battery_in_kwh, t('pfBattery') + ' in'],
+            ['⚡', totals.load_kwh, t('pfLoad')],
+        ];
+        totEl.innerHTML = items.map(([icon, v, label]) =>
+            `<div class="sankey-tot-item"><span>${icon} ${label}</span><span class="sankey-tot-value">${fmt2.format(v)} kWh</span></div>`
+        ).join('');
+    }
+}
+
+async function loadSankey(days) {
+    try {
+        const d = days || _sankeyDaysSelected;
+        const res = await fetch('/api/sankey?days=' + d);
+        if (!res.ok) return;
+        const data = await res.json();
+        if (!data.totals) return;
+        _sankeyLayout(data.flows || [], data.totals);
+    } catch (e) { console.warn('Sankey error:', e); }
+}
+
+// Wire up Sankey tab bar
+document.addEventListener('click', (e) => {
+    const tab = e.target.closest('#sankeySection .tab');
+    if (!tab) return;
+    document.querySelectorAll('#sankeySection .tab').forEach(t => t.classList.remove('active'));
+    tab.classList.add('active');
+    _sankeyDaysSelected = parseInt(tab.getAttribute('data-sankey'), 10) || 1;
+    loadSankey();
+});
+
+loadSankey();
+
+// === 1e: Cumulative Production Curve ===
+let _cumChart = null;
+
+async function loadCumulative() {
+    try {
+        const res = await fetch('/api/cumulative-production');
+        if (!res.ok) return;
+        const d = await res.json();
+        const series = d.series || [];
+        const total = $('cumTotalValue');
+        if (total) total.textContent = fmt2.format(d.total_kwh || 0);
+
+        if (series.length === 0) {
+            const ms = $('cumMilestones');
+            if (ms) ms.innerHTML = '<span class="cum-milestone">' + t('cumulativeNoData') + '</span>';
+            return;
+        }
+
+        const labels = series.map(r => r.date);
+        const data = series.map(r => r.cumulative);
+        const ctx = document.getElementById('chart_cumulative');
+        if (!ctx) return;
+        if (_cumChart) _cumChart.destroy();
+        _cumChart = new Chart(ctx, {
+            type: 'line',
+            data: {
+                labels,
+                datasets: [{
+                    label: t('cumulativeTotal') + ' (kWh)',
+                    data,
+                    borderColor: 'rgba(245,158,11,1)',
+                    backgroundColor: 'rgba(245,158,11,0.2)',
+                    fill: true,
+                    tension: 0.3,
+                    pointRadius: 0,
+                    borderWidth: 2,
+                }],
+            },
+            options: {
+                responsive: true,
+                maintainAspectRatio: false,
+                plugins: { legend: { display: false } },
+                scales: {
+                    x: { display: false },
+                    y: { ticks: { color: 'var(--text-dim)' }, grid: { color: 'rgba(255,255,255,0.05)' } },
+                },
+            },
+        });
+
+        // Milestones
+        const ms = $('cumMilestones');
+        if (ms) {
+            const items = (d.milestones || []).slice(-6);
+            if (items.length === 0) {
+                ms.innerHTML = '';
+            } else {
+                ms.innerHTML = items.map(m =>
+                    `<div class="cum-milestone"><strong>${fmt2.format(m.threshold_kwh)} kWh</strong>${m.date}</div>`
+                ).join('');
+            }
+        }
+    } catch (e) { console.warn('Cumulative error:', e); }
+}
+
+loadCumulative();
+
+// === 1d: Hourly Heatmap (24 × N days) ===
+async function loadHourlyHeatmap() {
+    try {
+        const res = await fetch('/api/hourly-heatmap?days=30');
+        if (!res.ok) return;
+        const d = await res.json();
+        const svg = $('hourlyHeatmapSvg');
+        if (!svg) return;
+        const days = d.days || [];
+        const data = d.data || [];
+        if (days.length === 0 || data.length === 0) {
+            svg.innerHTML = '<text x="280" y="160" text-anchor="middle" fill="var(--text-dim)" font-size="12">Keine Daten</text>';
+            return;
+        }
+
+        // Layout
+        const W = 560, H = 320;
+        const PAD_LEFT = 30, PAD_RIGHT = 10, PAD_TOP = 12, PAD_BOT = 20;
+        const gridW = W - PAD_LEFT - PAD_RIGHT;
+        const gridH = H - PAD_TOP - PAD_BOT;
+        const cellW = gridW / days.length;
+        const cellH = gridH / 24;
+        const maxW = Math.max(...data.map(r => r[2]), 1);
+
+        const parts = [];
+        // Draw cells
+        for (const [dayIdx, hour, w] of data) {
+            const x = PAD_LEFT + dayIdx * cellW;
+            const y = PAD_TOP + hour * cellH;
+            const intensity = Math.min(1, w / maxW);
+            const fillOpacity = 0.05 + intensity * 0.95;
+            parts.push(`<rect class="hh-cell" x="${x.toFixed(1)}" y="${y.toFixed(1)}" width="${cellW.toFixed(1)}" height="${cellH.toFixed(1)}" fill="var(--solar)" fill-opacity="${fillOpacity.toFixed(2)}"><title>${days[dayIdx]} ${hour}:00 — ${fmt.format(w)} W</title></rect>`);
+        }
+        // Hour labels on Y axis (every 4 hours)
+        for (let h = 0; h < 24; h += 4) {
+            const y = PAD_TOP + h * cellH + cellH / 2 + 3;
+            parts.push(`<text class="hh-axis-label" x="${PAD_LEFT - 4}" y="${y.toFixed(1)}" text-anchor="end">${h}</text>`);
+        }
+        // Day labels on X axis (every ~week)
+        const dayStep = Math.max(1, Math.floor(days.length / 6));
+        for (let i = 0; i < days.length; i += dayStep) {
+            const x = PAD_LEFT + i * cellW + cellW / 2;
+            const short = days[i].slice(5); // MM-DD
+            parts.push(`<text class="hh-axis-label" x="${x.toFixed(1)}" y="${H - 6}" text-anchor="middle">${short}</text>`);
+        }
+        svg.innerHTML = parts.join('');
+
+        const maxEl = $('hhLegendMax');
+        if (maxEl) maxEl.textContent = fmt.format(maxW) + ' W';
+    } catch (e) { console.warn('Hourly heatmap error:', e); }
+}
+
+loadHourlyHeatmap();
+
+// === 1f: Monthly distribution box-plots ===
+async function loadDistribution() {
+    try {
+        const res = await fetch('/api/monthly-distribution?months=12');
+        if (!res.ok) return;
+        const months = await res.json();
+        const svg = $('distributionSvg');
+        if (!svg) return;
+        if (!months || months.length === 0) {
+            svg.innerHTML = '<text x="280" y="130" text-anchor="middle" fill="var(--text-dim)" font-size="12">' + t('distributionNoData') + '</text>';
+            return;
+        }
+
+        const W = 560, H = 260;
+        const PAD_LEFT = 36, PAD_RIGHT = 12, PAD_TOP = 16, PAD_BOT = 30;
+        const plotW = W - PAD_LEFT - PAD_RIGHT;
+        const plotH = H - PAD_TOP - PAD_BOT;
+
+        const maxKwh = Math.max(0.01, ...months.map(m => m.max));
+        const y = (kwh) => PAD_TOP + plotH - (kwh / maxKwh) * plotH;
+        const boxW = Math.max(14, Math.min(40, plotW / months.length * 0.55));
+
+        const parts = [];
+        // Gridlines at 5 evenly spaced y values
+        for (let i = 0; i <= 4; i++) {
+            const kwh = maxKwh * i / 4;
+            const yy = y(kwh);
+            parts.push(`<line class="dist-grid-line" x1="${PAD_LEFT}" y1="${yy.toFixed(1)}" x2="${W - PAD_RIGHT}" y2="${yy.toFixed(1)}"/>`);
+            parts.push(`<text class="dist-axis-label" x="${PAD_LEFT - 4}" y="${(yy + 3).toFixed(1)}" text-anchor="end">${fmt2.format(kwh)}</text>`);
+        }
+
+        // Box for each month
+        months.forEach((m, i) => {
+            const cx = PAD_LEFT + (i + 0.5) * (plotW / months.length);
+            const x1 = cx - boxW / 2;
+            const x2 = cx + boxW / 2;
+            // Whiskers
+            parts.push(`<line class="dist-whisker" x1="${cx}" y1="${y(m.min).toFixed(1)}" x2="${cx}" y2="${y(m.max).toFixed(1)}"/>`);
+            parts.push(`<line class="dist-whisker" x1="${x1 + boxW * 0.3}" y1="${y(m.min).toFixed(1)}" x2="${x2 - boxW * 0.3}" y2="${y(m.min).toFixed(1)}"/>`);
+            parts.push(`<line class="dist-whisker" x1="${x1 + boxW * 0.3}" y1="${y(m.max).toFixed(1)}" x2="${x2 - boxW * 0.3}" y2="${y(m.max).toFixed(1)}"/>`);
+            // Box
+            parts.push(`<rect class="dist-box" x="${x1.toFixed(1)}" y="${y(m.q3).toFixed(1)}" width="${boxW.toFixed(1)}" height="${(y(m.q1) - y(m.q3)).toFixed(1)}"><title>${m.month} · n=${m.n} · median ${fmt2.format(m.median)} kWh · Q1 ${fmt2.format(m.q1)} – Q3 ${fmt2.format(m.q3)} · min ${fmt2.format(m.min)} · max ${fmt2.format(m.max)}</title></rect>`);
+            // Median line
+            parts.push(`<line class="dist-median" x1="${x1.toFixed(1)}" y1="${y(m.median).toFixed(1)}" x2="${x2.toFixed(1)}" y2="${y(m.median).toFixed(1)}"/>`);
+            // X axis month label
+            parts.push(`<text class="dist-axis-label" x="${cx.toFixed(1)}" y="${H - 10}" text-anchor="middle">${m.month.slice(5)}</text>`);
+        });
+        svg.innerHTML = parts.join('');
+    } catch (e) { console.warn('Distribution error:', e); }
+}
+
+loadDistribution();
 
 // === Usage Pattern Detection ===
 async function loadUsagePatterns() {
