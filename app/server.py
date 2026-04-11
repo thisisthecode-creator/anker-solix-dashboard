@@ -448,6 +448,15 @@ async def daily_forecast_loop():
 async def lifespan(app: FastAPI):
     global latest_data
     await init_db()
+    # One-shot: copy legacy `readings` rows into daily archive CSVs where
+    # no archive file exists yet. Idempotent — marker file on the volume.
+    try:
+        from app.migrate_readings_to_archive import migrate_readings_to_archive
+        migrated = await migrate_readings_to_archive()
+        if migrated:
+            logger.info("Readings → archive migration: %d rows", migrated)
+    except Exception as e:
+        logger.warning("Readings migration failed (non-fatal): %s", e)
     await restore_accumulator()
     compress_old_archives()  # Gzip any leftover CSVs from before restart
     battery_cycles.load()    # Load cycles state (backfills from archive on first run)

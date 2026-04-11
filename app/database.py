@@ -333,31 +333,44 @@ async def get_yearly() -> list[dict]:
 
 
 async def get_soh_trend():
-    """SOH trend from daily_solar (one row per day).
+    """SOH trend merged from daily_solar + legacy readings table.
 
-    Falls back to the legacy `readings` table if daily_solar has no avg_soh
-    column populated yet (fresh install before the accumulator wrote any day).
+    daily_solar has one row per day (populated by the new accumulator).
+    The legacy readings table has per-reading battery_soh values for older
+    days where daily_solar was not yet being filled. We merge both so the
+    SOH chart shows the full history.
     """
     db = await get_pool()
+    merged: dict[str, int] = {}
+    # Legacy rows first (older), then daily_solar wins on collision
+    try:
+        cur = await db.execute(
+            "SELECT date(timestamp) as day, ROUND(AVG(battery_soh)) as avg_soh "
+            "FROM readings WHERE battery_soh > 0 "
+            "GROUP BY date(timestamp)"
+        )
+        for r in await cur.fetchall():
+            merged[r[0]] = int(r[1])
+    except Exception as e:
+        logger.warning("Legacy SOH query failed: %s", e)
+
     cur = await db.execute(
-        "SELECT date, avg_soh FROM daily_solar "
-        "WHERE avg_soh > 0 ORDER BY date ASC"
+        "SELECT date, avg_soh FROM daily_solar WHERE avg_soh > 0"
     )
-    rows = await cur.fetchall()
-    if rows:
-        return [{"date": r[0], "soh": int(round(r[1]))} for r in rows]
-    # Legacy fallback
-    cur = await db.execute(
-        "SELECT date(timestamp) as day, ROUND(AVG(battery_soh)) as avg_soh "
-        "FROM readings WHERE battery_soh > 0 "
-        "GROUP BY date(timestamp) ORDER BY day"
-    )
-    rows = await cur.fetchall()
-    return [{"date": r[0], "soh": int(r[1])} for r in rows]
+    for r in await cur.fetchall():
+        merged[r[0]] = int(round(r[1]))
+
+    return [{"date": d, "soh": s} for d, s in sorted(merged.items())]
 
 
 async def get_daily_stats(days: int = 30):
-    """Daily stats from daily_solar (reads legacy columns when new ones empty)."""
+    """Daily stats merged from daily_solar (new) + legacy readings aggregates.
+
+    For days where daily_solar has all the new columns at 0 (either because
+    the day predates the accumulator migration OR because the accumulator
+    hasn't filled them yet), fall through to aggregating the legacy readings
+    table for that same date. That way old days still show real numbers.
+    """
     db = await get_pool()
     if days >= 9999:
         cur = await db.execute(
@@ -365,6 +378,7 @@ async def get_daily_stats(days: int = 30):
             "min_soc, max_soc, avg_output_w, peak_output_w "
             "FROM daily_solar ORDER BY date DESC"
         )
+        cutoff = None
     else:
         cutoff = (_now_local() - timedelta(days=days)).strftime("%Y-%m-%d")
         cur = await db.execute(
@@ -373,10 +387,10 @@ async def get_daily_stats(days: int = 30):
             "FROM daily_solar WHERE date >= ? ORDER BY date DESC",
             (cutoff,),
         )
-    rows = await cur.fetchall()
-    out = []
-    for r in rows:
-        out.append({
+    new_rows = await cur.fetchall()
+    by_date: dict[str, dict] = {}
+    for r in new_rows:
+        by_date[r[0]] = {
             "date": r[0],
             "avg_solar": r[1] or 0,
             "peak_solar": r[2] or 0,
@@ -387,14 +401,72 @@ async def get_daily_stats(days: int = 30):
             "max_soc": r[7] or 0,
             "avg_output": r[8] or 0,
             "peak_output": r[9] or 0,
-        })
-    return out
+        }
+
+    # Legacy-fallback: aggregate the readings table for dates where
+    # the new accumulator hasn't filled stats yet.
+    try:
+        if cutoff is None:
+            legacy_cur = await db.execute(
+                "SELECT date(timestamp) as day, "
+                "ROUND(AVG(solar_watts), 1), MAX(solar_watts), "
+                "ROUND(AVG(temperature), 1), MIN(temperature), MAX(temperature), "
+                "MIN(battery_soc), MAX(battery_soc), "
+                "ROUND(AVG(total_output_watts), 1), MAX(total_output_watts) "
+                "FROM readings "
+                "WHERE NOT (battery_soc = 0 AND temperature = 0) "
+                "GROUP BY date(timestamp)"
+            )
+        else:
+            legacy_cur = await db.execute(
+                "SELECT date(timestamp) as day, "
+                "ROUND(AVG(solar_watts), 1), MAX(solar_watts), "
+                "ROUND(AVG(temperature), 1), MIN(temperature), MAX(temperature), "
+                "MIN(battery_soc), MAX(battery_soc), "
+                "ROUND(AVG(total_output_watts), 1), MAX(total_output_watts) "
+                "FROM readings "
+                "WHERE date(timestamp) >= ? "
+                "  AND NOT (battery_soc = 0 AND temperature = 0) "
+                "GROUP BY date(timestamp)",
+                (cutoff,),
+            )
+        for r in await legacy_cur.fetchall():
+            date = r[0]
+            existing = by_date.get(date)
+            # Only fill from legacy when the new row is empty (all stats ≈ 0)
+            if existing is None or (
+                (existing["avg_temp"] or 0) == 0 and (existing["min_soc"] or 0) == 0
+                and (existing["max_soc"] or 0) == 0
+            ):
+                by_date[date] = {
+                    "date": date,
+                    "avg_solar": r[1] or 0,
+                    "peak_solar": r[2] or 0,
+                    "avg_temp": r[3] or 0,
+                    "min_temp": r[4] or 0,
+                    "max_temp": r[5] or 0,
+                    "min_soc": r[6] or 0,
+                    "max_soc": r[7] or 0,
+                    "avg_output": r[8] or 0,
+                    "peak_output": r[9] or 0,
+                }
+    except Exception as e:
+        logger.warning("Legacy daily_stats fallback failed: %s", e)
+
+    return sorted(by_date.values(), key=lambda d: d["date"], reverse=True)
 
 
 async def cleanup_old_readings():
-    """Prune the legacy readings table. Run from the cleanup loop."""
+    """Prune the legacy readings table.
+
+    Retention bumped 2 → 60 days so the historical data (pre-dedup era) stays
+    available as fallback for get_readings/get_soh_trend/get_daily_stats while
+    we gradually migrate it into the archive. Once every old row has been
+    copied into a corresponding daily archive CSV, this retention can come
+    back down — or the readings table can be dropped entirely.
+    """
     db = await get_pool()
-    cutoff = (_now_local() - timedelta(days=2)).strftime("%Y-%m-%d")
+    cutoff = (_now_local() - timedelta(days=60)).strftime("%Y-%m-%d")
     cur = await db.execute(
         "DELETE FROM readings WHERE timestamp < ?", (cutoff,)
     )
@@ -472,19 +544,23 @@ async def get_latest_reading() -> dict | None:
 
 
 async def get_readings(hours: int = 24) -> list[dict]:
-    """Historical readings from the archive (replaces readings-table query).
+    """Historical readings merged from the CSV archive AND the legacy
+    `readings` SQLite table.
 
-    The old behaviour (query `readings` table) is kept as a fallback only
-    if the archive turns up empty.
+    The legacy table still holds rows from before we had the archive
+    running (and from the pre-dedup era). Merging both sources keeps
+    every historical row visible in charts + the MQTT log until the
+    legacy table is either migrated or naturally drained by cleanup.
+
+    Archive rows win on timestamp collision (they are the newer format).
     """
     tz_now = _now_local()
     cutoff = tz_now - timedelta(hours=hours)
-    # Strip tz offset from isoformat so it matches the archive timestamps
-    # (which store "2026-04-11T14:30:00" without offset).
+    # Cutoff without TZ offset so it lexicographically compares correctly
+    # against archive rows that include it.
     cutoff_str = cutoff.strftime("%Y-%m-%dT%H:%M:%S")
     cutoff_date = cutoff.strftime("%Y-%m-%d")
 
-    rows: list[dict] = []
     ARCHIVE_DIR.mkdir(parents=True, exist_ok=True)
 
     def _parse_row(parts):
@@ -508,7 +584,8 @@ async def get_readings(hours: int = 24) -> list[dict]:
         except (ValueError, IndexError):
             return None
 
-    # Walk gzipped archives (older)
+    # --- Archive (newer source of truth) ---
+    archive_rows: list[dict] = []
     for gz_path in sorted(ARCHIVE_DIR.glob("*.csv.gz")):
         file_date = gz_path.name.replace(".csv.gz", "")
         if file_date < cutoff_date:
@@ -524,11 +601,10 @@ async def get_readings(hours: int = 24) -> list[dict]:
                         continue
                     r = _parse_row(parts)
                     if r and not (r["battery_soc"] == 0 and r["temperature"] == 0):
-                        rows.append(r)
+                        archive_rows.append(r)
         except Exception as e:
             logger.warning("Failed to read %s: %s", gz_path, e)
 
-    # Walk open CSVs (today + maybe yesterday before compress)
     for csv_path in sorted(ARCHIVE_DIR.glob("*.csv")):
         file_date = csv_path.stem
         if file_date < cutoff_date:
@@ -544,12 +620,54 @@ async def get_readings(hours: int = 24) -> list[dict]:
                         continue
                     r = _parse_row(parts)
                     if r and not (r["battery_soc"] == 0 and r["temperature"] == 0):
-                        rows.append(r)
+                        archive_rows.append(r)
         except Exception as e:
             logger.warning("Failed to read %s: %s", csv_path, e)
 
-    rows.sort(key=lambda r: r["timestamp"])
-    return rows
+    # --- Legacy readings table (older source, still populated for early days) ---
+    legacy_rows: list[dict] = []
+    try:
+        db = await get_pool()
+        cur = await db.execute(
+            """SELECT timestamp, solar_watts, battery_soc, battery_soh,
+                      ac_output_watts, dc_output_watts, dc_12v_watts,
+                      usbc_1_watts, usbc_2_watts, usbc_3_watts, usba_1_watts,
+                      total_output_watts, ac_input_watts, temperature
+               FROM readings
+               WHERE timestamp >= ?
+                 AND NOT (battery_soc = 0 AND temperature = 0)
+               ORDER BY timestamp ASC""",
+            (cutoff_str,),
+        )
+        for r in await cur.fetchall():
+            legacy_rows.append({
+                "timestamp": r[0],
+                "solar_watts": r[1] or 0,
+                "battery_soc": int(r[2] or 0),
+                "battery_soh": int(r[3] or 0),
+                "ac_output_watts": r[4] or 0,
+                "dc_output_watts": r[5] or 0,
+                "dc_12v_watts": r[6] or 0,
+                "usbc_1_watts": r[7] or 0,
+                "usbc_2_watts": r[8] or 0,
+                "usbc_3_watts": r[9] or 0,
+                "usba_1_watts": r[10] or 0,
+                "total_output_watts": r[11] or 0,
+                "ac_input_watts": r[12] or 0,
+                "temperature": r[13] or 0,
+            })
+    except Exception as e:
+        logger.warning("Legacy readings query failed: %s", e)
+
+    # Merge by timestamp — archive wins on collision (newer format,
+    # properly deduped). Legacy rows fill the gaps for older days.
+    merged: dict[str, dict] = {r["timestamp"]: r for r in legacy_rows}
+    for r in archive_rows:
+        merged[r["timestamp"]] = r
+
+    out = list(merged.values())
+    out.sort(key=lambda r: r["timestamp"])
+    return out
 
 
 async def get_energy_summary() -> dict:
