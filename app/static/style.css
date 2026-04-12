@@ -868,8 +868,8 @@ header h1 {
     line-height: 1;
     font-variant-numeric: tabular-nums;
 }
-.fc-temp-max { color: var(--red); font-weight: 700; }
-.fc-temp-min { color: var(--blue); opacity: 0.9; }
+.fc-temp-max { color: var(--red); font-weight: 700; white-space: nowrap; }
+.fc-temp-min { color: var(--blue); opacity: 0.9; white-space: nowrap; }
 
 /* === kWh Battery (Solar-Prognose daily yield as a battery with kWh inside) === */
 .fc-kwh-batt {
@@ -2502,6 +2502,12 @@ body.light-mode .log-table td {
 }
 .sankey-flow:hover {
     fill-opacity: 0.7;
+}
+.sankey-flow-label {
+    font-size: 8px;
+    font-weight: 700;
+    font-variant-numeric: tabular-nums;
+    opacity: 0.9;
 }
 .sankey-totals {
     display: flex;

@@ -1150,7 +1150,7 @@ async function loadForecast() {
             const tMax = d.temperature_2m_max ? Math.round(d.temperature_2m_max[i] || 0) : null;
             const tMin = d.temperature_2m_min ? Math.round(d.temperature_2m_min[i] || 0) : null;
             const tempHtml = (tMax != null && tMin != null)
-                ? `<div class="fc-temp"><span class="fc-temp-max">${tMax}°</span><span class="fc-temp-min">${tMin}°</span></div>`
+                ? `<div class="fc-temp"><span class="fc-temp-max" title="${LANG === 'de' ? 'Tag' : 'Day'}">☀${tMax}°</span><span class="fc-temp-min" title="${LANG === 'de' ? 'Nacht' : 'Night'}">☾${tMin}°</span></div>`
                 : '';
 
             const div = document.createElement('div');
@@ -2253,12 +2253,26 @@ function _sankeyLayout(flows, totals) {
         parts.push(curve(x1, y1, x2, y2, width, fd.color));
     }
 
-    // Nodes (on top of flows) — no inline labels / values, they live in the
-    // totals row below the diagram (user preference).
+    // Nodes with short labels above (no kWh inside — those live in the totals row below)
     for (const key of ['solar', 'grid', 'battery', 'load', 'loss']) {
         const n = nodeDefs[key];
         if (n.kwh < 0.001 && key !== 'battery') continue;
         parts.push(`<rect class="sankey-node-rect" x="${n.x}" y="${n.y}" width="${NODE_W}" height="${n.h}" fill="${n.color}"/>`);
+        // Label above node
+        const lx = n.x + NODE_W / 2;
+        parts.push(`<text class="sankey-node-label" x="${lx}" y="${n.y - 5}" text-anchor="middle">${n.label}</text>`);
+    }
+
+    // Flow labels on the curves (kWh value at the midpoint of each visible flow)
+    for (const fd of flowDefs) {
+        const flow = flows.find(f => f.from === fd.from && f.to === fd.to);
+        if (!flow || flow.kwh < 0.001) continue;
+        const src = nodeDefs[fd.from];
+        const dst = nodeDefs[fd.to];
+        if (!src || !dst) continue;
+        const mx = (src.x + NODE_W + dst.x) / 2;
+        const my = (src.y + src.h / 2 + dst.y + dst.h / 2) / 2;
+        parts.push(`<text class="sankey-flow-label" x="${mx}" y="${my - 3}" text-anchor="middle" fill="${fd.color}">${fmt2.format(flow.kwh)}</text>`);
     }
 
     svg.innerHTML = parts.join('');
