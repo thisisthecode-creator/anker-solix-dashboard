@@ -969,22 +969,29 @@ header h1 {
     font-variant-numeric: tabular-nums;
 }
 
-/* Solar-Prognose: 7 days in a single row at ALL breakpoints.
-   On mobile the cards get smaller but everything stays visible. */
+/* Solar-Prognose mobile: compact, aligned, with everything visible */
 @media (max-width: 768px) {
+    .forecast-grid { gap: 0; }
     .fc-day {
-        padding: 6px 1px;
+        padding: 8px 2px;
+        border-radius: 0;
+        border-right: 1px solid var(--card-border);
     }
-    .fc-day .fc-name { font-size: 0.55rem; }
-    .fc-day .fc-date { font-size: 0.5rem; }
-    .fc-day .fc-icon { font-size: 1rem; margin-bottom: 1px; }
-    .fc-day .fc-kwh { font-size: 0.82rem; }
+    .fc-day:last-child { border-right: none; }
+    .fc-day.fc-today {
+        background: rgba(245, 158, 11, 0.08);
+        border-radius: 0;
+    }
+    .fc-day .fc-name { font-size: 0.6rem; font-weight: 700; margin-bottom: 1px; }
+    .fc-day .fc-date { font-size: 0.5rem; margin-bottom: 3px; }
+    .fc-day .fc-icon { font-size: 1.1rem; margin-bottom: 2px; }
+    .fc-day .fc-kwh { font-size: 0.95rem; font-weight: 800; }
     .fc-day .fc-kwh-label { font-size: 0.42rem; margin-bottom: 2px; }
-    .fc-day .fc-temp { font-size: 0.48rem; gap: 3px; margin: 2px auto; }
-    .fc-day .fc-sun { font-size: 0.48rem; }
-    .fc-day .fc-wind { font-size: 0.42rem; }
+    .fc-day .fc-temp { font-size: 0.5rem; gap: 3px; margin: 2px auto; }
+    .fc-day .fc-sun { font-size: 0.5rem; }
+    .fc-day .fc-wind { font-size: 0.45rem; }
     .fc-day .fc-wind small { font-size: 0.7em; }
-    .fc-day .fc-uv { font-size: 0.45rem; padding: 0; }
+    .fc-day .fc-uv { font-size: 0.5rem; padding: 0 1px; margin-top: 1px; }
 }
 
 .fc-name {
@@ -2509,6 +2516,17 @@ body.light-mode .log-table td {
     flex-direction: column;
     align-items: center;
     gap: 2px;
+}
+.sankey-tot-dot {
+    display: inline-block;
+    width: 8px;
+    height: 8px;
+    border-radius: 50%;
+    margin-bottom: 1px;
+}
+.sankey-tot-label {
+    font-size: 0.65rem;
+    color: var(--text-dim);
 }
 .sankey-tot-value {
     color: var(--text);

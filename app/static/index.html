@@ -446,17 +446,6 @@
             <div id="usagePatternsContent" class="up-legend"></div>
         </section>
 
-        <!-- CSV Export -->
-        <section class="today-box">
-            <h2 data-i18n="dataExport">Daten Export (CSV)</h2>
-            <div class="export-row">
-                <button class="export-btn" onclick="downloadCSV(24)" data-i18n="today">Heute</button>
-                <button class="export-btn" onclick="downloadCSV(168)" data-i18n="week">Woche</button>
-                <button class="export-btn" onclick="downloadCSV(720)" data-i18n="month">Monat</button>
-                <button class="export-btn" onclick="downloadCSV(8760)" data-i18n="year">Jahr</button>
-            </div>
-        </section>
-
         <!-- Combined Overview Chart -->
         <section class="chart-box">
             <h3 data-i18n="mqttOverview">MQTT Übersicht</h3>
@@ -499,10 +488,6 @@
                         <span class="amort-hero-val amort-hero-accent" id="amortRemaining">941 €</span>
                     </div>
                 </div>
-            </div>
-            <!-- Cumulative savings line chart (real vs projection to break-even) -->
-            <div class="amort-chart-wrap">
-                <canvas id="chart_amort_progress"></canvas>
             </div>
             <div class="amort-payoff" id="amortPayoff"></div>
             <div class="amort-cards">
@@ -617,13 +602,23 @@
             </div>
         </section>
 
-        <!-- Data Backup (last section) -->
+        <!-- Data Backup + CSV Export (last sections) -->
         <section class="today-box" id="dataBackupSection">
             <h2 data-i18n="dataBackup">Daten-Backup</h2>
             <div class="backup-row">
                 <button class="export-btn" onclick="downloadFullBackup()" data-i18n="downloadDb">DB-Export herunterladen</button>
             </div>
             <div class="backup-hint" id="backupHint"></div>
+        </section>
+
+        <section class="today-box">
+            <h2 data-i18n="dataExport">Daten Export (CSV)</h2>
+            <div class="export-row">
+                <button class="export-btn" onclick="downloadCSV(24)" data-i18n="today">Heute</button>
+                <button class="export-btn" onclick="downloadCSV(168)" data-i18n="week">Woche</button>
+                <button class="export-btn" onclick="downloadCSV(720)" data-i18n="month">Monat</button>
+                <button class="export-btn" onclick="downloadCSV(8760)" data-i18n="year">Jahr</button>
+            </div>
         </section>
 
     </div>

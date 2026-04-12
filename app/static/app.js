@@ -76,7 +76,7 @@ const I18N = {
             '<p>Sprünge über 30 % werden als Datenlücken verworfen (z. B. wenn der Server kurz offline war). ' +
             'Die Berechnung läuft live im RAM, der Gesamtzähler wird in <code>data/battery_cycles.json</code> ' +
             'auf dem persistenten Volume gespeichert.</p>',
-        usagePatterns: 'Verbrauchsmuster', noPatterns: 'Noch nicht genug Daten für Muster.',
+        usagePatterns: 'Verbrauchsmuster', usagePatternsHint: 'Ø Verbrauch pro Stunde (letzte 7 Tage)', noPatterns: 'Noch nicht genug Daten für Muster.',
         avgWatts: '⌀ {w} W', regularUsage: 'Regelmäßiger Verbrauch',
         shareTitle: 'Mein Solar-Tag', shareText: 'Solar: {kwh} kWh ☀️ | Score: {score}%',
         yesterday: 'Gestern', todayLabel: 'Heute',
@@ -218,7 +218,7 @@ const I18N = {
             '<p>Jumps larger than 30 % are rejected as data gaps (for example if the server was briefly offline). ' +
             'The calculation runs live in RAM; the lifetime counter is persisted in ' +
             '<code>data/battery_cycles.json</code> on the persistent volume.</p>',
-        usagePatterns: 'Usage Patterns', noPatterns: 'Not enough data for patterns yet.',
+        usagePatterns: 'Usage Patterns', usagePatternsHint: 'Avg consumption per hour (last 7 days)', noPatterns: 'Not enough data for patterns yet.',
         avgWatts: 'Avg {w} W', regularUsage: 'Regular usage',
         shareTitle: 'My Solar Day', shareText: 'Solar: {kwh} kWh ☀️ | Score: {score}%',
         yesterday: 'Yesterday', todayLabel: 'Today',
@@ -2265,17 +2265,22 @@ function _sankeyLayout(flows, totals) {
     svg.innerHTML = parts.join('');
 
     // Render totals row
+    // Render totals row with colored dots matching the SVG node colors
     const totEl = $('sankeyTotals');
     if (totEl) {
         const items = [
-            ['☀', totals.solar_kwh, t('pfSolar')],
-            ['🏠', totals.grid_in_kwh, t('pfGrid')],
-            ['🔋↓', totals.battery_out_kwh, t('pfBattery') + ' out'],
-            ['🔋↑', totals.battery_in_kwh, t('pfBattery') + ' in'],
-            ['⚡', totals.load_kwh, t('pfLoad')],
+            ['var(--solar)', totals.solar_kwh, t('pfSolar')],
+            ['#888', totals.grid_in_kwh, t('pfGrid')],
+            ['var(--blue)', totals.battery_in_kwh, t('pfBattery') + ' in'],
+            ['var(--blue)', totals.battery_out_kwh, t('pfBattery') + ' out'],
+            ['#22c55e', totals.load_kwh, t('pfLoad')],
         ];
-        totEl.innerHTML = items.map(([icon, v, label]) =>
-            `<div class="sankey-tot-item"><span>${icon} ${label}</span><span class="sankey-tot-value">${fmt2.format(v)} kWh</span></div>`
+        totEl.innerHTML = items.map(([color, v, label]) =>
+            `<div class="sankey-tot-item">`
+            + `<span class="sankey-tot-dot" style="background:${color}"></span>`
+            + `<span class="sankey-tot-label">${label}</span>`
+            + `<span class="sankey-tot-value">${fmt2.format(v)} kWh</span>`
+            + `</div>`
         ).join('');
     }
 }
