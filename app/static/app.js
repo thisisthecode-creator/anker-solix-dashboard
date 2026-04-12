@@ -1160,9 +1160,9 @@ async function loadForecast() {
                 + `<div class="fc-icon">${icon}</div>`
                 + `<div class="fc-kwh">${estKwh}</div>`
                 + tempHtml
-                + `<div class="fc-sun">${sunH}h</div>`
+                + `<div class="fc-sun">🌞 ${sunH}h</div>`
                 + `<div class="fc-wind${windDanger}" title="${t('wind')} ${windSpeed} km/h (${LANG === 'de' ? 'Böen' : 'gusts'} ${windGusts} km/h)">💨 ${windSpeed}</div>`
-                + `<div class="fc-uv ${uvClass}">UV ${uv}</div>`;
+                + `<div class="fc-uv ${uvClass}">🔆 ${uv}</div>`;
             grid.appendChild(div);
         }
 

@@ -868,7 +868,7 @@ header h1 {
     line-height: 1;
     font-variant-numeric: tabular-nums;
 }
-.fc-temp-max { color: var(--red); font-weight: 700; white-space: nowrap; }
+.fc-temp-max { color: var(--solar); font-weight: 700; white-space: nowrap; }
 .fc-temp-min { color: var(--blue); opacity: 0.9; white-space: nowrap; }
 
 /* === kWh Battery (Solar-Prognose daily yield as a battery with kWh inside) === */
