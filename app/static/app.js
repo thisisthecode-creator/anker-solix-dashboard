@@ -1437,9 +1437,9 @@ const MQTT_METRICS = {
     temperature:        { label: '🌡️ Temp',   color: '#3b82f6', yAxis: 'yTemp', dash: [4, 2], logNull: false },
     ac_output_watts:    { label: '🏠 AC',     color: '#c084fc', yAxis: 'yW',    dash: [],     logNull: true },
     dc_output_watts:    { label: '🔋 DC',     color: '#fb923c', yAxis: 'yW',    dash: [],     logNull: true },
-    usbc_1_watts:       { label: '🔌 C1',     color: '#f472b6', yAxis: 'yW',    dash: [],     logNull: true },
-    usbc_2_watts:       { label: '🔌 C2',     color: '#34d399', yAxis: 'yW',    dash: [],     logNull: true },
-    usbc_3_watts:       { label: '🔌 C3',     color: '#fbbf24', yAxis: 'yW',    dash: [],     logNull: true },
+    usbc_1_watts:       { label: 'USB-C 1',   color: '#f472b6', yAxis: 'yW',    dash: [],     logNull: true },
+    usbc_2_watts:       { label: 'USB-C 2',   color: '#34d399', yAxis: 'yW',    dash: [],     logNull: true },
+    usbc_3_watts:       { label: 'USB-C 3',   color: '#fbbf24', yAxis: 'yW',    dash: [],     logNull: true },
     usba_1_watts:       { label: '🔌 A',      color: '#60a5fa', yAxis: 'yW',    dash: [],     logNull: true },
     dc_12v_watts:       { label: '🚗 12V',    color: '#facc15', yAxis: 'yW',    dash: [],     logNull: true },
 };

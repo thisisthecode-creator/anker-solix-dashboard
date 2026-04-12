@@ -570,6 +570,15 @@ header h1 {
     white-space: nowrap;
     text-align: center;
 }
+/* Inline USB-C icon in toggle buttons */
+.usbc-icon {
+    width: 12px;
+    height: 12px;
+    vertical-align: -2px;
+    margin-right: 1px;
+    display: inline-block;
+}
+
 .mqtt-toggle.active {
     background: var(--toggle-color, var(--text-dim));
     color: #000;
