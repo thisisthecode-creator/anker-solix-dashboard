@@ -1053,11 +1053,34 @@ async function loadWeather() {
         const uvEl = $('weatherUV');
         if (uv != null) {
             const uvVal = Math.round(uv * 10) / 10;
-            uvEl.textContent = 'UV ' + uvVal;
-            uvEl.className = 'weather-uv uv-' + (uv >= 8 ? 'extreme' : uv >= 6 ? 'high' : uv >= 3 ? 'mid' : 'low');
-        } else {
+            if (uvEl) {
+                uvEl.textContent = 'UV ' + uvVal;
+                uvEl.className = 'weather-uv uv-' + (uv >= 8 ? 'extreme' : uv >= 6 ? 'high' : uv >= 3 ? 'mid' : 'low');
+            }
+        } else if (uvEl) {
             uvEl.textContent = 'UV --';
             uvEl.className = 'weather-uv';
+        }
+        // --- Update Ring 5: Temperature °C (range -20 to +40 → 0-100%) ---
+        const tempRingEl = $('tempRingVal');
+        const tempArc = $('tempArc');
+        const tempC = c.temperature_2m;
+        if (tempRingEl) tempRingEl.textContent = Math.round(tempC) + '°';
+        if (tempArc) {
+            const RING_C = 144.51;
+            const tempPct = Math.max(0, Math.min(100, (tempC + 20) / 60 * 100));
+            tempArc.setAttribute('stroke-dashoffset', (RING_C - RING_C * tempPct / 100).toFixed(1));
+        }
+        // --- Update Ring 6: UV Index (range 0-11+) ---
+        const uvRingEl = $('uvRingVal');
+        const uvArcEl = $('uvArc');
+        if (uv != null) {
+            if (uvRingEl) uvRingEl.textContent = Math.round(uv * 10) / 10;
+            if (uvArcEl) {
+                const RING_C = 144.51;
+                const uvPct = Math.min(100, uv / 11 * 100);
+                uvArcEl.setAttribute('stroke-dashoffset', (RING_C - RING_C * uvPct / 100).toFixed(1));
+            }
         }
         // Sunrise/Sunset
         if (data.daily && data.daily.sunrise && data.daily.sunset) {

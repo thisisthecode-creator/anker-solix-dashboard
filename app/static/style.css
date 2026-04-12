@@ -1920,10 +1920,33 @@ body.light-mode .log-table td {
     line-height: 1;
     font-variant-numeric: tabular-nums;
 }
-.dash-ring-solar { color: var(--solar); }
-.dash-ring-green { color: #22c55e; }
-.dash-ring-blue  { color: var(--blue); }
-.dash-ring-gold  { color: #eab308; }
+.dash-ring-solar  { color: var(--solar); }
+.dash-ring-green  { color: #22c55e; }
+.dash-ring-blue   { color: var(--blue); }
+.dash-ring-gold   { color: #eab308; }
+.dash-ring-red    { color: #ef4444; }
+.dash-ring-purple { color: #a855f7; }
+
+/* Weather details row below the rings */
+.dash-weather-row {
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    gap: 10px;
+    flex-wrap: wrap;
+    font-size: 0.72rem;
+    color: var(--text-dim);
+    margin-top: 4px;
+    padding: 6px 0 0;
+    border-top: 1px solid var(--card-border);
+}
+
+/* 6 rings need to wrap nicely on narrow screens */
+.dash-top-row {
+    flex-wrap: wrap;
+    justify-content: center;
+    gap: 10px 14px;
+}
 .dash-ring-label {
     position: absolute;
     bottom: -10px;

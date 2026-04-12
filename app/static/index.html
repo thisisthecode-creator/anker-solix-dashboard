@@ -82,21 +82,43 @@
                     <div class="dash-ring-value dash-ring-gold" id="savingsRingVal">--</div>
                     <div class="dash-ring-label">Gespart</div>
                 </div>
-                <div class="dash-info">
-                    <span id="scoreProduced" style="display:none">-- Wh</span>
-                    <span id="scorePotential" style="display:none">-- Wh</span>
-                    <div class="dash-grid">
-                        <span class="dg-item"><span id="weatherIcon">☁️</span> <span id="weatherTemp">--</span></span>
-                        <span class="dg-item"><span class="weather-uv" id="weatherUV"></span></span>
-                        <span class="dg-item dg-dim" id="weatherDesc">--</span>
-                        <span class="dg-item dg-dim weather-clouds" id="weatherClouds"></span>
-                        <span class="dg-item" id="sunRise">🌅 --:--</span>
-                        <span class="dg-item" id="sunSet">🌇 --:--</span>
-                    </div>
+                <!-- Ring 5: Temperature °C (red) -->
+                <div class="dash-ring-wrap" title="Temperatur">
+                    <svg class="dash-ring" viewBox="0 0 56 56">
+                        <circle cx="28" cy="28" r="23" fill="none" stroke="var(--card-border)" stroke-width="4.5"/>
+                        <circle cx="28" cy="28" r="23" fill="none" stroke="#ef4444" stroke-width="4.5"
+                            stroke-dasharray="144.51" stroke-dashoffset="144.51" stroke-linecap="round"
+                            transform="rotate(-90 28 28)" id="tempArc"/>
+                    </svg>
+                    <div class="dash-ring-value dash-ring-red" id="tempRingVal">--</div>
+                    <div class="dash-ring-label">Temp</div>
                 </div>
-                <!-- savingsTickerValue kept hidden for JS compat -->
-                <span id="savingsTickerValue" style="display:none"></span>
+                <!-- Ring 6: UV Index (purple) -->
+                <div class="dash-ring-wrap" title="UV Index">
+                    <svg class="dash-ring" viewBox="0 0 56 56">
+                        <circle cx="28" cy="28" r="23" fill="none" stroke="var(--card-border)" stroke-width="4.5"/>
+                        <circle cx="28" cy="28" r="23" fill="none" stroke="#a855f7" stroke-width="4.5"
+                            stroke-dasharray="144.51" stroke-dashoffset="144.51" stroke-linecap="round"
+                            transform="rotate(-90 28 28)" id="uvArc"/>
+                    </svg>
+                    <div class="dash-ring-value dash-ring-purple" id="uvRingVal">--</div>
+                    <div class="dash-ring-label">UV</div>
+                </div>
             </div>
+            <!-- Weather details row below the rings -->
+            <div class="dash-weather-row">
+                <span id="weatherIcon">☁️</span>
+                <span id="weatherDesc">--</span>
+                <span class="weather-clouds" id="weatherClouds"></span>
+                <span id="sunRise">🌅 --:--</span>
+                <span id="sunSet">🌇 --:--</span>
+            </div>
+            <!-- Hidden compat elements -->
+            <span id="savingsTickerValue" style="display:none"></span>
+            <span id="scoreProduced" style="display:none"></span>
+            <span id="scorePotential" style="display:none"></span>
+            <span id="weatherTemp" style="display:none"></span>
+            <span id="weatherUV" style="display:none"></span>
         </div>
 
 
