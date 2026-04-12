@@ -799,7 +799,7 @@ function updateUI(d) {
     // Ring 4: Today's Savings € (0–0.75 € range = 3 kWh × 0.25 €/kWh)
     const savedEur = d.daily_savings_eur || 0;
     const savRingEl = $('savingsRingVal');
-    if (savRingEl) savRingEl.textContent = fmtEur.format(savedEur) + '€';
+    if (savRingEl) savRingEl.textContent = Math.round(savedEur) + '€';
     const savArc = $('savingsArc');
     if (savArc) {
         const pct = Math.min(100, savedEur / 0.75 * 100);
@@ -1175,7 +1175,8 @@ async function loadForecast() {
 
             const uvClass = uv >= 8 ? 'uv-extreme' : uv >= 6 ? 'uv-high' : uv >= 3 ? 'uv-mid' : 'uv-low';
 
-            // Wind data
+            // Cloud cover + wind data
+            const cloudCover = Math.round(d.cloud_cover_mean ? d.cloud_cover_mean[i] || 0 : 0);
             const windSpeed = Math.round(d.wind_speed_10m_max ? d.wind_speed_10m_max[i] || 0 : 0);
             const windGusts = Math.round(d.wind_gusts_10m_max ? d.wind_gusts_10m_max[i] || 0 : 0);
             const windDanger = windGusts >= 60 ? ' fc-wind-danger' : windGusts >= 40 ? ' fc-wind-warn' : '';
@@ -1199,7 +1200,8 @@ async function loadForecast() {
                 + `<div class="fc-icon">${icon}</div>`
                 + `<div class="fc-kwh">${estKwh}</div>`
                 + tempHtml
-                + `<div class="fc-sun">🌞 ${sunH}h</div>`
+                + `<div class="fc-sun">🔆 ${sunH}h</div>`
+                + `<div class="fc-clouds">☁ ${cloudCover}%</div>`
                 + `<div class="fc-wind${windDanger}" title="${t('wind')} ${windSpeed} km/h (${LANG === 'de' ? 'Böen' : 'gusts'} ${windGusts} km/h)">💨 ${windSpeed}</div>`
                 + `<div class="fc-uv ${uvClass}">🔆 ${uv}</div>`;
             grid.appendChild(div);

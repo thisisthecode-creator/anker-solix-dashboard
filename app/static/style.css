@@ -991,6 +991,7 @@ header h1 {
     /* All secondary info: uniform 0.6rem for easy reading */
     .fc-day .fc-temp { font-size: 0.6rem; gap: 4px; margin: 3px auto; }
     .fc-day .fc-sun { font-size: 0.6rem; margin: 1px 0; }
+    .fc-day .fc-clouds { font-size: 0.6rem; margin: 1px 0; }
     .fc-day .fc-wind { font-size: 0.6rem; margin: 1px 0; }
     .fc-day .fc-uv { font-size: 0.6rem; padding: 0 1px; margin-top: 1px; }
 }
@@ -1046,6 +1047,13 @@ header h1 {
     color: var(--text);
     font-variant-numeric: tabular-nums;
     margin-top: 3px;
+    line-height: 1.4;
+}
+
+.fc-clouds {
+    font-size: 0.6rem;
+    color: var(--text-dim);
+    font-variant-numeric: tabular-nums;
     line-height: 1.4;
 }
 
