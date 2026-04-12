@@ -570,12 +570,12 @@ header h1 {
     white-space: nowrap;
     text-align: center;
 }
-/* Inline USB-C icon in toggle buttons */
+/* Inline USB-C port icon (oval with inner slot) */
 .usbc-icon {
-    width: 12px;
-    height: 12px;
-    vertical-align: -2px;
-    margin-right: 1px;
+    width: 14px;
+    height: 9px;
+    vertical-align: -1px;
+    margin-right: 2px;
     display: inline-block;
 }
 
