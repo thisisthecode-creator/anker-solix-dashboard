@@ -572,10 +572,10 @@ header h1 {
 }
 /* Inline USB-C port icon (oval with inner slot) */
 .usbc-icon {
-    width: 14px;
-    height: 9px;
-    vertical-align: -1px;
-    margin-right: 2px;
+    width: 10px;
+    height: 6px;
+    vertical-align: 0px;
+    margin-right: 1px;
     display: inline-block;
 }
 
