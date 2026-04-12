@@ -871,109 +871,26 @@ header h1 {
 .fc-temp-max { color: var(--red); font-weight: 700; }
 .fc-temp-min { color: var(--blue); opacity: 0.9; }
 
-/* Mobile Solar-Prognose: HEUTE hero full-width row, 6 next days in 3×2 grid */
+/* Solar-Prognose: 7 days in a single row at ALL breakpoints.
+   On mobile the cards get smaller but everything stays visible. */
 @media (max-width: 768px) {
-    .forecast-grid {
-        display: grid !important;
-        grid-template-columns: 1fr 1fr 1fr !important;
-        gap: 8px !important;
+    .fc-day {
+        padding: 6px 1px;
     }
-    .fc-day.fc-today {
-        grid-column: 1 / -1;
-        padding: 16px 14px;
-        display: grid;
-        grid-template-columns: auto 1fr auto;
-        grid-template-rows: auto auto auto;
-        column-gap: 14px;
-        row-gap: 2px;
-        align-items: center;
-        text-align: left;
-    }
-    .fc-day.fc-today .fc-name {
-        grid-column: 1 / 2;
-        grid-row: 1 / 2;
-        font-size: 0.95rem;
-        font-weight: 700;
-        color: var(--solar);
-    }
-    .fc-day.fc-today .fc-date {
-        grid-column: 1 / 2;
-        grid-row: 2 / 3;
-        font-size: 0.7rem;
-        color: var(--text-dim);
-    }
-    .fc-day.fc-today .fc-icon {
-        grid-column: 1 / 2;
-        grid-row: 3 / 4;
-        font-size: 2.2rem;
-        text-align: center;
-        margin-top: 4px;
-    }
-    .fc-day.fc-today .fc-kwh {
-        grid-column: 2 / 3;
-        grid-row: 1 / 3;
-        font-size: 2rem;
-        text-align: center;
-        align-self: center;
-    }
-    .fc-day.fc-today .fc-kwh-label {
-        grid-column: 2 / 3;
-        grid-row: 3 / 4;
-        font-size: 0.7rem;
-        text-align: center;
-    }
-    .fc-day.fc-today .fc-temp {
-        grid-column: 3 / 4;
-        grid-row: 1 / 2;
-        font-size: 0.85rem;
-        justify-self: end;
-        gap: 8px;
-    }
-    .fc-day.fc-today .fc-bar {
-        grid-column: 3 / 4;
-        grid-row: 2 / 3;
-        width: 30px;
-        height: 18px;
-        justify-self: end;
-    }
-    .fc-day.fc-today .fc-sun {
-        grid-column: 3 / 4;
-        grid-row: 3 / 4;
-        font-size: 0.75rem;
-        justify-self: end;
-    }
-    /* Hero wind/ratio/UV on second row spanning full width */
-    .fc-day.fc-today .fc-wind {
-        grid-column: 1 / -1;
-        grid-row: 4 / 5;
-        justify-self: center;
-        padding-top: 6px;
-        border-top: 1px solid var(--card-border);
-        margin-top: 6px;
-        font-size: 0.7rem;
-    }
-    .fc-day.fc-today .fc-ratio {
-        grid-column: 1 / -1;
-        grid-row: 5 / 6;
-    }
-    .fc-day.fc-today .fc-uv {
-        grid-column: 1 / -1;
-        grid-row: 6 / 7;
-        font-size: 0.75rem;
-    }
-
-    /* Compact the 6 non-today chips */
-    .fc-day:not(.fc-today) .fc-ratio-icons,
-    .fc-day:not(.fc-today) .fc-ratio-labels,
-    .fc-day:not(.fc-today) .fc-ratio-bar {
-        display: none;
-    }
-    .fc-day:not(.fc-today) .fc-bar { height: 12px; }
-    .fc-day:not(.fc-today) .fc-kwh { font-size: 0.95rem; }
-    .fc-day:not(.fc-today) .fc-wind { font-size: 0.55rem; }
-    .fc-day:not(.fc-today) .fc-uv { font-size: 0.6rem; margin-top: 1px; }
-    .fc-day:not(.fc-today) .fc-temp { font-size: 0.6rem; }
-    .fc-day:not(.fc-today) { padding: 8px 4px; }
+    .fc-day .fc-name { font-size: 0.55rem; }
+    .fc-day .fc-date { font-size: 0.5rem; }
+    .fc-day .fc-icon { font-size: 0.9rem; margin-bottom: 1px; }
+    .fc-day .fc-kwh { font-size: 0.7rem; }
+    .fc-day .fc-kwh-label { font-size: 0.42rem; }
+    .fc-day .fc-temp { font-size: 0.48rem; gap: 3px; margin: 2px auto; }
+    .fc-day .fc-bar { height: 16px; width: 70%; }
+    .fc-day .fc-sun { font-size: 0.48rem; }
+    .fc-day .fc-wind { font-size: 0.42rem; }
+    .fc-day .fc-wind small { font-size: 0.7em; }
+    .fc-day .fc-ratio { width: 100%; }
+    .fc-day .fc-ratio-icons { font-size: 0.42rem; }
+    .fc-day .fc-ratio-labels { font-size: 0.42rem; }
+    .fc-day .fc-uv { font-size: 0.45rem; padding: 0; }
 }
 
 .fc-name {
