@@ -764,6 +764,47 @@ function updateUI(d) {
 
     // Energy-Flow section (direct-use / autarky / RTE) updates live from WS
     try { updateEnergyFlowFromLatest(d); } catch (e) {}
+    // === Triple-ring update in dash overview ===
+    const RING_CIRC = 144.51; // 2 * π * 23
+
+    // Ring 1: Solar W (0–440 W range for 2×220W panels)
+    const solarW = d.solar_watts || 0;
+    const solarWEl = $('solarWattRingVal');
+    if (solarWEl) solarWEl.textContent = Math.round(solarW);
+    const solarWArc = $('solarWattArc');
+    if (solarWArc) {
+        const pct = Math.min(100, solarW / 440 * 100);
+        solarWArc.setAttribute('stroke-dashoffset', (RING_CIRC - RING_CIRC * pct / 100).toFixed(1));
+    }
+
+    // Ring 2: Autarkie %
+    const aut = d.autarkie_pct || 0;
+    const autPct = $('autarkiePct');
+    if (autPct) autPct.textContent = fmt.format(aut) + '%';
+    const autArc = $('autarkieArc');
+    if (autArc) {
+        autArc.setAttribute('stroke-dashoffset', (RING_CIRC - RING_CIRC * Math.min(100, aut) / 100).toFixed(1));
+    }
+
+    // Ring 3: Today's Solar kWh (0–3 kWh range, generous for 2×220W)
+    const solarKwh = d.daily_kwh || 0;
+    const solarKwhEl = $('solarKwhRingVal');
+    if (solarKwhEl) solarKwhEl.textContent = fmt2.format(solarKwh);
+    const solarKwhArc = $('solarKwhArc');
+    if (solarKwhArc) {
+        const pct = Math.min(100, solarKwh / 3 * 100);
+        solarKwhArc.setAttribute('stroke-dashoffset', (RING_CIRC - RING_CIRC * pct / 100).toFixed(1));
+    }
+
+    // Ring 4: Today's Savings € (0–0.75 € range = 3 kWh × 0.25 €/kWh)
+    const savedEur = d.daily_savings_eur || 0;
+    const savRingEl = $('savingsRingVal');
+    if (savRingEl) savRingEl.textContent = fmtEur.format(savedEur) + '€';
+    const savArc = $('savingsArc');
+    if (savArc) {
+        const pct = Math.min(100, savedEur / 0.75 * 100);
+        savArc.setAttribute('stroke-dashoffset', (RING_CIRC - RING_CIRC * pct / 100).toFixed(1));
+    }
     // Live power-flow animation (Solar / Battery / Load / Grid icons + particles)
     try { if (typeof updatePowerFlow === 'function') updatePowerFlow(d); } catch (e) {}
 

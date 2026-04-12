@@ -38,14 +38,49 @@
         <!-- Dashboard Overview (Score + Savings + Weather unified) -->
         <div class="dash-overview" id="dashOverview">
             <div class="dash-top-row">
-                <div class="score-ring-wrap">
-                    <svg class="score-ring" viewBox="0 0 60 60">
-                        <circle cx="30" cy="30" r="26" fill="none" stroke="var(--card-border)" stroke-width="5"/>
-                        <circle cx="30" cy="30" r="26" fill="none" stroke="var(--solar)" stroke-width="5"
-                            stroke-dasharray="163.36" stroke-dashoffset="163.36" stroke-linecap="round"
-                            transform="rotate(-90 30 30)" id="scoreArc"/>
+                <!-- Ring 1: Current Solar W (orange, 0–440 W range for 2×220W panels) -->
+                <div class="dash-ring-wrap" title="Solar aktuell">
+                    <svg class="dash-ring" viewBox="0 0 56 56">
+                        <circle cx="28" cy="28" r="23" fill="none" stroke="var(--card-border)" stroke-width="4.5"/>
+                        <circle cx="28" cy="28" r="23" fill="none" stroke="var(--solar)" stroke-width="4.5"
+                            stroke-dasharray="144.51" stroke-dashoffset="144.51" stroke-linecap="round"
+                            transform="rotate(-90 28 28)" id="solarWattArc"/>
                     </svg>
-                    <div class="score-pct" id="scorePct">--</div>
+                    <div class="dash-ring-value dash-ring-solar" id="solarWattRingVal">--</div>
+                    <div class="dash-ring-label">Solar W</div>
+                </div>
+                <!-- Ring 2: Autarkie-Grad % (green) -->
+                <div class="dash-ring-wrap" title="Autarkie-Grad">
+                    <svg class="dash-ring" viewBox="0 0 56 56">
+                        <circle cx="28" cy="28" r="23" fill="none" stroke="var(--card-border)" stroke-width="4.5"/>
+                        <circle cx="28" cy="28" r="23" fill="none" stroke="#22c55e" stroke-width="4.5"
+                            stroke-dasharray="144.51" stroke-dashoffset="144.51" stroke-linecap="round"
+                            transform="rotate(-90 28 28)" id="autarkieArc"/>
+                    </svg>
+                    <div class="dash-ring-value dash-ring-green" id="autarkiePct">--%</div>
+                    <div class="dash-ring-label">Autarkie</div>
+                </div>
+                <!-- Ring 3: Today's Solar kWh (blue) -->
+                <div class="dash-ring-wrap" title="Solar heute">
+                    <svg class="dash-ring" viewBox="0 0 56 56">
+                        <circle cx="28" cy="28" r="23" fill="none" stroke="var(--card-border)" stroke-width="4.5"/>
+                        <circle cx="28" cy="28" r="23" fill="none" stroke="var(--blue)" stroke-width="4.5"
+                            stroke-dasharray="144.51" stroke-dashoffset="144.51" stroke-linecap="round"
+                            transform="rotate(-90 28 28)" id="solarKwhArc"/>
+                    </svg>
+                    <div class="dash-ring-value dash-ring-blue" id="solarKwhRingVal">--</div>
+                    <div class="dash-ring-label">kWh</div>
+                </div>
+                <!-- Ring 4: Today's Savings € (gold) -->
+                <div class="dash-ring-wrap" title="Gespart heute">
+                    <svg class="dash-ring" viewBox="0 0 56 56">
+                        <circle cx="28" cy="28" r="23" fill="none" stroke="var(--card-border)" stroke-width="4.5"/>
+                        <circle cx="28" cy="28" r="23" fill="none" stroke="#eab308" stroke-width="4.5"
+                            stroke-dasharray="144.51" stroke-dashoffset="144.51" stroke-linecap="round"
+                            transform="rotate(-90 28 28)" id="savingsArc"/>
+                    </svg>
+                    <div class="dash-ring-value dash-ring-gold" id="savingsRingVal">--</div>
+                    <div class="dash-ring-label">Gespart</div>
                 </div>
                 <div class="dash-info">
                     <span id="scoreProduced" style="display:none">-- Wh</span>
@@ -59,12 +94,8 @@
                         <span class="dg-item" id="sunSet">🌇 --:--</span>
                     </div>
                 </div>
-                <div class="dash-side-stats">
-                    <div class="side-stat">
-                        <span class="side-icon">💰</span>
-                        <span class="side-val savings-value" id="savingsTickerValue">0,00 €</span>
-                    </div>
-                </div>
+                <!-- savingsTickerValue kept hidden for JS compat -->
+                <span id="savingsTickerValue" style="display:none"></span>
             </div>
         </div>
 
@@ -238,46 +269,13 @@
             <div class="flow-anim-grid" id="flowAnimatedContent"></div>
         </section>
 
-        <!-- Energy & Savings Summary -->
-        <section class="today-box">
-            <h2><span data-i18n="energySavings">Energie &amp; Ersparnis</span> <span class="self-consumption-badge" id="selfConsumption" title="Self-consumption">--</span></h2>
-            <div class="energy-table-wrap">
-                <table class="energy-table">
-                    <thead>
-                        <tr>
-                            <th></th>
-                            <th data-i18n="today">Heute</th>
-                            <th data-i18n="week">Woche</th>
-                            <th data-i18n="month">Monat</th>
-                            <th data-i18n="total">Gesamt</th>
-                        </tr>
-                    </thead>
-                    <tbody>
-                        <tr class="et-row-solar">
-                            <td class="et-label"><span class="e-dot e-solar"></span> <span data-i18n="solar">Solar</span></td>
-                            <td id="eToday">--</td>
-                            <td id="eWeek">--</td>
-                            <td id="eMonth">--</td>
-                            <td id="eTotal">--</td>
-                        </tr>
-                        <tr class="et-row-usage">
-                            <td class="et-label"><span class="e-dot e-usage"></span> <span data-i18n="consumption">Verbrauch</span></td>
-                            <td id="eOutToday">--</td>
-                            <td id="eOutWeek">--</td>
-                            <td id="eOutMonth">--</td>
-                            <td id="eOutTotal">--</td>
-                        </tr>
-                        <tr class="et-row-savings">
-                            <td class="et-label" data-i18n="savedEur">Gespart EUR</td>
-                            <td class="e-savings" id="sToday">--</td>
-                            <td class="e-savings" id="sWeek">--</td>
-                            <td class="e-savings" id="sMonth">--</td>
-                            <td class="e-savings" id="sTotal">--</td>
-                        </tr>
-                    </tbody>
-                </table>
-            </div>
-        </section>
+        <!-- Energy & Savings elements kept hidden for JS compat -->
+        <div style="display:none">
+            <span id="selfConsumption"></span>
+            <span id="eToday"></span><span id="eWeek"></span><span id="eMonth"></span><span id="eTotal"></span>
+            <span id="eOutToday"></span><span id="eOutWeek"></span><span id="eOutMonth"></span><span id="eOutTotal"></span>
+            <span id="sToday"></span><span id="sWeek"></span><span id="sMonth"></span><span id="sTotal"></span>
+        </div>
 
         <!-- Daily Solar Bar Chart -->
         <section class="chart-box">
@@ -321,49 +319,13 @@
             </details>
         </section>
 
-        <!-- Energy Flow: Direct use / Autarky / RTE -->
-        <section class="today-box" id="energyFlowSection" aria-labelledby="efTitle">
-            <h2 id="efTitle" data-i18n="energyFlowTitle">Energie-Fluss (heute)</h2>
-            <div class="amort-grid ef-grid">
-                <div class="stat-card">
-                    <div class="stat-label" data-i18n="directUseKwh">Direkt verbraucht</div>
-                    <div class="stat-value" id="efDirectUse">--</div>
-                    <div class="stat-unit">kWh</div>
-                </div>
-                <div class="stat-card">
-                    <div class="stat-label" data-i18n="batteryInKwh">In Akku</div>
-                    <div class="stat-value" id="efBatteryIn">--</div>
-                    <div class="stat-unit">kWh</div>
-                </div>
-                <div class="stat-card">
-                    <div class="stat-label" data-i18n="batteryOutKwh">Aus Akku</div>
-                    <div class="stat-value" id="efBatteryOut">--</div>
-                    <div class="stat-unit">kWh</div>
-                </div>
-            </div>
-            <div class="ef-metric-row">
-                <div class="ef-metric">
-                    <div class="ef-metric-label" data-i18n="directUsePctLabel">Direkt-Eigenverbrauch</div>
-                    <div class="ef-metric-bar"><div class="ef-metric-fill ef-fill-solar" id="efDirectFill"></div></div>
-                    <div class="ef-metric-value" id="efDirectVal">--%</div>
-                </div>
-                <div class="ef-metric">
-                    <div class="ef-metric-label" data-i18n="autarkiePctLabel">Autarkie-Grad</div>
-                    <div class="ef-metric-bar"><div class="ef-metric-fill ef-fill-green" id="efAutFill"></div></div>
-                    <div class="ef-metric-value" id="efAutVal">--%</div>
-                </div>
-                <div class="ef-metric">
-                    <div class="ef-metric-label" data-i18n="rtePctLabel">Round-Trip Efficiency</div>
-                    <div class="ef-metric-bar"><div class="ef-metric-fill ef-fill-blue" id="efRteFill"></div></div>
-                    <div class="ef-metric-value" id="efRteVal">--%</div>
-                </div>
-            </div>
-            <div class="cycle-hint" id="efRteHint" data-i18n="rteHint">Mindestens 10 Wh Akku-Umsatz nötig</div>
-            <details class="amort-details cycle-info">
-                <summary data-i18n="efInfoTitle">Was bedeuten diese Kennzahlen?</summary>
-                <div class="cycle-info-body" data-i18n-html="efInfoBody"></div>
-            </details>
-        </section>
+        <!-- EF elements kept hidden for JS compat -->
+        <div style="display:none">
+            <span id="efDirectUse"></span><span id="efBatteryIn"></span><span id="efBatteryOut"></span>
+            <span id="efDirectFill"></span><span id="efAutFill"></span><span id="efRteFill"></span>
+            <span id="efDirectVal"></span><span id="efAutVal"></span><span id="efRteVal"></span>
+            <span id="efRteHint"></span>
+        </div>
 
 
         <!-- Cumulative Production Curve -->
@@ -487,17 +449,10 @@
                 </div>
             </div>
             <div class="amort-payoff" id="amortPayoff"></div>
-            <div class="amort-cards">
-                <div class="amort-card">
-                    <div class="amort-card-icon">⚡</div>
-                    <div class="amort-card-val" id="totalKwhValue">0</div>
-                    <div class="amort-card-label">kWh <span data-i18n="totalProduced">erzeugt</span></div>
-                </div>
-                <div class="amort-card">
-                    <div class="amort-card-icon">📅</div>
-                    <div class="amort-card-val" id="amortBreakEvenDate">--</div>
-                    <div class="amort-card-label" data-i18n="breakEvenProjection">Break-Even voraussichtlich</div>
-                </div>
+            <!-- Hidden compat elements for JS that writes to these IDs -->
+            <div style="display:none">
+                <span id="totalKwhValue"></span>
+                <span id="amortBreakEvenDate"></span>
             </div>
             <details class="amort-details">
                 <summary data-i18n="showCostBreakdown">Kostenaufstellung anzeigen</summary>
