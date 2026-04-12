@@ -1424,8 +1424,34 @@ async function loadSohChart() {
 
 loadSohChart();
 
-// === Combined MQTT Overview Chart ===
+// === Combined MQTT Overview Chart with selectable metrics ===
 let combinedPeriod = 'day';
+
+// All available metrics for the MQTT overview chart.
+// The toggle buttons reference these by key (data-metric attribute).
+const MQTT_METRICS = {
+    solar_watts:        { label: '☀ Solar',  color: '#f59e0b', yAxis: 'yW',    dash: [],     logNull: true },
+    total_output_watts: { label: '⚡ Out',    color: '#a78bfa', yAxis: 'yW',    dash: [],     logNull: true },
+    ac_input_watts:     { label: '🔌 AC In',  color: '#38bdf8', yAxis: 'yW',    dash: [],     logNull: true },
+    battery_soc:        { label: '🔋 Bat%',   color: '#22c55e', yAxis: 'yPct',  dash: [],     logNull: false },
+    temperature:        { label: '🌡 Temp',   color: '#3b82f6', yAxis: 'yTemp', dash: [4, 2], logNull: false },
+    ac_output_watts:    { label: 'AC Out',    color: '#c084fc', yAxis: 'yW',    dash: [],     logNull: true },
+    dc_output_watts:    { label: 'DC Out',    color: '#fb923c', yAxis: 'yW',    dash: [],     logNull: true },
+    usbc_1_watts:       { label: 'C1',        color: '#f472b6', yAxis: 'yW',    dash: [],     logNull: true },
+    usbc_2_watts:       { label: 'C2',        color: '#34d399', yAxis: 'yW',    dash: [],     logNull: true },
+    usbc_3_watts:       { label: 'C3',        color: '#fbbf24', yAxis: 'yW',    dash: [],     logNull: true },
+    usba_1_watts:       { label: 'USB-A',     color: '#60a5fa', yAxis: 'yW',    dash: [],     logNull: true },
+    dc_12v_watts:       { label: '12V',       color: '#facc15', yAxis: 'yW',    dash: [],     logNull: true },
+};
+
+function _getActiveMetrics() {
+    const active = [];
+    document.querySelectorAll('#mqttMetricToggles .mqtt-toggle.active').forEach(btn => {
+        const key = btn.dataset.metric;
+        if (MQTT_METRICS[key]) active.push(key);
+    });
+    return active.length > 0 ? active : ['solar_watts']; // fallback: at least solar
+}
 
 async function loadCombinedChart(hours) {
     if (!hours) hours = periodHours[combinedPeriod] || 24;
@@ -1438,20 +1464,22 @@ async function loadCombinedChart(hours) {
         const data = rows.filter((_, i) => i % step === 0);
         const labels = data.map(r => formatLabel(r.timestamp, combinedPeriod));
 
-        const mkDs = (label, key, color, yAxis, dash, logNull) => ({
-            label, data: data.map(r => { const v = r[key] || 0; return logNull && v <= 0 ? null : v; }),
-            borderColor: color, backgroundColor: color + '1a', fill: false,
-            tension: 0.45, borderWidth: 2, cubicInterpolationMode: 'monotone', borderCapStyle: 'round',
-            pointRadius: 0, pointHitRadius: 8, yAxisID: yAxis, borderDash: dash || [], spanGaps: true,
+        const activeKeys = _getActiveMetrics();
+        const datasets = activeKeys.map(key => {
+            const m = MQTT_METRICS[key];
+            return {
+                label: m.label,
+                data: data.map(r => { const v = r[key] || 0; return m.logNull && v <= 0 ? null : v; }),
+                borderColor: m.color, backgroundColor: m.color + '1a', fill: false,
+                tension: 0.45, borderWidth: 2, cubicInterpolationMode: 'monotone', borderCapStyle: 'round',
+                pointRadius: 0, pointHitRadius: 8, yAxisID: m.yAxis, borderDash: m.dash || [], spanGaps: true,
+            };
         });
 
-        const datasets = [
-            mkDs('☀ Solar', 'solar_watts', '#f59e0b', 'yW', [], true),
-            mkDs('⚡ Out', 'total_output_watts', '#a78bfa', 'yW', [], true),
-            mkDs('🔌 AC In', 'ac_input_watts', '#38bdf8', 'yW', [], true),
-            mkDs('🔋 Bat%', 'battery_soc', '#22c55e', 'yPct'),
-            mkDs('🌡 Temp', 'temperature', '#3b82f6', 'yTemp', [4, 2]),
-        ];
+        // Determine which Y axes are needed based on active metrics
+        const needsYW = activeKeys.some(k => MQTT_METRICS[k].yAxis === 'yW');
+        const needsYPct = activeKeys.some(k => MQTT_METRICS[k].yAxis === 'yPct');
+        const needsYTemp = activeKeys.some(k => MQTT_METRICS[k].yAxis === 'yTemp');
 
         if (combinedChart) combinedChart.destroy();
         combinedChart = new Chart($('chart_combined'), {
@@ -1465,12 +1493,13 @@ async function loadCombinedChart(hours) {
                     tooltip: { callbacks: { label: ctx => ctx.dataset.label + ': ' + fmt.format(ctx.parsed.y) } }
                 },
                 scales: {
-                    yW: { type: 'logarithmic', position: 'left', min: 0.5, grid: { color: chartGridColor() },
+                    yW: { display: needsYW, type: 'logarithmic', position: 'left', min: 0.5, grid: { color: chartGridColor() },
                         ticks: { maxTicksLimit: 6, font: { size: 9 }, callback: v => v < 1 ? '' : (v >= 1000 ? (v/1000)+'kW' : v+'W') },
                         afterBuildTicks: axis => { axis.ticks = axis.ticks.filter(t => t.value >= 1); } },
-                    yPct: { type: 'linear', position: 'right', min: 0, max: 100, grid: { display: false },
+                    yPct: { display: needsYPct, type: 'linear', position: 'right', min: 0, max: 100, grid: { display: false },
                         ticks: { maxTicksLimit: 5, font: { size: 9 }, callback: v => v + '%' } },
-                    yTemp: { type: 'linear', position: 'right', display: false, beginAtZero: true },
+                    yTemp: { display: needsYTemp, type: 'linear', position: 'right', beginAtZero: true, grid: { display: false },
+                        ticks: { maxTicksLimit: 5, font: { size: 9 }, callback: v => v + '°' } },
                     x: { grid: { display: false }, ticks: { maxTicksLimit: 8, maxRotation: 0, font: { size: 9 } } }
                 },
                 elements: { line: { tension: 0.45, cubicInterpolationMode: 'monotone', borderCapStyle: 'round', borderJoinStyle: 'round' } }
@@ -1478,6 +1507,14 @@ async function loadCombinedChart(hours) {
         });
     } catch (e) { console.warn('Combined chart error:', e); }
 }
+
+// Toggle buttons: click to activate/deactivate a metric, then re-render chart
+document.querySelectorAll('#mqttMetricToggles .mqtt-toggle').forEach(btn => {
+    btn.addEventListener('click', () => {
+        btn.classList.toggle('active');
+        loadCombinedChart(periodHours[combinedPeriod]);
+    });
+});
 
 loadCombinedChart();
 

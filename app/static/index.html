@@ -427,7 +427,7 @@
             <div id="usagePatternsContent" class="up-legend"></div>
         </section>
 
-        <!-- Combined Overview Chart -->
+        <!-- Combined Overview Chart with metric toggles -->
         <section class="chart-box">
             <h3 data-i18n="mqttOverview">MQTT Übersicht</h3>
             <div class="tab-bar combined-tabs" id="combinedTabs">
@@ -435,6 +435,20 @@
                 <button class="tab" data-combined="week" data-i18n="week">Woche</button>
                 <button class="tab" data-combined="month" data-i18n="month">Monat</button>
                 <button class="tab" data-combined="year" data-i18n="year">Jahr</button>
+            </div>
+            <div class="mqtt-metric-toggles" id="mqttMetricToggles">
+                <button class="mqtt-toggle active" data-metric="solar_watts" style="--toggle-color:#f59e0b">☀ Solar</button>
+                <button class="mqtt-toggle active" data-metric="total_output_watts" style="--toggle-color:#a78bfa">⚡ Out</button>
+                <button class="mqtt-toggle active" data-metric="ac_input_watts" style="--toggle-color:#38bdf8">🔌 AC In</button>
+                <button class="mqtt-toggle active" data-metric="battery_soc" style="--toggle-color:#22c55e">🔋 Bat%</button>
+                <button class="mqtt-toggle" data-metric="temperature" style="--toggle-color:#3b82f6">🌡 Temp</button>
+                <button class="mqtt-toggle" data-metric="ac_output_watts" style="--toggle-color:#c084fc">AC Out</button>
+                <button class="mqtt-toggle" data-metric="dc_output_watts" style="--toggle-color:#fb923c">DC Out</button>
+                <button class="mqtt-toggle" data-metric="usbc_1_watts" style="--toggle-color:#f472b6">C1</button>
+                <button class="mqtt-toggle" data-metric="usbc_2_watts" style="--toggle-color:#34d399">C2</button>
+                <button class="mqtt-toggle" data-metric="usbc_3_watts" style="--toggle-color:#fbbf24">C3</button>
+                <button class="mqtt-toggle" data-metric="usba_1_watts" style="--toggle-color:#60a5fa">USB-A</button>
+                <button class="mqtt-toggle" data-metric="dc_12v_watts" style="--toggle-color:#facc15">12V</button>
             </div>
             <div class="chart-wrap chart-wrap-tall"><canvas id="chart_combined"></canvas></div>
         </section>

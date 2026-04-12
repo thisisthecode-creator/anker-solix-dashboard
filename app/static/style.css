@@ -549,6 +549,36 @@ header h1 {
     position: relative;
 }
 
+/* MQTT metric toggle pills */
+.mqtt-metric-toggles {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 4px;
+    margin: 8px 0;
+    justify-content: center;
+}
+.mqtt-toggle {
+    font-size: 0.6rem;
+    font-weight: 600;
+    padding: 3px 8px;
+    border-radius: 12px;
+    border: 1.5px solid var(--toggle-color, var(--text-dim));
+    background: transparent;
+    color: var(--text-dim);
+    cursor: pointer;
+    transition: all 0.15s;
+    -webkit-tap-highlight-color: transparent;
+    white-space: nowrap;
+}
+.mqtt-toggle.active {
+    background: var(--toggle-color, var(--text-dim));
+    color: #000;
+    border-color: var(--toggle-color, var(--text-dim));
+}
+.mqtt-toggle:hover {
+    opacity: 0.85;
+}
+
 .chart-wrap-tall {
     height: 250px;
 }
