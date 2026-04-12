@@ -2542,6 +2542,162 @@ body.light-mode .log-table td {
     font-size: 0.85rem;
 }
 
+/* === Flow Variant 2: Donut === */
+.flow-donut-row {
+    display: flex;
+    justify-content: center;
+    gap: 20px;
+    margin: 12px 0;
+    flex-wrap: wrap;
+}
+.flow-donut-wrap {
+    text-align: center;
+    width: 140px;
+}
+.flow-donut-wrap canvas {
+    width: 140px !important;
+    height: 140px !important;
+}
+.flow-donut-label {
+    font-size: 0.7rem;
+    color: var(--text-dim);
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+    margin-top: 4px;
+    font-weight: 600;
+}
+
+/* === Flow Variant 3: Stacked Bars === */
+.flow-stacked-group {
+    margin: 10px 0;
+}
+.flow-stacked-label {
+    font-size: 0.7rem;
+    color: var(--text-dim);
+    text-transform: uppercase;
+    letter-spacing: 0.04em;
+    font-weight: 600;
+    margin-bottom: 4px;
+}
+.flow-stacked-bar {
+    display: flex;
+    height: 32px;
+    border-radius: 6px;
+    overflow: hidden;
+    margin-bottom: 4px;
+}
+.flow-stacked-seg {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 0.65rem;
+    font-weight: 700;
+    color: #000;
+    min-width: 2px;
+    transition: width 0.6s ease;
+    white-space: nowrap;
+    padding: 0 4px;
+}
+.flow-stacked-legend {
+    display: flex;
+    gap: 12px;
+    flex-wrap: wrap;
+    font-size: 0.65rem;
+    color: var(--text-dim);
+    margin-top: 4px;
+}
+.flow-stacked-legend-dot {
+    display: inline-block;
+    width: 8px;
+    height: 8px;
+    border-radius: 50%;
+    margin-right: 3px;
+    vertical-align: middle;
+}
+
+/* === Flow Variant 4: Waterfall === */
+.flow-wf-wrap {
+    margin: 10px 0;
+    overflow: hidden;
+}
+.flow-wf-svg {
+    width: 100%;
+    height: auto;
+    display: block;
+}
+.flow-wf-bar {
+    rx: 3;
+}
+.flow-wf-label {
+    font-size: 9px;
+    fill: var(--text-dim);
+    font-variant-numeric: tabular-nums;
+}
+.flow-wf-value {
+    font-size: 10px;
+    fill: var(--text);
+    font-weight: 700;
+    font-variant-numeric: tabular-nums;
+}
+.flow-wf-connector {
+    stroke: var(--text-dim);
+    stroke-width: 0.5;
+    stroke-dasharray: 2 2;
+}
+
+/* === Flow Variant 5: Animated Flow === */
+.flow-anim-grid {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+    margin: 10px 0;
+}
+.flow-anim-row {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 8px 12px;
+    background: var(--card-bg);
+    border: 1px solid var(--card-border);
+    border-radius: 10px;
+    position: relative;
+    overflow: hidden;
+}
+.flow-anim-row::before {
+    content: '';
+    position: absolute;
+    left: 0;
+    top: 0;
+    bottom: 0;
+    width: var(--flow-pct, 0%);
+    background: var(--flow-color, var(--solar));
+    opacity: 0.15;
+    transition: width 0.6s ease;
+}
+.flow-anim-icon {
+    font-size: 1.1rem;
+    flex-shrink: 0;
+    z-index: 1;
+}
+.flow-anim-name {
+    flex: 1;
+    font-size: 0.75rem;
+    color: var(--text);
+    font-weight: 600;
+    z-index: 1;
+}
+.flow-anim-value {
+    font-size: 0.85rem;
+    font-weight: 700;
+    font-variant-numeric: tabular-nums;
+    z-index: 1;
+}
+.flow-anim-arrow {
+    font-size: 0.65rem;
+    color: var(--text-dim);
+    z-index: 1;
+}
+
 /* === Cumulative Production === */
 .cumulative-stats {
     display: flex;

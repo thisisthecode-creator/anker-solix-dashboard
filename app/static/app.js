@@ -97,8 +97,7 @@ const I18N = {
         // Phase 1 chart additions
         powerFlowTitle: 'Energiefluss Live',
         pfSolar: 'Solar', pfBattery: 'Akku', pfLoad: 'Verbraucher', pfGrid: 'Netz',
-        sankeyTitle: 'Energie-Sankey-Diagramm',
-        sankeyToday: 'Heute', sankeyYesterday: 'Gestern', sankey7d: '7 Tage', sankey30d: 'Monat', sankey365d: 'Jahr',
+        energyBalanceTitle: 'Energie-Bilanz',
         sankeyLoss: 'Verluste',
         sankeyDirect: 'Direkt', sankeyStore: 'Gespeichert',
         hourlyHeatmapTitle: 'Tages-Heatmap (Stunde \u00d7 Tag)',
@@ -239,8 +238,7 @@ const I18N = {
         // Phase 1 chart additions
         powerFlowTitle: 'Live Power Flow',
         pfSolar: 'Solar', pfBattery: 'Battery', pfLoad: 'Load', pfGrid: 'Grid',
-        sankeyTitle: 'Energy Sankey Diagram',
-        sankeyToday: 'Today', sankeyYesterday: 'Yesterday', sankey7d: '7 days', sankey30d: 'Month', sankey365d: 'Year',
+        energyBalanceTitle: 'Energy Balance',
         sankeyLoss: 'Losses',
         sankeyDirect: 'Direct', sankeyStore: 'Stored',
         hourlyHeatmapTitle: 'Hourly Heatmap (hour \u00d7 day)',
@@ -2174,152 +2172,7 @@ function updatePowerFlow(d) {
     }
 }
 
-// === 1a: Sankey Energy-Flow diagram ===
-let _sankeyDaysSelected = 1;
-
-function _sankeyLayout(flows, totals) {
-    // 3 columns: sources (left), center nodes, sinks (right)
-    // Fixed positions for simplicity, colors per flow type.
-    const W = 400, H = 260;
-    const LEFT_X = 30, MID_X = 180, RIGHT_X = 350;
-    const NODE_W = 18;
-    const svg = $('sankeySvg');
-    if (!svg) return;
-
-    const nodeDefs = {
-        solar: { x: LEFT_X, label: t('pfSolar'), color: 'var(--solar)', kwh: totals.solar_kwh },
-        grid: { x: LEFT_X, label: t('pfGrid'), color: '#888', kwh: totals.grid_in_kwh },
-        battery: { x: MID_X, label: t('pfBattery'), color: 'var(--blue)',
-                   kwh: (totals.battery_in_kwh + totals.battery_out_kwh) / 2 },
-        load: { x: RIGHT_X, label: t('pfLoad'), color: '#22c55e', kwh: totals.load_kwh },
-        loss: { x: RIGHT_X, label: t('sankeyLoss'), color: '#ef4444',
-                kwh: (flows.find(f => f.to === 'loss') || {}).kwh || 0 },
-    };
-
-    // Compute max kwh for scaling
-    const maxKwh = Math.max(0.01, totals.solar_kwh, totals.load_kwh,
-                            totals.grid_in_kwh || 0.01);
-    const scale = (H - 60) / maxKwh;  // px per kWh
-
-    // Stack source heights proportional to kwh
-    let solarY = 20;
-    let gridY = solarY + Math.max(20, totals.solar_kwh * scale) + 20;
-    let loadY = 20;
-    let lossY = H - 60;
-    let batteryY = 80;
-
-    nodeDefs.solar.y = solarY;
-    nodeDefs.solar.h = Math.max(18, totals.solar_kwh * scale);
-    nodeDefs.grid.y = gridY;
-    nodeDefs.grid.h = Math.max(18, totals.grid_in_kwh * scale);
-    nodeDefs.load.y = loadY;
-    nodeDefs.load.h = Math.max(18, totals.load_kwh * scale);
-    nodeDefs.battery.y = batteryY;
-    nodeDefs.battery.h = Math.max(18, Math.max(totals.battery_in_kwh, totals.battery_out_kwh) * scale);
-    nodeDefs.loss.y = lossY;
-    nodeDefs.loss.h = Math.max(14, ((flows.find(f => f.to === 'loss') || {}).kwh || 0) * scale);
-
-    // Build SVG content
-    const parts = [];
-
-    // Flows: bezier curves from source right edge to target left edge
-    const curve = (x1, y1, x2, y2, width, color) => {
-        const mx = (x1 + x2) / 2;
-        return `<path class="sankey-flow" d="M ${x1} ${y1 - width / 2} C ${mx} ${y1 - width / 2}, ${mx} ${y2 - width / 2}, ${x2} ${y2 - width / 2} L ${x2} ${y2 + width / 2} C ${mx} ${y2 + width / 2}, ${mx} ${y1 + width / 2}, ${x1} ${y1 + width / 2} Z" fill="${color}"/>`;
-    };
-
-    // Map flow name → (source node, target node, color)
-    const flowDefs = [
-        { from: 'solar', to: 'load', color: 'var(--solar)' },
-        { from: 'solar', to: 'battery', color: 'var(--solar)' },
-        { from: 'battery', to: 'load', color: 'var(--blue)' },
-        { from: 'grid', to: 'load', color: '#888' },
-        { from: 'grid', to: 'battery', color: '#888' },
-        { from: 'battery', to: 'loss', color: '#ef4444' },
-    ];
-
-    // Allocate Y positions along each node's vertical extent per outgoing/incoming flow
-    for (const fd of flowDefs) {
-        const flow = flows.find(f => f.from === fd.from && f.to === fd.to);
-        if (!flow || flow.kwh < 0.001) continue;
-        const src = nodeDefs[fd.from];
-        const dst = nodeDefs[fd.to];
-        if (!src || !dst) continue;
-        const width = Math.max(2, flow.kwh * scale);
-        const x1 = src.x + NODE_W;
-        const x2 = dst.x;
-        const y1 = src.y + src.h / 2;
-        const y2 = dst.y + dst.h / 2;
-        parts.push(curve(x1, y1, x2, y2, width, fd.color));
-    }
-
-    // Nodes with short labels above (no kWh inside — those live in the totals row below)
-    for (const key of ['solar', 'grid', 'battery', 'load', 'loss']) {
-        const n = nodeDefs[key];
-        if (n.kwh < 0.001 && key !== 'battery') continue;
-        parts.push(`<rect class="sankey-node-rect" x="${n.x}" y="${n.y}" width="${NODE_W}" height="${n.h}" fill="${n.color}"/>`);
-        // Label above node
-        const lx = n.x + NODE_W / 2;
-        parts.push(`<text class="sankey-node-label" x="${lx}" y="${n.y - 5}" text-anchor="middle">${n.label}</text>`);
-    }
-
-    // Flow labels on the curves (kWh value at the midpoint of each visible flow)
-    for (const fd of flowDefs) {
-        const flow = flows.find(f => f.from === fd.from && f.to === fd.to);
-        if (!flow || flow.kwh < 0.001) continue;
-        const src = nodeDefs[fd.from];
-        const dst = nodeDefs[fd.to];
-        if (!src || !dst) continue;
-        const mx = (src.x + NODE_W + dst.x) / 2;
-        const my = (src.y + src.h / 2 + dst.y + dst.h / 2) / 2;
-        parts.push(`<text class="sankey-flow-label" x="${mx}" y="${my - 3}" text-anchor="middle" fill="${fd.color}">${fmt2.format(flow.kwh)}</text>`);
-    }
-
-    svg.innerHTML = parts.join('');
-
-    // Render totals row
-    // Render totals row with colored dots matching the SVG node colors
-    const totEl = $('sankeyTotals');
-    if (totEl) {
-        const items = [
-            ['var(--solar)', totals.solar_kwh, t('pfSolar')],
-            ['#888', totals.grid_in_kwh, t('pfGrid')],
-            ['#60a5fa', totals.battery_in_kwh, t('pfBattery') + ' in'],
-            ['#c084fc', totals.battery_out_kwh, t('pfBattery') + ' out'],
-            ['#22c55e', totals.load_kwh, t('pfLoad')],
-        ];
-        totEl.innerHTML = items.map(([color, v, label]) =>
-            `<div class="sankey-tot-item">`
-            + `<span class="sankey-tot-dot" style="background:${color}"></span>`
-            + `<span class="sankey-tot-label">${label}</span>`
-            + `<span class="sankey-tot-value">${fmt2.format(v)} kWh</span>`
-            + `</div>`
-        ).join('');
-    }
-}
-
-async function loadSankey(days) {
-    try {
-        const d = days || _sankeyDaysSelected;
-        const res = await fetch('/api/sankey?days=' + d);
-        if (!res.ok) return;
-        const data = await res.json();
-        if (!data.totals) return;
-        _sankeyLayout(data.flows || [], data.totals);
-    } catch (e) { console.warn('Sankey error:', e); }
-}
-
-// Wire up Sankey tab bar
-document.addEventListener('click', (e) => {
-    const tab = e.target.closest('#sankeySection .tab');
-    if (!tab) return;
-    document.querySelectorAll('#sankeySection .tab').forEach(t => t.classList.remove('active'));
-    tab.classList.add('active');
-    _sankeyDaysSelected = parseInt(tab.getAttribute('data-sankey'), 10) || 1;
-    loadSankey();
-});
-
-loadSankey();
+// Sankey removed — replaced by Energie-Bilanz (Animated Flow, Variant 5).
 
 // === 1e: Cumulative Production Curve ===
 let _cumChart = null;
@@ -2671,6 +2524,67 @@ checkWeeklyReport();
 // === Keyboard shortcuts (accessibility) ===
 // Press `h` → heatmap, `s` → stats, `c` → cycle tracker, `f` → forecast compare,
 // `e` → energy flow, `b` → break-even, `?` → show list of shortcuts.
+// ============================================================================
+// Energy-Flow Visualization Variants (2-5) — for user comparison.
+// All share the same /api/sankey?days=N data source.
+// ============================================================================
+let _flowVarDays = 1;
+
+async function loadFlowVariants(days) {
+    _flowVarDays = days || _flowVarDays;
+    // Update tab active state
+    document.querySelectorAll('#flowAnimTabs .tab').forEach(t => {
+        t.classList.toggle('active', parseInt(t.dataset.flowvar, 10) === _flowVarDays);
+    });
+    try {
+        const res = await fetch('/api/sankey?days=' + _flowVarDays);
+        if (!res.ok) return;
+        const data = await res.json();
+        const t = data.totals || {};
+        const flows = data.flows || [];
+        const solar = t.solar_kwh || 0;
+        const grid = t.grid_in_kwh || 0;
+        const batIn = t.battery_in_kwh || 0;
+        const batOut = t.battery_out_kwh || 0;
+        const load = t.load_kwh || 0;
+        const directUse = (flows.find(f => f.from === 'solar' && f.to === 'load') || {}).kwh || 0;
+        const loss = (flows.find(f => f.to === 'loss') || {}).kwh || 0;
+
+        const animEl = $('flowAnimatedContent');
+        if (animEl) {
+            const maxFlow = Math.max(0.001, solar, grid, batIn, batOut, load, directUse);
+            const row = (icon, name, value, color, arrow) => {
+                const pct = Math.min(100, value / maxFlow * 100);
+                return `<div class="flow-anim-row" style="--flow-pct:${pct.toFixed(1)}%;--flow-color:${color}">`
+                    + `<span class="flow-anim-icon">${icon}</span>`
+                    + `<span class="flow-anim-name">${name}</span>`
+                    + (arrow ? `<span class="flow-anim-arrow">${arrow}</span>` : '')
+                    + `<span class="flow-anim-value" style="color:${color}">${fmt2.format(value)} kWh</span>`
+                    + `</div>`;
+            };
+            animEl.innerHTML =
+                row('☀️', 'Solar erzeugt', solar, 'var(--solar)', '→')
+                + row('⚡', 'Direkt verbraucht', directUse, '#22c55e', '→')
+                + row('🔋↑', 'In Akku gespeichert', batIn, '#60a5fa', '↓')
+                + row('🔋↓', 'Aus Akku entnommen', batOut, '#c084fc', '↑')
+                + row('🏠', 'Aus Netz bezogen', grid, '#888', '→')
+                + row('❌', 'Verluste', loss, '#ef4444', '')
+                + `<div style="text-align:center;margin-top:8px;font-size:0.75rem;color:var(--text-dim)">Gesamt verbraucht: <strong style="color:var(--text)">${fmt2.format(load)} kWh</strong></div>`;
+        }
+    } catch (e) { console.warn('Flow variants error:', e); }
+}
+
+// Tab bar for Energie-Bilanz
+document.querySelectorAll('#flowAnimTabs .tab').forEach(btn => {
+    btn.addEventListener('click', () => {
+        document.querySelectorAll('#flowAnimTabs .tab').forEach(t => t.classList.remove('active'));
+        btn.classList.add('active');
+        loadFlowVariants(parseInt(btn.dataset.flowvar, 10) || 1);
+    });
+});
+
+loadFlowVariants(1);
+
 document.addEventListener('keydown', (e) => {
     // Ignore when typing in an input / textarea / contenteditable
     const tag = (e.target && e.target.tagName) || '';

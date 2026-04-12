@@ -226,6 +226,18 @@
             </div>
         </section>
 
+        <!-- Energie-Bilanz (right after Energiefluss) -->
+        <section class="today-box" id="flowAnimatedSection">
+            <h2 data-i18n="energyBalanceTitle">Energie-Bilanz</h2>
+            <div class="tab-bar" id="flowAnimTabs">
+                <button class="tab active" data-flowvar="1" data-i18n="today">Heute</button>
+                <button class="tab" data-flowvar="7" data-i18n="week">Woche</button>
+                <button class="tab" data-flowvar="30" data-i18n="month">Monat</button>
+                <button class="tab" data-flowvar="365" data-i18n="year">Jahr</button>
+            </div>
+            <div class="flow-anim-grid" id="flowAnimatedContent"></div>
+        </section>
+
         <!-- Energy & Savings Summary -->
         <section class="today-box">
             <h2><span data-i18n="energySavings">Energie &amp; Ersparnis</span> <span class="self-consumption-badge" id="selfConsumption" title="Self-consumption">--</span></h2>
@@ -353,21 +365,6 @@
             </details>
         </section>
 
-        <!-- Sankey Energy-Flow Diagramm -->
-        <section class="today-box" id="sankeySection" aria-labelledby="skTitle">
-            <h2 id="skTitle" data-i18n="sankeyTitle">Energie-Sankey-Diagramm</h2>
-            <div class="tab-bar">
-                <button class="tab active" data-sankey="1" data-i18n="sankeyToday">Heute</button>
-                <button class="tab" data-sankey="2" data-i18n="sankeyYesterday">Gestern</button>
-                <button class="tab" data-sankey="7" data-i18n="sankey7d">7 Tage</button>
-                <button class="tab" data-sankey="30" data-i18n="sankey30d">Monat</button>
-                <button class="tab" data-sankey="365" data-i18n="sankey365d">Jahr</button>
-            </div>
-            <div class="sankey-wrap">
-                <svg class="sankey-svg" id="sankeySvg" viewBox="0 0 400 260" preserveAspectRatio="xMidYMid meet"></svg>
-            </div>
-            <div class="sankey-totals" id="sankeyTotals"></div>
-        </section>
 
         <!-- Cumulative Production Curve -->
         <section class="today-box" id="cumulativeSection" aria-labelledby="cumTitle">
