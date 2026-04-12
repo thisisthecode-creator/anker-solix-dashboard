@@ -875,8 +875,9 @@ header h1 {
 .forecast-grid {
     display: grid;
     grid-template-columns: repeat(7, 1fr);
-    gap: 4px;
+    gap: 2px;
     text-align: center;
+    overflow: hidden;
 }
 
 .fc-day {
@@ -1024,6 +1025,22 @@ header h1 {
     .fc-day .fc-clouds { font-size: 0.6rem; margin: 1px 0; }
     .fc-day .fc-wind { font-size: 0.6rem; margin: 1px 0; }
     .fc-day .fc-uv { font-size: 0.6rem; padding: 0 1px; margin-top: 1px; }
+}
+/* Very narrow phones (< 400px): extra compact to prevent 7th card cutoff */
+@media (max-width: 400px) {
+    #forecastBox { padding: 10px 6px; }
+    .forecast-grid { gap: 1px; }
+    .fc-day { padding: 5px 1px; }
+    .fc-day .fc-name { font-size: 0.48rem; }
+    .fc-day .fc-date { font-size: 0.42rem; }
+    .fc-day .fc-icon { font-size: 0.85rem; }
+    .fc-day .fc-kwh { font-size: 0.72rem; }
+    .fc-day .fc-kwh-label { font-size: 0.38rem; }
+    .fc-day .fc-temp { font-size: 0.42rem; gap: 2px; }
+    .fc-day .fc-sun { font-size: 0.42rem; }
+    .fc-day .fc-clouds { font-size: 0.42rem; }
+    .fc-day .fc-wind { font-size: 0.42rem; }
+    .fc-day .fc-uv { font-size: 0.42rem; }
 }
 
 .fc-name {
@@ -1927,17 +1944,17 @@ body.light-mode .log-table td {
     gap: 16px;
 }
 
-/* Triple-ring row in dash overview */
+/* 6-ring row in dash overview — always single row, shrinks on mobile */
 .dash-ring-wrap {
     position: relative;
-    width: 56px;
-    height: 56px;
+    width: 48px;
+    height: 48px;
     flex-shrink: 0;
     margin-bottom: 10px;
 }
 .dash-ring {
-    width: 56px;
-    height: 56px;
+    width: 48px;
+    height: 48px;
 }
 .dash-ring-value {
     position: absolute;
@@ -1945,7 +1962,7 @@ body.light-mode .log-table td {
     display: flex;
     align-items: center;
     justify-content: center;
-    font-size: 0.7rem;
+    font-size: 0.62rem;
     font-weight: 700;
     line-height: 1;
     font-variant-numeric: tabular-nums;
@@ -1971,11 +1988,18 @@ body.light-mode .log-table td {
     border-top: 1px solid var(--card-border);
 }
 
-/* 6 rings need to wrap nicely on narrow screens */
+/* 6 rings MUST stay in ONE row — never wrap */
 .dash-top-row {
-    flex-wrap: wrap;
-    justify-content: center;
-    gap: 10px 14px;
+    flex-wrap: nowrap !important;
+    justify-content: space-between;
+    gap: 6px;
+}
+@media (max-width: 400px) {
+    .dash-ring-wrap { width: 42px; height: 42px; }
+    .dash-ring { width: 42px; height: 42px; }
+    .dash-ring-value { font-size: 0.55rem; }
+    .dash-ring-label { font-size: 0.4rem; }
+    .dash-top-row { gap: 3px; }
 }
 .dash-ring-label {
     position: absolute;
