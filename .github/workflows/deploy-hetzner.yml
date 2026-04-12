@@ -1,0 +1,35 @@
+name: Deploy to Hetzner
+
+on:
+  push:
+    branches:
+      - main
+
+jobs:
+  deploy:
+    name: Deploy to Hetzner
+    runs-on: ubuntu-latest
+    concurrency: deploy-group
+    steps:
+      - name: Deploy via SSH
+        uses: appleboy/ssh-action@v1
+        with:
+          host: 65.108.90.243
+          username: root
+          key: ${{ secrets.HETZNER_SSH_KEY }}
+          script: |
+            cd /opt/anker-solix
+            git pull origin main
+            docker build -t anker-solix .
+            docker stop anker-solix || true
+            docker rm anker-solix || true
+            docker run -d \
+              --name anker-solix \
+              --restart unless-stopped \
+              -p 8420:8420 \
+              -v /opt/anker-solix/data:/app/data \
+              --env-file /opt/anker-solix/.env \
+              -e TZ=Europe/Warsaw \
+              anker-solix
+            sleep 5
+            curl -sf http://localhost:8420/api/health || echo "HEALTH CHECK FAILED"
