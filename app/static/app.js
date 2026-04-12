@@ -84,7 +84,7 @@ const I18N = {
         weekBetter: '{pct}% mehr als letzte Woche ↑', weekWorse: '{pct}% weniger als letzte Woche ↓',
         weekSame: 'Gleich wie letzte Woche', daysUntilRoi: 'Tage bis Amortisation',
         avoided: 'vermieden', totalProduced: 'erzeugt', roiDone: 'Amortisiert! 🎉',
-        weeklyReport: 'Wochen-Report', weeklyReportBody: 'Solar: {kwh} kWh | Gespart: {eur} € | CO₂: {co2} kg vermieden',
+        weeklyReport: 'Wochen-Report', weeklyReportBody: 'Solar: {kwh} kWh | Gespart: {eur} €',
         autoTheme: 'Auto-Theme aktiv', cafes: 'Cafés',
         chargingIdle: 'Idle', chargingDischarge: 'Entladen', chargingCharge: 'Laden',
         acSwitch: 'AC', dcSwitch: 'DC', switchOn: 'An', switchOff: 'Aus',
@@ -98,7 +98,7 @@ const I18N = {
         powerFlowTitle: 'Energiefluss Live',
         pfSolar: 'Solar', pfBattery: 'Akku', pfLoad: 'Verbraucher', pfGrid: 'Netz',
         sankeyTitle: 'Energie-Sankey-Diagramm',
-        sankeyToday: 'Heute', sankeyYesterday: 'Gestern', sankey7d: '7 Tage', sankey30d: '30 Tage',
+        sankeyToday: 'Heute', sankeyYesterday: 'Gestern', sankey7d: '7 Tage', sankey30d: 'Monat', sankey365d: 'Jahr',
         sankeyLoss: 'Verluste',
         sankeyDirect: 'Direkt', sankeyStore: 'Gespeichert',
         hourlyHeatmapTitle: 'Tages-Heatmap (Stunde \u00d7 Tag)',
@@ -226,7 +226,7 @@ const I18N = {
         weekBetter: '{pct}% more than last week ↑', weekWorse: '{pct}% less than last week ↓',
         weekSame: 'Same as last week', daysUntilRoi: 'Days until ROI',
         avoided: 'avoided', totalProduced: 'produced', roiDone: 'Paid off! 🎉',
-        weeklyReport: 'Weekly Report', weeklyReportBody: 'Solar: {kwh} kWh | Saved: {eur} € | CO₂: {co2} kg avoided',
+        weeklyReport: 'Weekly Report', weeklyReportBody: 'Solar: {kwh} kWh | Saved: {eur} €',
         autoTheme: 'Auto-theme active', cafes: 'Cafés',
         chargingIdle: 'Idle', chargingDischarge: 'Discharging', chargingCharge: 'Charging',
         acSwitch: 'AC', dcSwitch: 'DC', switchOn: 'On', switchOff: 'Off',
@@ -240,7 +240,7 @@ const I18N = {
         powerFlowTitle: 'Live Power Flow',
         pfSolar: 'Solar', pfBattery: 'Battery', pfLoad: 'Load', pfGrid: 'Grid',
         sankeyTitle: 'Energy Sankey Diagram',
-        sankeyToday: 'Today', sankeyYesterday: 'Yesterday', sankey7d: '7 days', sankey30d: '30 days',
+        sankeyToday: 'Today', sankeyYesterday: 'Yesterday', sankey7d: '7 days', sankey30d: 'Month', sankey365d: 'Year',
         sankeyLoss: 'Losses',
         sankeyDirect: 'Direct', sankeyStore: 'Stored',
         hourlyHeatmapTitle: 'Hourly Heatmap (hour \u00d7 day)',
@@ -318,7 +318,6 @@ const fmt2 = new Intl.NumberFormat(locale, { maximumFractionDigits: 2 });
 const fmtEur = new Intl.NumberFormat(locale, { minimumFractionDigits: 2, maximumFractionDigits: 2 });
 const EUR_PER_KWH = 0.25; // Poland household electricity price
 const SYSTEM_COST_EUR = 941; // 4011 PLN ÷ 4.2623 (NBP rate 2026-04-08)
-const CO2_KG_PER_KWH = 0.7; // Poland electricity mix
 const CAFE_PRICE_EUR = 3.70; // Price of a café in Warsaw
 
 function fmtWh(kwh) {
@@ -605,6 +604,8 @@ function makeChart(m) {
 
 function initCharts() {
     for (const m of metrics) {
+        // Skip metrics whose canvas was removed from the DOM
+        if (!$('chart_' + m.key)) continue;
         charts[m.key] = makeChart(m);
     }
 }
@@ -631,6 +632,7 @@ async function loadAllCharts() {
         const gridColor = chartGridColor();
         for (const m of metrics) {
             const chart = charts[m.key];
+            if (!chart) continue;  // canvas was removed
             chart.data.labels = labels;
             chart.data.datasets[0].data = thinned.map(r => {
                 const v = r[m.key] || 0;
@@ -812,7 +814,7 @@ async function loadEnergySummary() {
             if (el2) el2.textContent = fmtEur.format(d.savings_eur || 0) + ' \u20ac';
         }
         updateAmortisation(data);
-        updateCO2Table(data);
+        // CO2 table removed
         updateWeekComparison(data);
         updateDashTotals(data);
     } catch (e) {
@@ -820,34 +822,16 @@ async function loadEnergySummary() {
     }
 }
 
-function formatCO2(kwh) {
-    const kg = kwh * CO2_KG_PER_KWH;
-    if (kg >= 1) return fmt.format(kg) + ' kg';
-    return Math.round(kg * 1000) + ' g';
-}
-
-function updateCO2Table(energyData) {
-    const todayKwh = accumulator_dailyKwh || 0;
-    const el = $('co2Today');
-    if (el) el.textContent = formatCO2(todayKwh);
-    for (const [period, id] of [['week', 'co2Week'], ['month', 'co2Month'], ['total', 'co2Total']]) {
-        const d = energyData[period] || {};
-        const e = $(id);
-        if (e) e.textContent = formatCO2(d.solar_kwh || 0);
-    }
-}
+// CO2 table / CO2 ticker / formatCO2 removed — user requested full CO2 cleanup.
 
 function updateDashTotals(energyData) {
     const total = energyData.total || {};
     const totalKwh = total.solar_kwh || 0;
     const totalEur = totalKwh * EUR_PER_KWH;
-    const totalCo2 = totalKwh * CO2_KG_PER_KWH;
     const totalCafes = Math.floor(totalEur / CAFE_PRICE_EUR);
 
     const tickerEl = $('savingsTickerValue');
     if (tickerEl) tickerEl.textContent = fmtEur.format(totalEur) + ' \u20ac';
-    const co2El = $('co2TodayValue');
-    if (co2El) co2El.textContent = fmt.format(totalCo2) + ' kg';
     const cafeEl = $('cafeSavingsValue');
     if (cafeEl) cafeEl.textContent = totalCafes.toLocaleString(locale);
 }
@@ -1085,7 +1069,7 @@ async function loadForecast() {
     try {
         const [dailyRes, ...stripResults] = await Promise.all([
             fetch('https://api.open-meteo.com/v1/forecast?latitude=52.1928&longitude=21.0103'
-                + '&daily=sunshine_duration,weather_code,cloud_cover_mean,uv_index_max,wind_speed_10m_max,wind_gusts_10m_max'
+                + '&daily=sunshine_duration,weather_code,cloud_cover_mean,uv_index_max,wind_speed_10m_max,wind_gusts_10m_max,temperature_2m_max,temperature_2m_min'
                 + '&hourly=direct_radiation,diffuse_radiation'
                 + '&timezone=Europe%2FWarsaw&forecast_days=7').then(r => r.json()),
             ...CURVE_STRIPS.map(s => fetchGTI(s.tilt))
@@ -1162,6 +1146,13 @@ async function loadForecast() {
             // Check storm notification for today/tomorrow
             if (i <= 1 && windGusts >= 60) checkStormNotification(windGusts);
 
+            // Temperature min/max from Open-Meteo
+            const tMax = d.temperature_2m_max ? Math.round(d.temperature_2m_max[i] || 0) : null;
+            const tMin = d.temperature_2m_min ? Math.round(d.temperature_2m_min[i] || 0) : null;
+            const tempHtml = (tMax != null && tMin != null)
+                ? `<div class="fc-temp"><span class="fc-temp-max">${tMax}°</span><span class="fc-temp-min">${tMin}°</span></div>`
+                : '';
+
             const div = document.createElement('div');
             div.className = 'fc-day' + (isToday ? ' fc-today' : '');
             div.innerHTML = `<div class="fc-name">${isToday ? t('today') : dayName}</div>`
@@ -1169,6 +1160,7 @@ async function loadForecast() {
                 + `<div class="fc-icon">${icon}</div>`
                 + `<div class="fc-kwh">${estKwh}</div>`
                 + `<div class="fc-kwh-label">kWh</div>`
+                + tempHtml
                 + `<div class="fc-bar"><div class="fc-bar-fill" style="height:${barPct}%"></div></div>`
                 + `<div class="fc-sun">${sunH}h</div>`
                 + `<div class="fc-wind${windDanger}" title="${t('wind')} ${windSpeed} km/h (${LANG === 'de' ? 'Böen' : 'gusts'} ${windGusts} km/h)">💨 ${windSpeed}<small>km/h</small></div>`
@@ -1431,43 +1423,10 @@ async function loadCombinedChart(hours) {
 
 loadCombinedChart();
 
-// === Daily Stats ===
-async function loadDailyStats(days) {
-    if (days === undefined) days = 1;
-    document.querySelectorAll('.stats-tabs .tab').forEach(t => {
-        t.classList.toggle('active', parseInt(t.dataset.stats) === days);
-    });
-    try {
-        const res = await fetch('/api/daily-stats?days=' + days);
-        const data = await res.json();
-        if (!data.length) {
-            $('statPeakSolar').textContent = '--';
-            $('statAvgSolar').textContent = '--';
-            $('statAvgTemp').textContent = '--';
-            $('statPeakOutput').textContent = '--';
-            $('statMinSoc').textContent = '--';
-            $('statMaxSoc').textContent = '--';
-            return;
-        }
-        let peakSolar = 0, sumSolar = 0, sumTemp = 0, peakOutput = 0, minSoc = 100, maxSoc = 0;
-        for (const d of data) {
-            if (d.peak_solar > peakSolar) peakSolar = d.peak_solar;
-            sumSolar += d.avg_solar || 0;
-            sumTemp += d.avg_temp || 0;
-            if (d.peak_output > peakOutput) peakOutput = d.peak_output;
-            if (d.min_soc < minSoc) minSoc = d.min_soc;
-            if (d.max_soc > maxSoc) maxSoc = d.max_soc;
-        }
-        $('statPeakSolar').textContent = fmt.format(peakSolar);
-        $('statAvgSolar').textContent = fmt.format(sumSolar / data.length);
-        $('statAvgTemp').textContent = fmt.format(sumTemp / data.length);
-        $('statPeakOutput').textContent = fmt.format(peakOutput);
-        $('statMinSoc').textContent = minSoc;
-        $('statMaxSoc').textContent = maxSoc;
-    } catch (e) { console.warn('Stats error:', e); }
-}
-
-loadDailyStats(1);
+// Daily Stats section removed by user request.
+// Global function kept as a no-op so existing onclick handlers (in case
+// any older cached markup still references them) don't throw.
+function loadDailyStats() { /* removed */ }
 
 // === CSV Export ===
 function downloadCSV(hours) { window.location.href = '/api/csv?hours=' + hours; }
@@ -1616,10 +1575,6 @@ function updateAmortisation(energyData) {
         } else {
             $('amortPayoff').textContent = t('noMonthlyData');
         }
-        // CO₂ total in amort section
-        const co2Total = (total.solar_kwh || 0) * CO2_KG_PER_KWH;
-        const co2TotalEl = $('co2TotalValue');
-        if (co2TotalEl) co2TotalEl.textContent = fmt.format(co2Total);
         // Total kWh produced
         const totalKwhEl = $('totalKwhValue');
         if (totalKwhEl) totalKwhEl.textContent = fmt.format(total.solar_kwh || 0);
@@ -2153,15 +2108,12 @@ function _sankeyLayout(flows, totals) {
         parts.push(curve(x1, y1, x2, y2, width, fd.color));
     }
 
-    // Nodes (on top of flows)
+    // Nodes (on top of flows) — no inline labels / values, they live in the
+    // totals row below the diagram (user preference).
     for (const key of ['solar', 'grid', 'battery', 'load', 'loss']) {
         const n = nodeDefs[key];
         if (n.kwh < 0.001 && key !== 'battery') continue;
         parts.push(`<rect class="sankey-node-rect" x="${n.x}" y="${n.y}" width="${NODE_W}" height="${n.h}" fill="${n.color}"/>`);
-        const lx = (n.x < 100) ? n.x : (n.x > 300 ? n.x + NODE_W : n.x + NODE_W / 2);
-        const anchor = (n.x < 100) ? 'start' : (n.x > 300 ? 'end' : 'middle');
-        parts.push(`<text class="sankey-node-label" x="${lx}" y="${n.y - 6}" text-anchor="${anchor}">${n.label}</text>`);
-        parts.push(`<text class="sankey-node-value" x="${lx}" y="${n.y + n.h + 10}" text-anchor="${anchor}">${fmt2.format(n.kwh)} kWh</text>`);
     }
 
     svg.innerHTML = parts.join('');
@@ -2521,13 +2473,11 @@ function checkWeeklyReport() {
         let totalKwh = 0;
         for (const d of data) totalKwh += d.solar_kwh || 0;
         const savedEur = totalKwh * EUR_PER_KWH;
-        const co2 = totalKwh * CO2_KG_PER_KWH;
 
         new Notification(t('weeklyReport'), {
             body: t('weeklyReportBody')
                 .replace('{kwh}', fmt2.format(totalKwh))
-                .replace('{eur}', fmtEur.format(savedEur))
-                .replace('{co2}', fmt.format(co2)),
+                .replace('{eur}', fmtEur.format(savedEur)),
             icon: '/static/icon-192.png'
         });
         localStorage.setItem('lastWeeklyReport', todayStr);

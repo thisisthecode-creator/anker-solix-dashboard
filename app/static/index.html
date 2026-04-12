@@ -64,11 +64,6 @@
                         <span class="side-icon">💰</span>
                         <span class="side-val savings-value" id="savingsTickerValue">0,00 €</span>
                     </div>
-                    <div class="side-stat">
-                        <span class="side-icon">🌱</span>
-                        <span class="side-val co2-val" id="co2TodayValue">0 kg</span>
-                        <span class="side-unit">CO₂</span>
-                    </div>
                 </div>
             </div>
         </div>
@@ -267,72 +262,9 @@
                             <td class="e-savings" id="sMonth">--</td>
                             <td class="e-savings" id="sTotal">--</td>
                         </tr>
-                        <tr class="et-row-co2">
-                            <td class="et-label"><span class="e-dot e-co2"></span> CO₂</td>
-                            <td class="e-co2-val" id="co2Today">--</td>
-                            <td class="e-co2-val" id="co2Week">--</td>
-                            <td class="e-co2-val" id="co2Month">--</td>
-                            <td class="e-co2-val" id="co2Total">--</td>
-                        </tr>
                     </tbody>
                 </table>
             </div>
-        </section>
-
-        <!-- Period tabs -->
-        <section class="tabs-section">
-            <div class="tab-bar">
-                <button class="tab active" data-period="day" data-i18n="day">Tag</button>
-                <button class="tab" data-period="week" data-i18n="week">Woche</button>
-                <button class="tab" data-period="month" data-i18n="month">Monat</button>
-                <button class="tab" data-period="year" data-i18n="year">Jahr</button>
-            </div>
-        </section>
-
-        <!-- All charts -->
-        <section class="chart-box">
-            <h3>Solar (W)</h3>
-            <div class="chart-wrap"><canvas id="chart_solar_watts"></canvas></div>
-        </section>
-        <section class="chart-box">
-            <h3 data-i18n="batteryPct">Batterie (%)</h3>
-            <div class="chart-wrap"><canvas id="chart_battery_soc"></canvas></div>
-        </section>
-        <section class="chart-box">
-            <h3 data-i18n="temperatureC">Temperatur (C)</h3>
-            <div class="chart-wrap"><canvas id="chart_temperature"></canvas></div>
-        </section>
-        <section class="chart-box">
-            <h3 data-i18n="totalOutputW">Ausgang Gesamt (W)</h3>
-            <div class="chart-wrap"><canvas id="chart_total_output_watts"></canvas></div>
-        </section>
-        <section class="chart-box">
-            <h3>AC 230V (W)</h3>
-            <div class="chart-wrap"><canvas id="chart_ac_output_watts"></canvas></div>
-        </section>
-        <section class="chart-box">
-            <h3>USB-C 1 (W)</h3>
-            <div class="chart-wrap"><canvas id="chart_usbc_1_watts"></canvas></div>
-        </section>
-        <section class="chart-box">
-            <h3>USB-C 2 (W)</h3>
-            <div class="chart-wrap"><canvas id="chart_usbc_2_watts"></canvas></div>
-        </section>
-        <section class="chart-box">
-            <h3>USB-C 3 (W)</h3>
-            <div class="chart-wrap"><canvas id="chart_usbc_3_watts"></canvas></div>
-        </section>
-        <section class="chart-box">
-            <h3>USB-A (W)</h3>
-            <div class="chart-wrap"><canvas id="chart_usba_1_watts"></canvas></div>
-        </section>
-        <section class="chart-box">
-            <h3>DC 12V (W)</h3>
-            <div class="chart-wrap"><canvas id="chart_dc_12v_watts"></canvas></div>
-        </section>
-        <section class="chart-box">
-            <h3 data-i18n="acCharging">AC Laden (W)</h3>
-            <div class="chart-wrap"><canvas id="chart_ac_input_watts"></canvas></div>
         </section>
 
         <!-- Daily Solar Bar Chart -->
@@ -341,12 +273,6 @@
             <div class="chart-wrap"><canvas id="chart_daily_bars"></canvas></div>
         </section>
 
-        <!-- Heatmap Calendar -->
-        <section class="today-box" id="heatmapSection">
-            <h2 data-i18n="heatmapTitle">Solar-Kalender</h2>
-            <div class="heatmap-legend" id="heatmapLegend"></div>
-            <div class="heatmap-wrap" id="heatmapWrap"></div>
-        </section>
 
         <!-- SOH Trend -->
         <section class="chart-box">
@@ -434,7 +360,8 @@
                 <button class="tab active" data-sankey="1" data-i18n="sankeyToday">Heute</button>
                 <button class="tab" data-sankey="2" data-i18n="sankeyYesterday">Gestern</button>
                 <button class="tab" data-sankey="7" data-i18n="sankey7d">7 Tage</button>
-                <button class="tab" data-sankey="30" data-i18n="sankey30d">30 Tage</button>
+                <button class="tab" data-sankey="30" data-i18n="sankey30d">Monat</button>
+                <button class="tab" data-sankey="365" data-i18n="sankey365d">Jahr</button>
             </div>
             <div class="sankey-wrap">
                 <svg class="sankey-svg" id="sankeySvg" viewBox="0 0 400 260" preserveAspectRatio="xMidYMid meet"></svg>
@@ -544,49 +471,6 @@
             <div id="usagePatternsContent"></div>
         </section>
 
-        <!-- Daily Stats -->
-        <section class="today-box">
-            <h2 data-i18n="statistics">Statistiken</h2>
-            <div class="tab-bar stats-tabs">
-                <button class="tab active" data-stats="1" onclick="loadDailyStats(1)" data-i18n="today">Heute</button>
-                <button class="tab" data-stats="7" onclick="loadDailyStats(7)" data-i18n="days7">7 Tage</button>
-                <button class="tab" data-stats="30" onclick="loadDailyStats(30)" data-i18n="days30">30 Tage</button>
-                <button class="tab" data-stats="9999" onclick="loadDailyStats(9999)" data-i18n="all">Alle</button>
-            </div>
-            <div class="stats-grid" id="statsGrid">
-                <div class="stat-card">
-                    <div class="stat-label" data-i18n="peakSolar">Peak Solar</div>
-                    <div class="stat-value" id="statPeakSolar">--</div>
-                    <div class="stat-unit">W</div>
-                </div>
-                <div class="stat-card">
-                    <div class="stat-label" data-i18n="avgSolar">Ø Solar</div>
-                    <div class="stat-value" id="statAvgSolar">--</div>
-                    <div class="stat-unit">W</div>
-                </div>
-                <div class="stat-card">
-                    <div class="stat-label" data-i18n="avgTemp">Ø Temperatur</div>
-                    <div class="stat-value" id="statAvgTemp">--</div>
-                    <div class="stat-unit">&deg;C</div>
-                </div>
-                <div class="stat-card">
-                    <div class="stat-label" data-i18n="peakOutput">Peak Output</div>
-                    <div class="stat-value" id="statPeakOutput">--</div>
-                    <div class="stat-unit">W</div>
-                </div>
-                <div class="stat-card">
-                    <div class="stat-label" data-i18n="minBattery">Min Batterie</div>
-                    <div class="stat-value" id="statMinSoc">--</div>
-                    <div class="stat-unit">%</div>
-                </div>
-                <div class="stat-card">
-                    <div class="stat-label" data-i18n="maxBattery">Max Batterie</div>
-                    <div class="stat-value" id="statMaxSoc">--</div>
-                    <div class="stat-unit">%</div>
-                </div>
-            </div>
-        </section>
-
         <!-- CSV Export -->
         <section class="today-box">
             <h2 data-i18n="dataExport">Daten Export (CSV)</h2>
@@ -647,11 +531,6 @@
                     <div class="amort-card-icon">⚡</div>
                     <div class="amort-card-val" id="totalKwhValue">0</div>
                     <div class="amort-card-label">kWh <span data-i18n="totalProduced">erzeugt</span></div>
-                </div>
-                <div class="amort-card">
-                    <div class="amort-card-icon">🌱</div>
-                    <div class="amort-card-val" id="co2TotalValue">0</div>
-                    <div class="amort-card-label">kg CO₂ <span data-i18n="avoided">vermieden</span></div>
                 </div>
             </div>
             <details class="amort-details">
@@ -763,11 +642,6 @@
             </div>
         </section>
 
-        <!-- Charge Equivalents -->
-        <section class="today-box" id="chargeEquivSection">
-            <h2 data-i18n="chargeEquiv">Ladezyklen-Äquivalent</h2>
-            <div id="chargeEquivContent"></div>
-        </section>
     </div>
 
     <script src="/static/app.js?v=37"></script>

@@ -36,6 +36,50 @@ body {
     min-height: 100dvh;
 }
 
+/* Desktop: multi-column grid that uses the full window width.
+   Mobile stays single-column as before. */
+@media (min-width: 900px) {
+    .container {
+        max-width: 1400px !important;
+        display: grid;
+        grid-template-columns: 1fr 1fr;
+        gap: 18px 16px;
+        align-items: start;
+    }
+    /* Full-width rows at the top + certain wide sections */
+    .container > header,
+    .container > .dash-overview,
+    .container > .ptr-indicator,
+    .container > .offline-banner,
+    .container > #forecastBox,
+    .container > #forecastVsRealBox,
+    .container > #powerFlowSection,
+    .container > #sankeySection,
+    .container > #hourlyHeatmapSection,
+    .container > #cumulativeSection,
+    .container > #distributionSection {
+        grid-column: 1 / -1;
+    }
+}
+
+@media (min-width: 1300px) {
+    .container {
+        grid-template-columns: repeat(3, 1fr);
+    }
+    /* Power-flow + sankey stay wide on 3-col grids too */
+    .container > #powerFlowSection,
+    .container > #sankeySection,
+    .container > #forecastBox,
+    .container > #forecastVsRealBox,
+    .container > #cumulativeSection,
+    .container > #hourlyHeatmapSection,
+    .container > #distributionSection,
+    .container > .dash-overview,
+    .container > header {
+        grid-column: 1 / -1;
+    }
+}
+
 .container {
     max-width: 500px;
     margin: 0 auto;
@@ -854,6 +898,46 @@ header h1 {
 
 .fc-day.fc-today {
     border: 1px solid var(--solar);
+}
+
+.fc-temp {
+    display: flex;
+    justify-content: center;
+    gap: 5px;
+    margin: 3px auto;
+    font-size: 0.6rem;
+    line-height: 1;
+    font-variant-numeric: tabular-nums;
+}
+.fc-temp-max { color: var(--red); font-weight: 700; }
+.fc-temp-min { color: var(--blue); opacity: 0.9; }
+
+/* Mobile Solar-Prognose: HEUTE hero full-width, 6 next days in a 3x2 grid */
+@media (max-width: 640px) {
+    .forecast-grid {
+        grid-template-columns: 1fr 1fr 1fr;
+        gap: 6px;
+    }
+    .fc-day.fc-today {
+        grid-column: 1 / -1;
+        padding: 14px 12px;
+    }
+    .fc-day.fc-today .fc-name { font-size: 0.85rem; }
+    .fc-day.fc-today .fc-icon { font-size: 2rem; margin-bottom: 4px; }
+    .fc-day.fc-today .fc-kwh { font-size: 1.7rem; }
+    .fc-day.fc-today .fc-kwh-label { font-size: 0.65rem; }
+    .fc-day.fc-today .fc-sun { font-size: 0.75rem; }
+    .fc-day.fc-today .fc-uv { font-size: 0.7rem; }
+    /* Compact the 6 non-today chips: drop the least important bits */
+    .fc-day:not(.fc-today) .fc-ratio-icons,
+    .fc-day:not(.fc-today) .fc-ratio-labels {
+        display: none;
+    }
+    .fc-day:not(.fc-today) .fc-bar {
+        height: 14px;
+    }
+    .fc-day:not(.fc-today) .fc-kwh { font-size: 0.95rem; }
+    .fc-day:not(.fc-today) .fc-wind { font-size: 0.55rem; }
 }
 
 .fc-name {
@@ -1805,17 +1889,8 @@ body.light-mode .log-table td {
     color: var(--green);
 }
 
-.co2-val {
-    color: var(--green);
-}
-
 .cafe-val {
     color: var(--solar);
-}
-
-.co2-label {
-    color: var(--text-dim);
-    font-size: 0.65rem;
 }
 
 /* Week Comparison */
@@ -1914,41 +1989,6 @@ body.light-mode .log-table td {
 .roi-label {
     font-size: 0.7rem;
     color: var(--text-dim);
-}
-
-/* CO₂ Total Row */
-.co2-total-row {
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    gap: 6px;
-    margin: 8px 0 4px;
-    padding: 8px;
-    background: var(--bg);
-    border-radius: 10px;
-}
-
-.co2-icon-big {
-    font-size: 1.3rem;
-}
-
-.co2-total-value {
-    font-size: 1.3rem;
-    font-weight: 700;
-    color: var(--green);
-    font-variant-numeric: tabular-nums;
-}
-
-.co2-total-label {
-    font-size: 0.7rem;
-    color: var(--text-dim);
-}
-
-/* CO₂ in energy table */
-.e-dot.e-co2 { background: #22c55e; }
-.e-co2-val {
-    color: var(--green) !important;
-    font-size: 0.65rem !important;
 }
 
 /* Device Status Bar */
@@ -2208,8 +2248,9 @@ body.light-mode .log-table td {
     display: flex;
     justify-content: space-between;
     align-items: center;
-    padding: 8px 14px;
-    margin: 6px 0 10px;
+    gap: 12px;
+    padding: 10px 16px;
+    margin: 8px 0 12px;
     background: var(--card-bg);
     border: 1px solid var(--card-border);
     border-radius: 10px;
@@ -2220,20 +2261,23 @@ body.light-mode .log-table td {
     text-transform: uppercase;
     letter-spacing: 0.06em;
     font-weight: 600;
-    display: flex;
+    display: inline-flex;
     align-items: center;
-    gap: 6px;
+    gap: 8px;
+    line-height: 1;
 }
 .pf-v-load-label::before {
     content: "\26A1"; /* lightning bolt */
-    font-size: 0.95rem;
+    font-size: 1rem;
     color: var(--solar);
+    line-height: 1;
 }
 .pf-v-load-total {
     font-size: 1rem;
     color: var(--text);
     font-weight: 700;
     font-variant-numeric: tabular-nums;
+    line-height: 1;
 }
 
 /* === Phase 1 charts: Power Flow animation === */
