@@ -283,9 +283,41 @@ async def on_mqtt_data(raw: dict):
         "battery_cycles_today": battery_cycles.today_cycles,
     }
 
-    # --- 4. Disk writes — only when a tracked field actually changes ---
+    # --- 4. Disk writes — only on MEANINGFUL changes ---
+    # Applies tolerances to filter out sensor noise and MQTT glitches:
+    #  - temperature: ±1° hysteresis (C1000 sensor fluctuates at 0.5° boundary)
+    #  - config fields (min_soc, ac_input_limit, display_mode): ignore 0-spikes
+    #    (Anker firmware occasionally sends 0 for one packet then reverts)
     current_fp = tuple(data.get(k, 0) for k in ARCHIVE_FIELDS)
-    if current_fp != _last_write_fp:
+    if _last_write_fp:
+        changed = False
+        for i, (cur, prev) in enumerate(zip(current_fp, _last_write_fp)):
+            if cur == prev:
+                continue
+            field = ARCHIVE_FIELDS[i]
+            # Temperature: ignore ±1° fluctuation
+            if field == "temperature":
+                try:
+                    if abs(float(cur) - float(prev)) <= 1.0:
+                        continue
+                except (ValueError, TypeError):
+                    pass
+            # Config spike filter: ignore when value drops to 0 briefly
+            if field in ("min_soc", "ac_input_limit", "display_mode"):
+                try:
+                    if float(cur) == 0 and float(prev) > 0:
+                        continue  # spike down to 0 — ignore
+                    if float(prev) == 0 and float(cur) > 0:
+                        continue  # recovery from 0-spike — ignore
+                except (ValueError, TypeError):
+                    pass
+            changed = True
+            break
+        if changed:
+            archive_reading(data)
+            _last_write_fp = current_fp
+    else:
+        # First reading — always write
         archive_reading(data)
         _last_write_fp = current_fp
 
