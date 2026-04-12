@@ -639,11 +639,10 @@ async def auth_login_submit(request: Request):
     if not hmac.compare_digest(password, DASHBOARD_PASSWORD):
         return JSONResponse({"error": "wrong_password"}, status_code=401)
     resp = JSONResponse({"ok": True})
-    # secure=False so the cookie works on both HTTP and HTTPS
     resp.set_cookie(
         SESSION_COOKIE, _sign_session(),
         max_age=SESSION_TTL_S, httponly=True, samesite="lax",
-        secure=False, path="/",
+        secure=True, path="/",
     )
     return resp
 
