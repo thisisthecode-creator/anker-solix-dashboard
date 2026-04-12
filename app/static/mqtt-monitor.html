@@ -47,15 +47,18 @@
             transition: border-color 0.4s, background 0.4s;
             min-height: 52px;
         }
-        /* Blink animation on change */
-        .f.blink {
-            border-color: var(--solar) !important;
-            background: rgba(245,158,11,0.08) !important;
-            animation: blink-fade 1.5s ease-out forwards;
+        /* Permanent orange border on fields that have changed at least once */
+        .f.has-changed {
+            border-color: var(--solar);
         }
-        @keyframes blink-fade {
-            0% { border-color: var(--solar); background: rgba(245,158,11,0.12); }
-            100% { border-color: var(--border); background: var(--card); }
+        /* Brief bright flash on the moment of change */
+        .f.flash {
+            background: rgba(245,158,11,0.15) !important;
+            animation: flash-fade 2s ease-out forwards;
+        }
+        @keyframes flash-fade {
+            0% { background: rgba(245,158,11,0.18); }
+            100% { background: var(--card); }
         }
 
         .f-name {
@@ -202,12 +205,14 @@ function update(fields) {
         el.val.textContent = fmt(k, v);
         el.val.className = 'f-val ' + colorClass(k, v);
 
-        // Blink on change
+        // Orange border stays permanently on fields that changed at least once.
+        // Brief flash animation on the moment of change.
         if (changed) {
             el.prev.textContent = 'vorher: ' + fmt(k, oldVal);
-            el.box.classList.remove('blink');
-            void el.box.offsetWidth; // force reflow to restart animation
-            el.box.classList.add('blink');
+            el.box.classList.add('has-changed');
+            el.box.classList.remove('flash');
+            void el.box.offsetWidth;
+            el.box.classList.add('flash');
         }
     }
     prev = { ...fields };
