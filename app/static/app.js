@@ -1158,13 +1158,8 @@ async function loadForecast() {
             div.innerHTML = `<div class="fc-name">${isToday ? t('today') : dayName}</div>`
                 + `<div class="fc-date">${dateStr}</div>`
                 + `<div class="fc-icon">${icon}</div>`
-                + `<div class="fc-kwh-batt" title="${estKwh} kWh · relativ zum besten Tag ${barPct}% · ☀ ${directPct}% direkt">`
-                + `<div class="fc-kwh-batt-body">`
-                + `<div class="fc-kwh-batt-fill" style="width:${barPct}%"></div>`
-                + `<span class="fc-kwh-batt-text">${estKwh} <small>kWh</small></span>`
-                + `</div>`
-                + `<div class="fc-kwh-batt-cap"></div>`
-                + `</div>`
+                + `<div class="fc-kwh">${estKwh}</div>`
+                + `<div class="fc-kwh-label">kWh</div>`
                 + tempHtml
                 + `<div class="fc-sun">${sunH}h</div>`
                 + `<div class="fc-wind${windDanger}" title="${t('wind')} ${windSpeed} km/h (${LANG === 'de' ? 'Böen' : 'gusts'} ${windGusts} km/h)">💨 ${windSpeed}<small>km/h</small></div>`

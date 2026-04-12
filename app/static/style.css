@@ -978,17 +978,13 @@ header h1 {
     .fc-day .fc-name { font-size: 0.55rem; }
     .fc-day .fc-date { font-size: 0.5rem; }
     .fc-day .fc-icon { font-size: 1rem; margin-bottom: 1px; }
+    .fc-day .fc-kwh { font-size: 0.82rem; }
+    .fc-day .fc-kwh-label { font-size: 0.42rem; margin-bottom: 2px; }
     .fc-day .fc-temp { font-size: 0.48rem; gap: 3px; margin: 2px auto; }
     .fc-day .fc-sun { font-size: 0.48rem; }
     .fc-day .fc-wind { font-size: 0.42rem; }
     .fc-day .fc-wind small { font-size: 0.7em; }
     .fc-day .fc-uv { font-size: 0.45rem; padding: 0; }
-    /* kWh-battery scales down on mobile */
-    .fc-day .fc-kwh-batt { width: 94%; max-width: 60px; margin: 4px auto 2px; }
-    .fc-day .fc-kwh-batt-body { height: 16px; border-width: 1px; border-radius: 3px; }
-    .fc-day .fc-kwh-batt-text { font-size: 0.55rem; }
-    .fc-day .fc-kwh-batt-text small { font-size: 0.65em; }
-    .fc-day .fc-kwh-batt-cap { width: 2px; height: 7px; }
 }
 
 .fc-name {
