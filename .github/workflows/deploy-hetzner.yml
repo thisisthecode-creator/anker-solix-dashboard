@@ -19,6 +19,7 @@ jobs:
           key: ${{ secrets.HETZNER_SSH_KEY }}
           script: |
             cd /opt/anker-solix
+            git remote set-url origin https://github.com/intotheblueocean1/anker-solix-dashboard.git
             git pull origin main
             docker build -t anker-solix .
             docker stop anker-solix || true
