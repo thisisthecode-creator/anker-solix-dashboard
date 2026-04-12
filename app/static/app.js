@@ -1430,7 +1430,7 @@ let combinedPeriod = 'day';
 // All available metrics for the MQTT overview chart.
 // The toggle buttons reference these by key (data-metric attribute).
 const MQTT_METRICS = {
-    solar_watts:        { label: '☀ Solar',  color: '#f59e0b', yAxis: 'yW',    dash: [],     logNull: true },
+    solar_watts:        { label: '☀️ Solar',  color: '#f59e0b', yAxis: 'yW',    dash: [],     logNull: true },
     total_output_watts: { label: '⚡ Out',    color: '#a78bfa', yAxis: 'yW',    dash: [],     logNull: true },
     ac_input_watts:     { label: '🔌 AC In',  color: '#38bdf8', yAxis: 'yW',    dash: [],     logNull: true },
     battery_soc:        { label: '🔋 Bat%',   color: '#22c55e', yAxis: 'yPct',  dash: [],     logNull: false },
