@@ -58,6 +58,52 @@ _last_write_fp: tuple = ()
 _last_daily_upsert: float = 0
 _last_cycle_save: float = 0
 
+
+def _restore_last_fingerprint():
+    """Load _last_write_fp from the last line of today's archive.
+
+    Without this, every container restart writes a duplicate first row
+    because _last_write_fp starts empty and the 'else' branch always writes.
+    """
+    global _last_write_fp
+    tz = ZoneInfo(TIMEZONE)
+    today = datetime.now(tz).strftime("%Y-%m-%d")
+    csv_path = ARCHIVE_DIR / f"{today}.csv"
+    if not csv_path.exists():
+        return
+    try:
+        with open(csv_path, "r") as f:
+            lines = f.readlines()
+        # Find the last non-empty data line
+        for line in reversed(lines):
+            line = line.strip()
+            if not line or line.startswith("timestamp"):
+                continue
+            parts = line.split(",")
+            if len(parts) < 14:
+                continue
+            # Rebuild fingerprint from the stored values (skip timestamp at index 0)
+            fp_values = []
+            for i, field in enumerate(ARCHIVE_FIELDS):
+                col_idx = i + 1  # +1 because timestamp is column 0
+                if col_idx < len(parts):
+                    raw = parts[col_idx]
+                    # Match the types that extract_data produces
+                    try:
+                        if '.' in raw:
+                            fp_values.append(float(raw))
+                        else:
+                            fp_values.append(int(raw))
+                    except ValueError:
+                        fp_values.append(raw)
+                else:
+                    fp_values.append(0)
+            _last_write_fp = tuple(fp_values)
+            logger.info("Restored archive fingerprint from %s (last row)", csv_path.name)
+            return
+    except Exception as e:
+        logger.warning("Could not restore fingerprint: %s", e)
+
 # === CSV Archive (every changed MQTT field) ===
 # The archive captures ALL 24 fields that extract_data() pulls from the
 # Anker MQTT payload. The dedup fingerprint compares all 24, so any change
@@ -524,6 +570,7 @@ async def lifespan(app: FastAPI):
     await restore_accumulator()
     compress_old_archives()  # Gzip any leftover CSVs from before restart
     battery_cycles.load()    # Load cycles state (backfills from archive on first run)
+    _restore_last_fingerprint()  # Prevent duplicate first row after restart
     # Load last reading as fallback so dashboard isn't empty on reload
     last = await get_latest_reading()
     if last:
