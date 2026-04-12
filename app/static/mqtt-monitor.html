@@ -47,18 +47,10 @@
             transition: border-color 0.4s, background 0.4s;
             min-height: 52px;
         }
-        /* Permanent orange border on fields that have changed at least once */
-        .f.has-changed {
+        /* Orange border ONLY on fields that changed in THIS poll cycle */
+        .f.changed-now {
             border-color: var(--solar);
-        }
-        /* Brief bright flash on the moment of change */
-        .f.flash {
-            background: rgba(245,158,11,0.15) !important;
-            animation: flash-fade 2s ease-out forwards;
-        }
-        @keyframes flash-fade {
-            0% { background: rgba(245,158,11,0.18); }
-            100% { background: var(--card); }
+            background: rgba(245,158,11,0.08);
         }
 
         .f-name {
@@ -195,24 +187,25 @@ function update(fields) {
     // First call: build the grid
     if (Object.keys(els).length === 0) buildGrid(fields);
 
+    // First: remove orange from ALL fields
+    for (const el of Object.values(els)) {
+        el.box.classList.remove('changed-now');
+        el.prev.textContent = '';
+    }
+
+    // Then: update values and mark only the ones that changed THIS cycle
     for (const [k, v] of Object.entries(fields)) {
         const el = els[k];
         if (!el) continue;
         const oldVal = prev[k];
         const changed = oldVal !== undefined && String(oldVal) !== String(v);
 
-        // Update value + color
         el.val.textContent = fmt(k, v);
         el.val.className = 'f-val ' + colorClass(k, v);
 
-        // Orange border stays permanently on fields that changed at least once.
-        // Brief flash animation on the moment of change.
         if (changed) {
+            el.box.classList.add('changed-now');
             el.prev.textContent = 'vorher: ' + fmt(k, oldVal);
-            el.box.classList.add('has-changed');
-            el.box.classList.remove('flash');
-            void el.box.offsetWidth;
-            el.box.classList.add('flash');
         }
     }
     prev = { ...fields };
