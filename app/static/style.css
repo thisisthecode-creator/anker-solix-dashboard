@@ -969,7 +969,7 @@ header h1 {
     font-variant-numeric: tabular-nums;
 }
 
-/* Solar-Prognose mobile: compact, aligned, with everything visible */
+/* Solar-Prognose mobile: compact, aligned, vertical separators */
 @media (max-width: 768px) {
     .forecast-grid { gap: 0; }
     .fc-day {
@@ -985,13 +985,14 @@ header h1 {
     .fc-day .fc-name { font-size: 0.6rem; font-weight: 700; margin-bottom: 1px; }
     .fc-day .fc-date { font-size: 0.5rem; margin-bottom: 3px; }
     .fc-day .fc-icon { font-size: 1.1rem; margin-bottom: 2px; }
-    .fc-day .fc-kwh { font-size: 0.95rem; font-weight: 800; }
-    .fc-day .fc-kwh-label { font-size: 0.42rem; margin-bottom: 2px; }
-    .fc-day .fc-temp { font-size: 0.5rem; gap: 3px; margin: 2px auto; }
-    .fc-day .fc-sun { font-size: 0.5rem; }
-    .fc-day .fc-wind { font-size: 0.45rem; }
-    .fc-day .fc-wind small { font-size: 0.7em; }
-    .fc-day .fc-uv { font-size: 0.5rem; padding: 0 1px; margin-top: 1px; }
+    /* kWh stays largest — primary info */
+    .fc-day .fc-kwh { font-size: 0.95rem; font-weight: 800; margin-bottom: 2px; }
+    .fc-day .fc-kwh-label { display: none; }
+    /* All secondary info: uniform 0.6rem for easy reading */
+    .fc-day .fc-temp { font-size: 0.6rem; gap: 4px; margin: 3px auto; }
+    .fc-day .fc-sun { font-size: 0.6rem; margin: 1px 0; }
+    .fc-day .fc-wind { font-size: 0.6rem; margin: 1px 0; }
+    .fc-day .fc-uv { font-size: 0.6rem; padding: 0 1px; margin-top: 1px; }
 }
 
 .fc-name {

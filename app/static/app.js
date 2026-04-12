@@ -1159,10 +1159,9 @@ async function loadForecast() {
                 + `<div class="fc-date">${dateStr}</div>`
                 + `<div class="fc-icon">${icon}</div>`
                 + `<div class="fc-kwh">${estKwh}</div>`
-                + `<div class="fc-kwh-label">kWh</div>`
                 + tempHtml
                 + `<div class="fc-sun">${sunH}h</div>`
-                + `<div class="fc-wind${windDanger}" title="${t('wind')} ${windSpeed} km/h (${LANG === 'de' ? 'Böen' : 'gusts'} ${windGusts} km/h)">💨 ${windSpeed}<small>km/h</small></div>`
+                + `<div class="fc-wind${windDanger}" title="${t('wind')} ${windSpeed} km/h (${LANG === 'de' ? 'Böen' : 'gusts'} ${windGusts} km/h)">💨 ${windSpeed}</div>`
                 + `<div class="fc-uv ${uvClass}">UV ${uv}</div>`;
             grid.appendChild(div);
         }
@@ -2271,8 +2270,8 @@ function _sankeyLayout(flows, totals) {
         const items = [
             ['var(--solar)', totals.solar_kwh, t('pfSolar')],
             ['#888', totals.grid_in_kwh, t('pfGrid')],
-            ['var(--blue)', totals.battery_in_kwh, t('pfBattery') + ' in'],
-            ['var(--blue)', totals.battery_out_kwh, t('pfBattery') + ' out'],
+            ['#60a5fa', totals.battery_in_kwh, t('pfBattery') + ' in'],
+            ['#c084fc', totals.battery_out_kwh, t('pfBattery') + ' out'],
             ['#22c55e', totals.load_kwh, t('pfLoad')],
         ];
         totEl.innerHTML = items.map(([color, v, label]) =>
