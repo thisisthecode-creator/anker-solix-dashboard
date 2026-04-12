@@ -1536,7 +1536,9 @@ async function loadForecastVsReal() {
 
 setTimeout(loadForecastVsReal, 5000);
 
-// === Payback Calculator ===
+// === Amortisation + Break-Even (merged section with cumulative savings chart) ===
+let _amortChart = null;
+
 function updateAmortisation(energyData) {
     try {
         const total = energyData.total || {};
@@ -1544,42 +1546,132 @@ function updateAmortisation(energyData) {
         const remaining = Math.max(0, SYSTEM_COST_EUR - totalSavedEur);
         const pct = Math.min(100, totalSavedEur / SYSTEM_COST_EUR * 100);
 
-        $('amortSaved').textContent = Math.round(totalSavedEur).toLocaleString(locale) + ' €';
-        $('amortProgressLabel').textContent = Math.round(pct) + '%';
-        // SVG ring progress
+        const savedEl = $('amortSaved');
+        if (savedEl) savedEl.textContent = Math.round(totalSavedEur).toLocaleString(locale) + ' €';
+        const remEl = $('amortRemaining');
+        if (remEl) remEl.textContent = Math.round(remaining).toLocaleString(locale) + ' €';
+        const pctEl = $('amortProgressLabel');
+        if (pctEl) pctEl.textContent = Math.round(pct) + '%';
         const ringFill = $('amortRingFill');
         if (ringFill) {
             const circ = 326.73;
             ringFill.setAttribute('stroke-dashoffset', (circ - circ * pct / 100).toFixed(1));
         }
 
-        const month = energyData.month || {};
-        const monthSavedEur = (month.solar_kwh || 0) * EUR_PER_KWH;
-        if (monthSavedEur > 0 && remaining > 0) {
-            const monthsRemaining = remaining / monthSavedEur;
-            const payoffDate = new Date();
-            payoffDate.setMonth(payoffDate.getMonth() + Math.ceil(monthsRemaining));
-            const months = t('monthNames');
-            $('amortPayoff').textContent = t('expectedPayback') + ' ' + months[payoffDate.getMonth()] + ' ' + payoffDate.getFullYear();
-            // ROI Countdown
-            const daysRemaining = Math.ceil(monthsRemaining * 30.44);
-            const roiEl = $('roiDays');
-            if (roiEl) roiEl.textContent = daysRemaining.toLocaleString(locale);
-        } else if (remaining <= 0) {
-            $('amortPayoff').textContent = t('paidOff');
-            $('amortPayoff').style.color = '#22c55e';
-            const roiEl = $('roiDays');
-            if (roiEl) { roiEl.textContent = t('roiDone'); roiEl.style.fontSize = '1rem'; }
-            const roiLabel = $('roiCountdown')?.querySelector('.roi-label');
-            if (roiLabel) roiLabel.style.display = 'none';
-        } else {
-            $('amortPayoff').textContent = t('noMonthlyData');
-        }
-        // Total kWh produced
+        // Total kWh produced card
         const totalKwhEl = $('totalKwhValue');
         if (totalKwhEl) totalKwhEl.textContent = fmt.format(total.solar_kwh || 0);
     } catch (e) { console.warn('Amort error:', e); }
 }
+
+// Dedicated loader for the merged section: cumulative-savings chart +
+// break-even projection + formatted date. Uses /api/break-even (already
+// exposed) for the backend-calculated projection.
+async function loadAmortChart() {
+    try {
+        const [beRes, cumRes] = await Promise.all([
+            fetch('/api/break-even'),
+            fetch('/api/cumulative-production'),
+        ]);
+        if (!beRes.ok || !cumRes.ok) return;
+        const be = await beRes.json();
+        const cum = await cumRes.json();
+
+        // Update top-level date card + payoff sub-line
+        const dateEl = $('amortBreakEvenDate');
+        const payoffEl = $('amortPayoff');
+        const avgDaily = be.avg_daily_kwh_last30 || 0;
+
+        if (be.total_savings_eur >= be.system_cost_eur) {
+            if (dateEl) dateEl.textContent = '🎉';
+            if (payoffEl) { payoffEl.textContent = t('breakEvenPaidOff'); payoffEl.style.color = 'var(--green)'; }
+        } else if (avgDaily > 0.01 && be.break_even_date) {
+            // Sanity cap: if the extrapolated date is more than 100 years out,
+            // the avg is too low to be useful — show a friendly fallback.
+            const beDate = new Date(be.break_even_date);
+            const yearsOut = (beDate - new Date()) / (365.25 * 24 * 3600 * 1000);
+            if (yearsOut > 100) {
+                if (dateEl) dateEl.textContent = '—';
+                if (payoffEl) payoffEl.textContent = t('cumulativeNoData');
+            } else {
+                const months = t('monthNames');
+                const short = months[beDate.getMonth()] + ' ' + beDate.getFullYear();
+                if (dateEl) dateEl.textContent = short;
+                if (payoffEl) payoffEl.textContent =
+                    t('breakEvenAvgDay').replace('{kwh}', fmt2.format(avgDaily));
+            }
+        } else {
+            if (dateEl) dateEl.textContent = '—';
+            if (payoffEl) payoffEl.textContent = t('cumulativeNoData');
+        }
+
+        // Build the cumulative savings line chart
+        const canvas = $('chart_amort_progress');
+        if (!canvas) return;
+        const series = cum.series || [];
+        if (series.length === 0) {
+            if (_amortChart) { _amortChart.destroy(); _amortChart = null; }
+            canvas.style.display = 'none';
+            return;
+        }
+        canvas.style.display = '';
+
+        const labels = series.map(r => r.date);
+        const savings = series.map(r => r.cumulative * EUR_PER_KWH);
+        // Horizontal guide line at SYSTEM_COST_EUR
+        const goal = labels.map(() => SYSTEM_COST_EUR);
+
+        if (_amortChart) _amortChart.destroy();
+        _amortChart = new Chart(canvas, {
+            type: 'line',
+            data: {
+                labels,
+                datasets: [
+                    {
+                        label: t('savedSoFar'),
+                        data: savings,
+                        borderColor: 'rgba(34,197,94,1)',
+                        backgroundColor: 'rgba(34,197,94,0.18)',
+                        fill: true,
+                        tension: 0.3,
+                        pointRadius: 0,
+                        borderWidth: 2,
+                    },
+                    {
+                        label: t('systemCost'),
+                        data: goal,
+                        borderColor: 'rgba(245,158,11,0.7)',
+                        borderWidth: 1.5,
+                        borderDash: [6, 4],
+                        pointRadius: 0,
+                        fill: false,
+                    },
+                ],
+            },
+            options: {
+                responsive: true,
+                maintainAspectRatio: false,
+                plugins: { legend: { display: false } },
+                scales: {
+                    x: { display: false },
+                    y: {
+                        beginAtZero: true,
+                        ticks: {
+                            color: 'rgba(136,136,136,0.8)',
+                            callback: v => fmtEur.format(v) + ' €',
+                            maxTicksLimit: 4,
+                        },
+                        grid: { color: 'rgba(128,128,128,0.12)' },
+                    },
+                },
+            },
+        });
+    } catch (e) { console.warn('Amort chart error:', e); }
+}
+
+// Initial + periodic refresh
+loadAmortChart();
+setInterval(loadAmortChart, 120000);  // every 2 min
 
 // === Pull-to-Refresh ===
 (function initPullToRefresh() {
