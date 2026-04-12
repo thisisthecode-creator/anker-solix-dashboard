@@ -944,6 +944,38 @@ async def api_live(since: str = None, refresh: bool = False):
     return latest_data or {}
 
 
+@app.get("/api/mqtt-raw")
+async def api_mqtt_raw():
+    """All raw MQTT fields from the Anker device — unfiltered, unprocessed.
+
+    Returns the full 42-field dict from the MQTT session cache plus metadata.
+    Used by the /mqtt-monitor debug page.
+    """
+    raw = {}
+    if client.device_sn:
+        raw = client.get_status() or {}
+    # Strip non-serializable fields
+    clean = {}
+    for k, v in raw.items():
+        if k in ('last_message', 'topics'):
+            continue
+        clean[k] = v
+    return {
+        "connected": bool(client.device_sn),
+        "device_sn": client.device_sn or "",
+        "device_name": client.device_name or "",
+        "field_count": len(clean),
+        "timestamp": latest_data.get("timestamp", ""),
+        "fields": clean,
+    }
+
+
+@app.get("/mqtt-monitor")
+async def mqtt_monitor_page():
+    """Standalone raw MQTT data monitor page."""
+    return FileResponse(STATIC / "mqtt-monitor.html")
+
+
 @app.get("/api/status")
 async def api_status():
     return {

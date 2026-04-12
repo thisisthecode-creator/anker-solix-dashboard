@@ -1,0 +1,255 @@
+<!DOCTYPE html>
+<html lang="de">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+    <meta name="theme-color" content="#0a0a0a">
+    <title>MQTT Monitor · Anker Solix</title>
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        :root {
+            --bg: #0a0a0a; --card: #111; --border: #222; --text: #e8e8e8;
+            --dim: #666; --solar: #f59e0b; --green: #22c55e; --blue: #3b82f6;
+            --red: #ef4444; --purple: #a855f7;
+        }
+        body {
+            font-family: 'SF Mono', 'Fira Code', 'JetBrains Mono', monospace;
+            background: var(--bg); color: var(--text);
+            min-height: 100vh; padding: 16px;
+            -webkit-font-smoothing: antialiased;
+        }
+        .header {
+            display: flex; align-items: center; gap: 12px;
+            margin-bottom: 16px; flex-wrap: wrap;
+        }
+        .header h1 {
+            font-size: 1rem; font-weight: 700; color: var(--solar);
+            letter-spacing: 0.02em;
+        }
+        .badge {
+            font-size: 0.65rem; padding: 3px 10px; border-radius: 12px;
+            font-weight: 600; letter-spacing: 0.03em;
+        }
+        .badge-ok { background: rgba(34,197,94,0.15); color: var(--green); border: 1px solid rgba(34,197,94,0.3); }
+        .badge-off { background: rgba(239,68,68,0.15); color: var(--red); border: 1px solid rgba(239,68,68,0.3); }
+        .badge-info { background: rgba(59,130,246,0.1); color: var(--blue); border: 1px solid rgba(59,130,246,0.2); }
+        .meta {
+            font-size: 0.65rem; color: var(--dim);
+            margin-bottom: 14px; display: flex; gap: 16px; flex-wrap: wrap;
+        }
+        .meta span { white-space: nowrap; }
+        .grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fill, minmax(220px, 1fr));
+            gap: 8px;
+        }
+        .field {
+            background: var(--card); border: 1px solid var(--border);
+            border-radius: 10px; padding: 10px 12px;
+            transition: border-color 0.3s, background 0.3s;
+            position: relative; overflow: hidden;
+        }
+        .field.changed {
+            border-color: var(--solar);
+            background: rgba(245,158,11,0.06);
+        }
+        .field-name {
+            font-size: 0.6rem; color: var(--dim);
+            text-transform: uppercase; letter-spacing: 0.06em;
+            margin-bottom: 4px; font-weight: 600;
+        }
+        .field-value {
+            font-size: 1.05rem; font-weight: 700;
+            font-variant-numeric: tabular-nums;
+            color: var(--text); word-break: break-all;
+        }
+        .field-value.zero { color: var(--dim); opacity: 0.5; }
+        .field-value.power { color: var(--solar); }
+        .field-value.pct { color: var(--green); }
+        .field-value.temp { color: var(--blue); }
+        .field-value.switch-on { color: var(--green); }
+        .field-value.switch-off { color: var(--red); opacity: 0.6; }
+        .field-prev {
+            font-size: 0.55rem; color: var(--dim);
+            margin-top: 3px; font-style: italic;
+        }
+        .field-cat {
+            position: absolute; top: 6px; right: 8px;
+            font-size: 0.5rem; color: var(--dim); opacity: 0.5;
+            text-transform: uppercase; letter-spacing: 0.05em;
+        }
+        .back-link {
+            display: inline-block; margin-bottom: 12px;
+            color: var(--dim); text-decoration: none; font-size: 0.7rem;
+        }
+        .back-link:hover { color: var(--text); }
+        .pulse {
+            display: inline-block; width: 8px; height: 8px;
+            border-radius: 50%; margin-right: 6px; vertical-align: middle;
+        }
+        .pulse-on { background: var(--green); animation: pulse 2s infinite; }
+        .pulse-off { background: var(--red); }
+        @keyframes pulse {
+            0%, 100% { opacity: 1; } 50% { opacity: 0.4; }
+        }
+        .footer {
+            margin-top: 20px; text-align: center;
+            font-size: 0.6rem; color: var(--dim);
+        }
+        @media (max-width: 500px) {
+            .grid { grid-template-columns: 1fr 1fr; gap: 6px; }
+            .field { padding: 8px 10px; }
+            .field-value { font-size: 0.9rem; }
+        }
+    </style>
+</head>
+<body>
+    <a href="/" class="back-link">← Dashboard</a>
+    <div class="header">
+        <h1>MQTT RAW MONITOR</h1>
+        <span class="badge badge-off" id="statusBadge">OFFLINE</span>
+        <span class="badge badge-info" id="fieldCountBadge">0 fields</span>
+    </div>
+    <div class="meta">
+        <span>Device: <strong id="deviceName">—</strong></span>
+        <span>SN: <strong id="deviceSn">—</strong></span>
+        <span>Last: <strong id="lastUpdate">—</strong></span>
+        <span>Refresh: <strong>3s</strong></span>
+    </div>
+    <div class="grid" id="fieldsGrid"></div>
+    <div class="footer">
+        Alle 3 Sekunden live vom Anker MQTT-Stream · Änderungen werden orange hervorgehoben
+    </div>
+
+    <script>
+        const CATEGORIES = {
+            dc_input_power_total: 'solar', dc_input_power_switch: 'solar',
+            ac_output_power: 'output', ac_output_power_switch: 'switch',
+            ac_output_mode: 'config', ac_output_timeout_seconds: 'config',
+            dc_output_power_total: 'output', dc_output_power_switch: 'switch',
+            dc_output_timeout_seconds: 'config', dc_12v_output_mode: 'config',
+            output_power_total: 'output',
+            usbc_1_power: 'output', usbc_2_power: 'output', usbc_3_power: 'output',
+            usba_1_power: 'output',
+            usbc_1_status: 'status', usbc_2_status: 'status', usbc_3_status: 'status',
+            usba_1_status: 'status',
+            ac_input_power: 'input', ac_input_power_a7: 'input',
+            ac_input_limit: 'config', ac_input_limit_max: 'config',
+            ac_fast_charge_switch: 'switch',
+            battery_soc: 'battery', battery_soh: 'battery',
+            temperature: 'sensor',
+            max_soc: 'config', min_soc: 'config',
+            display_switch: 'switch', display_mode: 'config', display_timeout_seconds: 'config',
+            device_timeout_minutes: 'config', port_memory_switch: 'switch',
+            device_sn: 'device', device_pn: 'device',
+            utc_timestamp: 'meta', msg_timestamp: 'meta',
+        };
+
+        const UNITS = {
+            dc_input_power_total: 'W', ac_output_power: 'W', dc_output_power_total: 'W',
+            output_power_total: 'W', ac_input_power: 'W', ac_input_power_a7: 'W',
+            usbc_1_power: 'W', usbc_2_power: 'W', usbc_3_power: 'W', usba_1_power: 'W',
+            ac_input_limit: 'W', ac_input_limit_max: 'W',
+            battery_soc: '%', battery_soh: '%', max_soc: '%', min_soc: '%',
+            temperature: '°C',
+            ac_output_timeout_seconds: 's', dc_output_timeout_seconds: 's',
+            display_timeout_seconds: 's', device_timeout_minutes: 'min',
+        };
+
+        let prevFields = {};
+        let changedTimers = {};
+
+        function classify(key, value) {
+            if (key.endsWith('_switch') || key === 'port_memory_switch') {
+                return value == 1 ? 'switch-on' : 'switch-off';
+            }
+            if (key === 'temperature') return 'temp';
+            if (key === 'battery_soc' || key === 'battery_soh') return 'pct';
+            if (key.endsWith('_power') || key.endsWith('_power_total')) return value > 0 ? 'power' : 'zero';
+            if (value === 0 || value === '0' || value === '') return 'zero';
+            return '';
+        }
+
+        function formatValue(key, value) {
+            const unit = UNITS[key] || '';
+            if (key === 'utc_timestamp' || key === 'msg_timestamp') {
+                try {
+                    const d = new Date(typeof value === 'number' && value > 1e12 ? value * 1000 :
+                                       typeof value === 'number' ? value * 1000 : value);
+                    if (!isNaN(d)) return d.toLocaleTimeString('de-DE');
+                } catch (e) {}
+            }
+            if (typeof value === 'number') {
+                return (Number.isInteger(value) ? value : value.toFixed(1)) + (unit ? ' ' + unit : '');
+            }
+            return String(value) + (unit ? ' ' + unit : '');
+        }
+
+        function renderFields(fields) {
+            const grid = document.getElementById('fieldsGrid');
+            const keys = Object.keys(fields).sort((a, b) => {
+                const catA = CATEGORIES[a] || 'zzz';
+                const catB = CATEGORIES[b] || 'zzz';
+                if (catA !== catB) return catA.localeCompare(catB);
+                return a.localeCompare(b);
+            });
+
+            let html = '';
+            for (const key of keys) {
+                const val = fields[key];
+                const prev = prevFields[key];
+                const changed = prev !== undefined && String(prev) !== String(val);
+                const cls = classify(key, val);
+                const cat = CATEGORIES[key] || '';
+                const prevStr = changed ? `vorher: ${formatValue(key, prev)}` : '';
+
+                if (changed) {
+                    clearTimeout(changedTimers[key]);
+                    changedTimers[key] = setTimeout(() => {
+                        const el = document.querySelector(`[data-field="${key}"]`);
+                        if (el) el.classList.remove('changed');
+                    }, 5000);
+                }
+
+                html += `<div class="field ${changed ? 'changed' : ''}" data-field="${key}">`
+                    + `<div class="field-name">${key}</div>`
+                    + `<div class="field-value ${cls}">${formatValue(key, val)}</div>`
+                    + (prevStr ? `<div class="field-prev">${prevStr}</div>` : '')
+                    + (cat ? `<div class="field-cat">${cat}</div>` : '')
+                    + `</div>`;
+            }
+            grid.innerHTML = html;
+            prevFields = { ...fields };
+        }
+
+        async function poll() {
+            try {
+                const res = await fetch('/api/mqtt-raw');
+                if (res.status === 401) {
+                    window.location.href = '/auth/login';
+                    return;
+                }
+                const data = await res.json();
+
+                const badge = document.getElementById('statusBadge');
+                badge.textContent = data.connected ? 'LIVE' : 'OFFLINE';
+                badge.className = 'badge ' + (data.connected ? 'badge-ok' : 'badge-off');
+
+                document.getElementById('fieldCountBadge').textContent = data.field_count + ' fields';
+                document.getElementById('deviceName').textContent = data.device_name || '—';
+                document.getElementById('deviceSn').textContent = data.device_sn || '—';
+                document.getElementById('lastUpdate').textContent = data.timestamp || '—';
+
+                if (data.fields && Object.keys(data.fields).length > 0) {
+                    renderFields(data.fields);
+                }
+            } catch (e) {
+                console.warn('Poll error:', e);
+            }
+        }
+
+        poll();
+        setInterval(poll, 3000);
+    </script>
+</body>
+</html>
