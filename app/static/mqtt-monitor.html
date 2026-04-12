@@ -96,10 +96,51 @@
             margin-top: 20px; text-align: center;
             font-size: 0.6rem; color: var(--dim);
         }
+        /* Live log table */
+        .log-section {
+            margin-top: 24px; border-top: 1px solid var(--border);
+            padding-top: 16px;
+        }
+        .log-section h2 {
+            font-size: 0.85rem; color: var(--solar); margin-bottom: 10px;
+            display: flex; align-items: center; gap: 8px;
+        }
+        .log-count {
+            font-size: 0.6rem; color: var(--dim); font-weight: 400;
+        }
+        .log-table-wrap {
+            overflow-x: auto; max-height: 500px; overflow-y: auto;
+            border: 1px solid var(--border); border-radius: 8px;
+        }
+        .log-table {
+            width: 100%; border-collapse: collapse; font-size: 0.6rem;
+        }
+        .log-table th {
+            position: sticky; top: 0; background: #1a1a1a;
+            padding: 6px 8px; text-align: left; color: var(--dim);
+            font-weight: 600; text-transform: uppercase; letter-spacing: 0.05em;
+            border-bottom: 1px solid var(--border); white-space: nowrap;
+        }
+        .log-table td {
+            padding: 4px 8px; border-bottom: 1px solid rgba(255,255,255,0.03);
+            white-space: nowrap; font-variant-numeric: tabular-nums;
+        }
+        .log-table tr:first-child td {
+            background: rgba(245,158,11,0.06);
+        }
+        .log-table .val-changed {
+            color: var(--solar); font-weight: 700;
+        }
+        .log-table .val-zero { color: var(--dim); opacity: 0.4; }
+        .log-table .val-power { color: var(--solar); }
+        .log-table .val-pct { color: var(--green); }
+        .log-table .col-ts { color: var(--blue); font-weight: 600; }
         @media (max-width: 500px) {
             .grid { grid-template-columns: 1fr 1fr; gap: 6px; }
             .field { padding: 8px 10px; }
             .field-value { font-size: 0.9rem; }
+            .log-table { font-size: 0.5rem; }
+            .log-table th, .log-table td { padding: 3px 4px; }
         }
     </style>
 </head>
@@ -117,8 +158,20 @@
         <span>Refresh: <strong>3s</strong></span>
     </div>
     <div class="grid" id="fieldsGrid"></div>
+
+    <!-- Live MQTT message log table -->
+    <div class="log-section">
+        <h2>📡 LIVE MQTT LOG <span class="log-count" id="logCount">0 Nachrichten</span></h2>
+        <div class="log-table-wrap">
+            <table class="log-table">
+                <thead id="logHead"><tr><th>Zeit</th></tr></thead>
+                <tbody id="logBody"></tbody>
+            </table>
+        </div>
+    </div>
+
     <div class="footer">
-        Alle 3 Sekunden live vom Anker MQTT-Stream · Änderungen werden orange hervorgehoben
+        Alle 3 Sekunden live vom Anker MQTT-Stream · Änderungen werden orange hervorgehoben · Log nur im RAM (nicht gespeichert)
     </div>
 
     <script>
@@ -250,6 +303,82 @@
 
         poll();
         setInterval(poll, 3000);
+
+        // === Live MQTT log table ===
+        const LOG_FIELDS = [
+            'battery_soc', 'battery_soh', 'temperature',
+            'dc_input_power_total', 'ac_output_power', 'dc_output_power_total',
+            'output_power_total', 'ac_input_power',
+            'usbc_1_power', 'usbc_2_power', 'usbc_3_power', 'usba_1_power',
+            'ac_output_power_switch', 'dc_output_power_switch',
+            'max_soc', 'min_soc', 'ac_input_limit',
+            'display_mode', 'display_switch',
+        ];
+        const SHORT = {
+            battery_soc: 'SOC%', battery_soh: 'SOH%', temperature: 'Temp',
+            dc_input_power_total: 'Solar', ac_output_power: 'AC Out',
+            dc_output_power_total: 'DC Out', output_power_total: 'Total Out',
+            ac_input_power: 'AC In',
+            usbc_1_power: 'C1', usbc_2_power: 'C2', usbc_3_power: 'C3',
+            usba_1_power: 'USB-A',
+            ac_output_power_switch: 'AC⚡', dc_output_power_switch: 'DC⚡',
+            max_soc: 'Max%', min_soc: 'Min%', ac_input_limit: 'AC Lim',
+            display_mode: 'Disp', display_switch: 'Disp⚡',
+        };
+
+        let logHeaderBuilt = false;
+        let lastLogTs = '';
+
+        function buildLogHeader() {
+            const head = document.getElementById('logHead');
+            head.innerHTML = '<tr><th>#</th><th>Zeit</th>'
+                + LOG_FIELDS.map(f => `<th>${SHORT[f] || f}</th>`).join('')
+                + '</tr>';
+            logHeaderBuilt = true;
+        }
+
+        async function pollLog() {
+            try {
+                const res = await fetch('/api/mqtt-log?limit=50');
+                if (!res.ok) return;
+                const items = await res.json();
+                if (!items.length) return;
+
+                if (!logHeaderBuilt) buildLogHeader();
+
+                // Only update if new data
+                if (items[0].ts === lastLogTs) return;
+                lastLogTs = items[0].ts;
+
+                document.getElementById('logCount').textContent = items.length + ' Nachrichten';
+
+                const body = document.getElementById('logBody');
+                let html = '';
+                for (let i = 0; i < items.length; i++) {
+                    const item = items[i];
+                    const raw = item.raw || {};
+                    const ts = (item.ts || '').slice(11, 19);
+                    const prev = i + 1 < items.length ? (items[i + 1].raw || {}) : null;
+
+                    html += `<tr><td>${items.length - i}</td><td class="col-ts">${ts}</td>`;
+                    for (const f of LOG_FIELDS) {
+                        const val = raw[f] ?? '';
+                        const prevVal = prev ? (prev[f] ?? '') : null;
+                        const changed = prev && String(val) !== String(prevVal);
+                        const isZero = val === 0 || val === '0' || val === '' || val === null;
+                        let cls = '';
+                        if (changed) cls = 'val-changed';
+                        else if (isZero) cls = 'val-zero';
+                        html += `<td class="${cls}">${val}</td>`;
+                    }
+                    html += '</tr>';
+                }
+                body.innerHTML = html;
+            } catch (e) { console.warn('Log poll error:', e); }
+        }
+
+        pollLog();
+        setInterval(pollLog, 3000);
     </script>
 </body>
 </html>

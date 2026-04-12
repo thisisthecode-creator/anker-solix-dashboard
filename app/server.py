@@ -58,6 +58,11 @@ _last_write_fp: tuple = ()
 _last_daily_upsert: float = 0
 _last_cycle_save: float = 0
 
+# Circular buffer of recent raw MQTT messages (RAM only, NOT saved to disk).
+# Used by /api/mqtt-log for the live debug table on the mqtt-monitor page.
+from collections import deque
+_mqtt_raw_log: deque = deque(maxlen=100)
+
 
 def _restore_last_fingerprint():
     """Load _last_write_fp from the last line of today's archive.
@@ -265,6 +270,12 @@ async def on_mqtt_data(raw: dict):
     now = time.time()
     tz = ZoneInfo(TIMEZONE)
     data["timestamp"] = datetime.now(tz).isoformat(timespec="seconds")
+
+    # --- 0. Live debug log (RAM only, last 100 messages) ---
+    _mqtt_raw_log.append({
+        "ts": data["timestamp"],
+        "raw": {k: v for k, v in raw.items() if k not in ('last_message', 'topics')},
+    })
 
     # --- 1. RAM trackers (every 3 s, no disk I/O) ---
     finalized = accumulator.update(
@@ -1015,6 +1026,18 @@ async def api_mqtt_raw():
         "timestamp": latest_data.get("timestamp", ""),
         "fields": clean,
     }
+
+
+@app.get("/api/mqtt-log")
+async def api_mqtt_log(limit: int = Query(50, ge=1, le=100)):
+    """Last N raw MQTT messages from the circular buffer (RAM only).
+
+    Each entry has: ts (ISO timestamp) + raw (all 42 fields as received).
+    Newest first. NOT persisted — only what's in memory since last restart.
+    """
+    items = list(_mqtt_raw_log)
+    items.reverse()  # newest first
+    return items[:limit]
 
 
 @app.get("/mqtt-monitor")
