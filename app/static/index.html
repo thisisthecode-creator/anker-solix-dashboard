@@ -436,10 +436,14 @@
             </div>
         </section>
 
-        <!-- Usage Patterns -->
+        <!-- Usage Patterns — 24h bar chart of avg load per hour -->
         <section class="today-box" id="usagePatternsSection">
             <h2 data-i18n="usagePatterns">Verbrauchsmuster</h2>
-            <div id="usagePatternsContent"></div>
+            <div class="cycle-hint" data-i18n="usagePatternsHint">Ø Verbrauch pro Stunde (letzte 7 Tage)</div>
+            <div class="up-wrap">
+                <svg class="up-svg" id="usagePatternsSvg" viewBox="0 0 560 200" preserveAspectRatio="xMidYMid meet"></svg>
+            </div>
+            <div id="usagePatternsContent" class="up-legend"></div>
         </section>
 
         <!-- CSV Export -->

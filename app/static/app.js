@@ -1158,16 +1158,16 @@ async function loadForecast() {
             div.innerHTML = `<div class="fc-name">${isToday ? t('today') : dayName}</div>`
                 + `<div class="fc-date">${dateStr}</div>`
                 + `<div class="fc-icon">${icon}</div>`
-                + `<div class="fc-kwh">${estKwh}</div>`
-                + `<div class="fc-kwh-label">kWh</div>`
+                + `<div class="fc-kwh-batt" title="${estKwh} kWh · relativ zum besten Tag ${barPct}% · ☀ ${directPct}% direkt">`
+                + `<div class="fc-kwh-batt-body">`
+                + `<div class="fc-kwh-batt-fill" style="width:${barPct}%"></div>`
+                + `<span class="fc-kwh-batt-text">${estKwh} <small>kWh</small></span>`
+                + `</div>`
+                + `<div class="fc-kwh-batt-cap"></div>`
+                + `</div>`
                 + tempHtml
-                + `<div class="fc-bar"><div class="fc-bar-fill" style="height:${barPct}%"></div></div>`
                 + `<div class="fc-sun">${sunH}h</div>`
                 + `<div class="fc-wind${windDanger}" title="${t('wind')} ${windSpeed} km/h (${LANG === 'de' ? 'Böen' : 'gusts'} ${windGusts} km/h)">💨 ${windSpeed}<small>km/h</small></div>`
-                + `<div class="fc-ratio" title="Direct ${directPct}% / Diffuse ${100 - directPct}%">`
-                + `<div class="fc-ratio-icons"><span class="fc-ri-direct">☀</span><span class="fc-ri-diffuse">☁</span></div>`
-                + `<div class="fc-ratio-bar"><div class="fc-ratio-direct" style="width:${directPct}%"></div><div class="fc-ratio-diffuse" style="width:${100 - directPct}%"></div></div>`
-                + `<div class="fc-ratio-labels"><span class="fc-rl-direct">${directPct}%</span><span class="fc-rl-divider"></span><span class="fc-rl-diffuse">${100 - directPct}%</span></div></div>`
                 + `<div class="fc-uv ${uvClass}">UV ${uv}</div>`;
             grid.appendChild(div);
         }
@@ -2110,15 +2110,74 @@ loadForecastCompare();
 // Curve · Monthly Box-Plots
 // ============================================================================
 
-// === 1b: Power Flow updates (vertical layout, no SVG animation) ===
-// Updates the total "Verbraucher" label at the top of the port grid on
-// every WS tick. The individual port cards (AC, USB-C 1-3, USB-A, DC 12V)
-// are updated by updateUI/updateDeviceStatus elsewhere using the same
-// flowXxxVal element IDs the old layout had.
+// === 1b: Power Flow updates (vertical layout, interactive top → bottom) ===
+// Single source of truth — replaces the earlier stub. Updates every W value,
+// toggles .active on each card/arrow, and glow-animates the battery based
+// on whether it's charging or discharging (derived from the conservation
+// equation battery_net = solar + grid − load).
 function updatePowerFlow(d) {
     if (!d) return;
+    const solar = d.solar_watts || 0;
+    const acIn = d.ac_input_watts || 0;
+    const acOut = d.ac_output_watts || 0;
+    const usbc1 = d.usbc_1_watts || 0;
+    const usbc2 = d.usbc_2_watts || 0;
+    const usbc3 = d.usbc_3_watts || 0;
+    const usba1 = d.usba_1_watts || 0;
+    const dc12v = d.dc_12v_watts || 0;
+    const totalIn = solar + acIn;
+    const totalOut = acOut + usbc1 + usbc2 + usbc3 + usba1 + dc12v;
+
+    const set = (id, v) => { const el = $(id); if (el) el.textContent = v; };
+    set('flowSolarVal', fmt.format(solar) + ' W');
+    set('flowAcInVal', fmt.format(acIn) + ' W');
+    set('flowAcOutVal', fmt.format(acOut) + ' W');
+    set('flowUsbc1Val', fmt.format(usbc1) + ' W');
+    set('flowUsbc2Val', fmt.format(usbc2) + ' W');
+    set('flowUsbc3Val', fmt.format(usbc3) + ' W');
+    set('flowUsba1Val', fmt.format(usba1) + ' W');
+    set('flowDc12vVal', fmt.format(dc12v) + ' W');
+    // Only show SOC overlay once we have real data — keeps the
+    // .pf-bat-pct:empty hide rule happy on first load.
+    const socEl = $('flowBatSoc');
+    if (socEl) socEl.textContent = d.battery_soc > 0 ? d.battery_soc + '%' : '';
+
+    // "Verbraucher" aggregate header total
     const totalEl = $('flowTotalOutVal');
-    if (totalEl) totalEl.textContent = fmt.format(d.total_output_watts || 0) + ' W';
+    if (totalEl) totalEl.textContent = fmt.format(d.total_output_watts || totalOut) + ' W';
+
+    // Battery fill height (0-100%)
+    const batFill = $('flowBatFill');
+    if (batFill) batFill.style.height = (d.battery_soc || 0) + '%';
+
+    // Light up each source + port card based on its power flow
+    const activate = (id, on) => {
+        const el = $(id);
+        if (el) el.classList.toggle('active', on);
+    };
+    activate('flowSolar', solar > 1);
+    activate('flowAcIn', acIn > 1);
+    activate('flowAcOut', acOut > 0.5);
+    activate('flowUsbc1', usbc1 > 0.5);
+    activate('flowUsbc2', usbc2 > 0.5);
+    activate('flowUsbc3', usbc3 > 0.5);
+    activate('flowUsba1', usba1 > 0.5);
+    activate('flowDc12v', dc12v > 0.5);
+
+    // Animated arrows: solar/grid → battery (top arrow) + battery → load (bottom)
+    const arrIn = $('flowArrowIn');
+    const arrOut = $('flowArrowOut');
+    if (arrIn) arrIn.classList.toggle('pf-line-active', totalIn > 1);
+    if (arrOut) arrOut.classList.toggle('pf-line-active', totalOut > 1);
+
+    // Battery charging/discharging glow — conservation equation
+    // battery_net > 0 → charging, < 0 → discharging
+    const batNet = solar + acIn - totalOut;
+    const batVis = document.querySelector('.pf-bat-visual');
+    if (batVis) {
+        batVis.classList.toggle('pf-bat-charging', batNet > 1);
+        batVis.classList.toggle('pf-bat-discharging', batNet < -1);
+    }
 }
 
 // === 1a: Sankey Energy-Flow diagram ===
@@ -2422,80 +2481,96 @@ async function loadDistribution() {
 
 loadDistribution();
 
-// === Usage Pattern Detection ===
+// === Usage Patterns — 24 h average load bar chart ===
+// Aggregates /api/readings (last 7 days) by hour-of-day and renders an SVG
+// bar chart of the mean output watts. Bars are color-intensity scaled.
 async function loadUsagePatterns() {
     try {
         const res = await fetch('/api/readings?hours=168'); // 7 days
         const rows = await res.json();
+        const svg = $('usagePatternsSvg');
+        const legend = $('usagePatternsContent');
+        if (!svg) return;
+
         if (rows.length < 100) {
-            const el = $('usagePatternsContent');
-            if (el) el.innerHTML = `<div class="usage-empty">${t('noPatterns')}</div>`;
+            svg.innerHTML = '<text x="280" y="100" text-anchor="middle" fill="var(--text-dim)" font-size="12">' + t('noPatterns') + '</text>';
+            if (legend) legend.innerHTML = '';
             return;
         }
 
-        // Aggregate output watts by hour across days
-        const hourBuckets = {};
-        for (let h = 0; h < 24; h++) hourBuckets[h] = [];
-
+        // Aggregate: for each hour 0-23, accumulate output W samples.
+        const hourSum = new Array(24).fill(0);
+        const hourCount = new Array(24).fill(0);
         for (const r of rows) {
             const d = new Date(r.timestamp);
-            const hour = d.getHours();
+            const h = d.getHours();
+            if (isNaN(h)) continue;
             const out = r.total_output_watts || 0;
-            if (out > 5) hourBuckets[hour].push(out);
+            hourSum[h] += out;
+            hourCount[h] += 1;
         }
+        const avgPerHour = hourSum.map((s, i) => hourCount[i] > 0 ? s / hourCount[i] : 0);
+        const maxAvg = Math.max(1, ...avgPerHour);
 
-        // Find hours with consistent high usage (>50% of readings have output)
-        const patterns = [];
+        // Compute aggregate stats for the legend
+        let totalAvg = 0, peakHour = 0, idleHours = 0, activeHours = 0;
         for (let h = 0; h < 24; h++) {
-            const bucket = hourBuckets[h];
-            const totalReadingsPerHour = rows.filter(r => new Date(r.timestamp).getHours() === h).length;
-            if (bucket.length > totalReadingsPerHour * 0.3 && bucket.length >= 10) {
-                const avg = bucket.reduce((a, b) => a + b, 0) / bucket.length;
-                if (avg > 10) {
-                    // Determine likely device
-                    let icon = '🔌';
-                    let desc = t('regularUsage');
-                    if (avg > 200) { icon = '🖥️'; desc = LANG === 'de' ? 'Schwerer Verbraucher' : 'Heavy consumer'; }
-                    else if (avg > 60) { icon = '💻'; desc = LANG === 'de' ? 'Laptop/Monitor' : 'Laptop/Monitor'; }
-                    else if (avg > 20) { icon = '📱'; desc = LANG === 'de' ? 'Laden/Kleingerät' : 'Charging/Small device'; }
-                    else { icon = '💡'; desc = LANG === 'de' ? 'Standby/LED' : 'Standby/LED'; }
+            totalAvg += avgPerHour[h];
+            if (avgPerHour[h] > avgPerHour[peakHour]) peakHour = h;
+            if (avgPerHour[h] < 5) idleHours++;
+            else activeHours++;
+        }
+        const overallAvg = totalAvg / 24;
 
-                    patterns.push({ hour: h, avg: Math.round(avg), icon, desc, freq: Math.round(bucket.length / totalReadingsPerHour * 100) });
-                }
+        // SVG layout
+        const W = 560, H = 200;
+        const PAD_LEFT = 36, PAD_RIGHT = 10, PAD_TOP = 12, PAD_BOT = 26;
+        const plotW = W - PAD_LEFT - PAD_RIGHT;
+        const plotH = H - PAD_TOP - PAD_BOT;
+        const barW = plotW / 24;
+        const barGap = 2;
+
+        const y = (w) => PAD_TOP + plotH - (w / maxAvg) * plotH;
+
+        const parts = [];
+        // Horizontal gridlines at 4 levels
+        for (let i = 0; i <= 4; i++) {
+            const w = maxAvg * i / 4;
+            const yy = y(w);
+            parts.push(`<line class="dist-grid-line" x1="${PAD_LEFT}" y1="${yy.toFixed(1)}" x2="${W - PAD_RIGHT}" y2="${yy.toFixed(1)}"/>`);
+            parts.push(`<text class="dist-axis-label" x="${PAD_LEFT - 4}" y="${(yy + 3).toFixed(1)}" text-anchor="end">${Math.round(w)}</text>`);
+        }
+        // Bars
+        for (let h = 0; h < 24; h++) {
+            const w = avgPerHour[h];
+            const x = PAD_LEFT + h * barW + barGap / 2;
+            const barH = plotH - (y(w) - PAD_TOP);
+            const yy = y(w);
+            const intensity = Math.min(1, w / maxAvg);
+            // Color gradient: dim → solar → red for high usage
+            const color = intensity > 0.7 ? 'var(--red)' : intensity > 0.35 ? 'var(--solar)' : '#22c55e';
+            const opacity = 0.25 + intensity * 0.75;
+            parts.push(`<rect class="up-bar" x="${x.toFixed(1)}" y="${yy.toFixed(1)}" width="${(barW - barGap).toFixed(1)}" height="${Math.max(1, barH).toFixed(1)}" fill="${color}" fill-opacity="${opacity.toFixed(2)}"><title>${h}:00 — Ø ${fmt.format(w)} W</title></rect>`);
+            // Hour label every 6 hours
+            if (h % 6 === 0) {
+                parts.push(`<text class="dist-axis-label" x="${(x + (barW - barGap) / 2).toFixed(1)}" y="${H - 8}" text-anchor="middle">${h}</text>`);
             }
         }
+        svg.innerHTML = parts.join('');
 
-        // Merge adjacent hours
-        const merged = [];
-        for (let i = 0; i < patterns.length; i++) {
-            if (merged.length > 0 && patterns[i].hour === merged[merged.length - 1].endHour + 1 &&
-                Math.abs(patterns[i].avg - merged[merged.length - 1].avg) < merged[merged.length - 1].avg * 0.5) {
-                merged[merged.length - 1].endHour = patterns[i].hour;
-                merged[merged.length - 1].avg = Math.round((merged[merged.length - 1].avg + patterns[i].avg) / 2);
-            } else {
-                merged.push({ ...patterns[i], endHour: patterns[i].hour });
-            }
+        // Legend: 3 compact stat chips
+        if (legend) {
+            const peakLabel = peakHour + ':00';
+            legend.innerHTML =
+                `<div class="up-stat"><span class="up-stat-label">Ø Tag</span><span class="up-stat-value">${fmt.format(overallAvg)} W</span></div>`
+                + `<div class="up-stat"><span class="up-stat-label">Peak</span><span class="up-stat-value">${peakLabel} (${fmt.format(avgPerHour[peakHour])} W)</span></div>`
+                + `<div class="up-stat"><span class="up-stat-label">Aktiv</span><span class="up-stat-value">${activeHours} h / Tag</span></div>`;
         }
-
-        const el = $('usagePatternsContent');
-        if (!el) return;
-        if (merged.length === 0) {
-            el.innerHTML = `<div class="usage-empty">${t('noPatterns')}</div>`;
-            return;
-        }
-
-        el.innerHTML = merged.slice(0, 6).map(p => {
-            const timeStr = p.hour + ':00 – ' + (p.endHour + 1) + ':00';
-            return `<div class="usage-pattern">`
-                + `<div class="usage-icon">${p.icon}</div>`
-                + `<div class="usage-info"><div class="usage-time">${timeStr}</div><div class="usage-desc">${p.desc} · ${p.freq}%</div></div>`
-                + `<div class="usage-watts">⌀ ${fmt.format(p.avg)} W</div>`
-                + `</div>`;
-        }).join('');
     } catch (e) { console.warn('Usage patterns error:', e); }
 }
 
 loadUsagePatterns();
+setInterval(loadUsagePatterns, 600000);  // refresh every 10 min
 
 // === Week Comparison ===
 async function updateWeekComparison(energyData) {

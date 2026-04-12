@@ -871,6 +871,104 @@ header h1 {
 .fc-temp-max { color: var(--red); font-weight: 700; }
 .fc-temp-min { color: var(--blue); opacity: 0.9; }
 
+/* === kWh Battery (Solar-Prognose daily yield as a battery with kWh inside) === */
+.fc-kwh-batt {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 1px;
+    margin: 6px auto 4px;
+    width: 90%;
+    max-width: 92px;
+}
+.fc-kwh-batt-body {
+    position: relative;
+    flex: 1;
+    height: 22px;
+    border: 1.4px solid var(--green);
+    border-radius: 4px;
+    background: rgba(34, 197, 94, 0.08);
+    overflow: hidden;
+}
+.fc-kwh-batt-fill {
+    position: absolute;
+    top: 0;
+    left: 0;
+    height: 100%;
+    background: linear-gradient(90deg, rgba(34, 197, 94, 0.55), rgba(34, 197, 94, 0.85));
+    transition: width 0.6s ease;
+}
+.fc-kwh-batt-text {
+    position: absolute;
+    inset: 0;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 0.78rem;
+    font-weight: 800;
+    color: var(--text);
+    font-variant-numeric: tabular-nums;
+    text-shadow: 0 0 3px rgba(0, 0, 0, 0.55);
+    line-height: 1;
+    letter-spacing: -0.01em;
+}
+.fc-kwh-batt-text small {
+    font-size: 0.68em;
+    font-weight: 600;
+    margin-left: 2px;
+    opacity: 0.85;
+}
+.fc-kwh-batt-cap {
+    width: 3px;
+    height: 10px;
+    background: var(--green);
+    border-radius: 0 1.5px 1.5px 0;
+}
+
+/* === Verbrauchsmuster 24h bar chart === */
+.up-wrap {
+    overflow: hidden;
+    margin: 10px 0;
+}
+.up-svg {
+    width: 100%;
+    height: auto;
+    display: block;
+}
+.up-bar {
+    transition: fill-opacity 0.2s;
+}
+.up-bar:hover {
+    fill-opacity: 1 !important;
+}
+.up-legend {
+    display: flex;
+    justify-content: space-around;
+    gap: 8px;
+    flex-wrap: wrap;
+    margin-top: 4px;
+    padding: 8px 4px 0;
+    border-top: 1px solid var(--card-border);
+}
+.up-stat {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 2px;
+}
+.up-stat-label {
+    font-size: 0.65rem;
+    color: var(--text-dim);
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+}
+.up-stat-value {
+    font-size: 0.85rem;
+    font-weight: 700;
+    color: var(--text);
+    font-variant-numeric: tabular-nums;
+}
+
 /* Solar-Prognose: 7 days in a single row at ALL breakpoints.
    On mobile the cards get smaller but everything stays visible. */
 @media (max-width: 768px) {
@@ -879,18 +977,18 @@ header h1 {
     }
     .fc-day .fc-name { font-size: 0.55rem; }
     .fc-day .fc-date { font-size: 0.5rem; }
-    .fc-day .fc-icon { font-size: 0.9rem; margin-bottom: 1px; }
-    .fc-day .fc-kwh { font-size: 0.7rem; }
-    .fc-day .fc-kwh-label { font-size: 0.42rem; }
+    .fc-day .fc-icon { font-size: 1rem; margin-bottom: 1px; }
     .fc-day .fc-temp { font-size: 0.48rem; gap: 3px; margin: 2px auto; }
-    .fc-day .fc-bar { height: 16px; width: 70%; }
     .fc-day .fc-sun { font-size: 0.48rem; }
     .fc-day .fc-wind { font-size: 0.42rem; }
     .fc-day .fc-wind small { font-size: 0.7em; }
-    .fc-day .fc-ratio { width: 100%; }
-    .fc-day .fc-ratio-icons { font-size: 0.42rem; }
-    .fc-day .fc-ratio-labels { font-size: 0.42rem; }
     .fc-day .fc-uv { font-size: 0.45rem; padding: 0; }
+    /* kWh-battery scales down on mobile */
+    .fc-day .fc-kwh-batt { width: 94%; max-width: 60px; margin: 4px auto 2px; }
+    .fc-day .fc-kwh-batt-body { height: 16px; border-width: 1px; border-radius: 3px; }
+    .fc-day .fc-kwh-batt-text { font-size: 0.55rem; }
+    .fc-day .fc-kwh-batt-text small { font-size: 0.65em; }
+    .fc-day .fc-kwh-batt-cap { width: 2px; height: 7px; }
 }
 
 .fc-name {
@@ -1188,14 +1286,57 @@ header h1 {
 
 .pf-node.active {
     opacity: 1;
+    animation: pfActivePulse 2s ease-in-out infinite;
 }
 
 .pf-v-inputs .pf-node.active {
     border-color: var(--solar);
+    box-shadow: 0 0 0 1px var(--solar), 0 0 8px rgba(245, 158, 11, 0.35);
 }
 
 .pf-v-outputs .pf-node.active {
     border-color: var(--green);
+    box-shadow: 0 0 0 1px var(--green), 0 0 8px rgba(34, 197, 94, 0.35);
+}
+
+@keyframes pfActivePulse {
+    0%, 100% { box-shadow: 0 0 0 1px currentColor, 0 0 8px rgba(245, 158, 11, 0.35); }
+    50%      { box-shadow: 0 0 0 1px currentColor, 0 0 14px rgba(245, 158, 11, 0.55); }
+}
+
+/* Arrow lines: dim by default, animate when power flows */
+.pf-v-arrow {
+    color: var(--text-dim);
+    transition: color 0.3s;
+}
+.pf-v-arrow.pf-line-active {
+    color: var(--solar);
+    animation: pfArrowFlow 1.2s ease-in-out infinite;
+}
+.pf-v-arrow.pf-line-active.pf-line-out {
+    color: var(--green);
+}
+@keyframes pfArrowFlow {
+    0%, 100% { transform: translateY(0); opacity: 0.5; }
+    50%      { transform: translateY(3px); opacity: 1; }
+}
+
+/* Battery visual glow when charging/discharging */
+.pf-bat-visual.pf-bat-charging .pf-bat-fill {
+    box-shadow: 0 0 12px var(--solar), inset 0 0 4px rgba(245, 158, 11, 0.4);
+    animation: pfBatCharge 1.6s ease-in-out infinite;
+}
+.pf-bat-visual.pf-bat-discharging .pf-bat-fill {
+    box-shadow: 0 0 12px var(--green), inset 0 0 4px rgba(34, 197, 94, 0.4);
+    animation: pfBatDischarge 1.6s ease-in-out infinite;
+}
+@keyframes pfBatCharge {
+    0%, 100% { opacity: 0.85; }
+    50%      { opacity: 1; }
+}
+@keyframes pfBatDischarge {
+    0%, 100% { opacity: 0.85; }
+    50%      { opacity: 1; }
 }
 
 .pf-emoji {
