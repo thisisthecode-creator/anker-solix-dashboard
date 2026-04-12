@@ -875,9 +875,14 @@ header h1 {
 .forecast-grid {
     display: grid;
     grid-template-columns: repeat(7, 1fr);
-    gap: 2px;
+    gap: 3px;
     text-align: center;
     overflow: hidden;
+}
+/* Mobile: hide 7th day, show only 6 */
+@media (max-width: 768px) {
+    .forecast-grid { grid-template-columns: repeat(6, 1fr); }
+    .forecast-grid .fc-day:nth-child(7) { display: none; }
 }
 
 .fc-day {
