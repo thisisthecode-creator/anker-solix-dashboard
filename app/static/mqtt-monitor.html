@@ -113,16 +113,42 @@
             font-size: 0.6rem; color: var(--dim);
         }
 
-        /* Mobile: keep 5 columns but more compact */
-        @media (max-width: 700px) {
-            body { padding: 10px 8px; }
-            .grid { gap: 6px; }
-            .f { padding: 10px 10px; min-height: 70px; border-radius: 10px; }
-            .f-desc { font-size: 0.52rem; margin-bottom: 5px; }
-            .f-val { font-size: 0.9rem; }
-            .f-prev { font-size: 0.45rem; margin-top: 4px; }
-            .f-key { font-size: 0.4rem; margin-top: 5px; }
-            .hdr h1 { font-size: 0.85rem; }
+        /* Tablet: 3 columns */
+        @media (max-width: 1024px) {
+            .grid { grid-template-columns: repeat(3, 1fr); gap: 10px; }
+        }
+
+        /* Mobile */
+        @media (max-width: 640px) {
+            body { padding: 12px 10px; }
+            .hdr { gap: 6px; margin-bottom: 14px; }
+            .hdr h1 { font-size: 0.9rem; }
+            .badge { font-size: 0.52rem; padding: 2px 8px; }
+            .theme-btn { padding: 4px 10px; font-size: 0.65rem; border-radius: 8px; }
+
+            .grid { grid-template-columns: repeat(2, 1fr); gap: 8px; }
+
+            .f {
+                padding: 10px 12px; min-height: auto; border-radius: 10px;
+                flex-direction: row; flex-wrap: wrap; align-items: baseline;
+                gap: 0;
+            }
+            /* Row 1: description spans full width */
+            .f-desc {
+                width: 100%; font-size: 0.6rem; margin-bottom: 2px;
+                white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+            }
+            /* Row 2: value left, previous right */
+            .f-val { font-size: 1.15rem; flex: 1; }
+            .f-prev {
+                font-size: 0.55rem; margin-top: 0; text-align: right;
+                flex-shrink: 0; min-height: auto;
+            }
+            /* Row 3: key name */
+            .f-key { width: 100%; font-size: 0.45rem; margin-top: 4px; }
+
+            .c-id { font-size: 0.65rem; }
+            .foot { font-size: 0.52rem; margin-top: 16px; }
         }
     </style>
 </head>

@@ -1018,10 +1018,57 @@ async def api_mqtt_raw():
         if k in ('last_message', 'topics'):
             continue
         clean[k] = v
+
+    # Mock data for local development when MQTT is not connected
+    if not clean and os.environ.get("MOCK_MQTT"):
+        import random, time
+        clean = {
+            "battery_soc": random.randint(20, 95),
+            "battery_soh": 98,
+            "temperature": round(random.uniform(18.0, 35.0), 1),
+            "dc_input_power_total": random.choice([0, 45, 120, 280, 350]),
+            "ac_input_power": 0,
+            "ac_input_power_a7": 0,
+            "output_power_total": random.randint(5, 200),
+            "ac_output_power": random.choice([0, 30, 85, 150]),
+            "dc_output_power_total": random.randint(0, 50),
+            "usbc_1_power": random.choice([0, 0, 18, 45, 65]),
+            "usbc_2_power": random.choice([0, 0, 20]),
+            "usbc_3_power": 0,
+            "usba_1_power": random.choice([0, 0, 10]),
+            "ac_output_power_switch": 1,
+            "dc_output_power_switch": 1,
+            "dc_input_power_switch": 1,
+            "ac_fast_charge_switch": 0,
+            "display_switch": 1,
+            "port_memory_switch": 0,
+            "max_soc": 100,
+            "min_soc": 10,
+            "ac_input_limit": 300,
+            "ac_input_limit_max": 600,
+            "display_mode": 2,
+            "display_timeout_seconds": 30,
+            "ac_output_mode": 1,
+            "ac_output_timeout_seconds": 0,
+            "dc_output_timeout_seconds": 0,
+            "dc_12v_output_mode": 0,
+            "device_timeout_minutes": 0,
+            "usbc_1_status": 1,
+            "usbc_2_status": 0,
+            "usbc_3_status": 0,
+            "usba_1_status": 0,
+            "device_sn": "MOCK00000000001",
+            "device_pn": "A17C1-MOCK",
+            "utc_timestamp": int(time.time()),
+            "msg_timestamp": int(time.time()),
+            "unknown_2": "v1.5.2",
+            "unknown_3": "v2.0.1",
+        }
+
     return {
-        "connected": bool(client.device_sn),
-        "device_sn": client.device_sn or "",
-        "device_name": client.device_name or "",
+        "connected": bool(client.device_sn) or bool(os.environ.get("MOCK_MQTT")),
+        "device_sn": client.device_sn or "MOCK00000000001",
+        "device_name": client.device_name or "Mock Solix C1000",
         "field_count": len(clean),
         "timestamp": latest_data.get("timestamp", ""),
         "fields": clean,
