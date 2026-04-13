@@ -7,25 +7,38 @@
     <title>MQTT Monitor · Anker Solix</title>
     <style>
         * { margin: 0; padding: 0; box-sizing: border-box; }
+
+        /* === Dark mode (default) === */
         :root {
             --bg: #0a0a0a; --card: #111; --border: #1e1e1e; --text: #e8e8e8;
-            --dim: #555; --solar: #f59e0b; --green: #22c55e; --blue: #3b82f6;
+            --dim: #555; --desc: #444; --zero: #333;
+            --solar: #f59e0b; --green: #22c55e; --blue: #3b82f6;
             --red: #ef4444; --purple: #a855f7;
+            --change-bg: rgba(245,158,11,0.08);
+            --pill-bg: rgba(34,197,94,0.15);
         }
+        /* === Light mode === */
+        .light {
+            --bg: #f5f5f5; --card: #fff; --border: #e0e0e0; --text: #1a1a1a;
+            --dim: #888; --desc: #999; --zero: #ccc;
+            --change-bg: rgba(245,158,11,0.1);
+        }
+
         body {
             font-family: 'SF Mono', 'Fira Code', 'JetBrains Mono', ui-monospace, monospace;
             background: var(--bg); color: var(--text);
             min-height: 100vh; padding: 12px;
             -webkit-font-smoothing: antialiased;
+            transition: background 0.3s, color 0.3s;
+        }
+
+        .top-bar {
+            display: flex; align-items: center; gap: 8px;
+            margin-bottom: 10px; flex-wrap: wrap;
         }
         a.back { color: var(--dim); text-decoration: none; font-size: 0.65rem; }
         a.back:hover { color: var(--text); }
-
-        .top {
-            display: flex; align-items: center; gap: 10px;
-            margin: 6px 0 10px; flex-wrap: wrap;
-        }
-        .top h1 { font-size: 0.9rem; font-weight: 800; color: var(--solar); letter-spacing: 0.03em; }
+        .top-bar h1 { font-size: 0.9rem; font-weight: 800; color: var(--solar); letter-spacing: 0.03em; }
         .pill {
             font-size: 0.55rem; padding: 2px 8px; border-radius: 10px;
             font-weight: 700; letter-spacing: 0.04em;
@@ -34,6 +47,14 @@
         .pill-off { background: rgba(239,68,68,0.12); color: var(--red); border: 1px solid rgba(239,68,68,0.25); }
         .pill-info { background: rgba(59,130,246,0.08); color: var(--blue); border: 1px solid rgba(59,130,246,0.2); }
         .pill-ts { background: rgba(168,85,247,0.1); color: var(--purple); border: 1px solid rgba(168,85,247,0.2); }
+
+        /* Theme toggle button */
+        .theme-btn {
+            margin-left: auto; cursor: pointer; background: none; border: 1px solid var(--border);
+            border-radius: 8px; padding: 3px 10px; font-size: 0.7rem; color: var(--dim);
+            transition: all 0.2s;
+        }
+        .theme-btn:hover { border-color: var(--solar); color: var(--solar); }
 
         .grid {
             display: grid;
@@ -44,72 +65,133 @@
         .f {
             background: var(--card); border: 1px solid var(--border);
             border-radius: 8px; padding: 8px 10px;
-            transition: border-color 0.4s, background 0.4s;
-            min-height: 52px;
+            transition: border-color 0.3s, background 0.3s;
+            display: flex; flex-direction: column;
         }
-        /* Orange border ONLY on fields that changed in THIS poll cycle */
         .f.changed-now {
             border-color: var(--solar);
-            background: rgba(245,158,11,0.08);
+            background: var(--change-bg);
         }
 
-        .f-name {
-            font-size: 0.5rem; color: var(--dim);
-            text-transform: uppercase; letter-spacing: 0.06em;
-            font-weight: 600; margin-bottom: 3px;
-            white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+        /* Description on TOP (small, gray) */
+        .f-desc {
+            font-size: 0.45rem; color: var(--desc);
+            line-height: 1.3; margin-bottom: 4px;
+            min-height: 1.3em;
         }
+        /* Value in the MIDDLE (big, colored) */
         .f-val {
             font-size: 1rem; font-weight: 700;
             font-variant-numeric: tabular-nums;
-            line-height: 1.1;
+            line-height: 1.1; flex: 1;
         }
-        .f-desc {
-            font-size: 0.45rem; color: #444; margin-top: 3px;
-            line-height: 1.3;
-        }
+        /* Previous value (only shown on change) */
         .f-prev {
-            font-size: 0.45rem; color: var(--solar); margin-top: 2px;
-            font-style: italic;
+            font-size: 0.42rem; color: var(--solar); margin-top: 2px;
+            font-style: italic; min-height: 0.9em;
+        }
+        /* Field name at BOTTOM (small, dim) */
+        .f-name {
+            font-size: 0.45rem; color: var(--dim);
+            text-transform: uppercase; letter-spacing: 0.06em;
+            font-weight: 600; margin-top: 4px;
+            white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
         }
 
         /* Value colors */
-        .c-zero { color: #333; }
+        .c-zero { color: var(--zero); }
         .c-power { color: var(--solar); }
         .c-pct { color: var(--green); }
         .c-temp { color: var(--blue); }
         .c-on { color: var(--green); }
-        .c-off { color: #444; }
+        .c-off { color: var(--zero); }
         .c-id { color: var(--purple); font-size: 0.65rem; }
         .c-default { color: var(--text); }
 
         .foot {
             margin-top: 16px; text-align: center;
-            font-size: 0.5rem; color: #333;
+            font-size: 0.5rem; color: var(--dim);
         }
 
         @media (max-width: 600px) {
-            .grid { grid-template-columns: repeat(5, 1fr); gap: 3px; }
-            .f { padding: 5px 6px; min-height: 40px; }
+            .grid { gap: 3px; }
+            .f { padding: 5px 6px; }
             .f-val { font-size: 0.7rem; }
-            .f-name { font-size: 0.38rem; }
-            .f-desc { font-size: 0.35rem; }
-            .f-prev { font-size: 0.35rem; }
+            .f-name { font-size: 0.35rem; }
+            .f-desc { font-size: 0.33rem; }
+            .f-prev { font-size: 0.33rem; }
         }
     </style>
 </head>
 <body>
-    <a href="/" class="back">← Dashboard</a>
-    <div class="top">
+    <div class="top-bar">
+        <a href="/" class="back">← Dashboard</a>
         <h1>MQTT RAW MONITOR</h1>
         <span class="pill pill-off" id="pill">OFFLINE</span>
         <span class="pill pill-info" id="pillN">0 fields</span>
         <span class="pill pill-ts" id="pillTs">--:--:--</span>
+        <button class="theme-btn" id="themeBtn" onclick="toggleTheme()">☀ Light</button>
     </div>
     <div class="grid" id="g"></div>
-    <div class="foot">Live alle 3s · Blinkt orange bei Änderung · Nur RAM, nicht gespeichert</div>
+    <div class="foot">Live alle 3s · Orange = Änderung jetzt · Nur RAM</div>
 
 <script>
+// === Theme toggle ===
+function toggleTheme() {
+    const isLight = document.body.classList.toggle('light');
+    localStorage.setItem('mqtt-theme', isLight ? 'light' : 'dark');
+    document.getElementById('themeBtn').textContent = isLight ? '🌙 Dark' : '☀ Light';
+}
+// Restore saved theme
+if (localStorage.getItem('mqtt-theme') === 'light') {
+    document.body.classList.add('light');
+    document.getElementById('themeBtn').textContent = '🌙 Dark';
+}
+
+// === Field metadata ===
+const DESC = {
+    battery_soc: 'Akku-Ladezustand',
+    battery_soh: 'Akku-Gesundheit',
+    temperature: 'Gerätetemperatur',
+    dc_input_power_total: 'Solar-Einspeisung',
+    ac_input_power: 'Netz-Einspeisung',
+    ac_input_power_a7: 'Netz intern',
+    output_power_total: 'Gesamt-Verbrauch',
+    ac_output_power: 'AC 230V Ausgang',
+    dc_output_power_total: 'DC Ausgänge gesamt',
+    usbc_1_power: 'USB-C 1 Leistung',
+    usbc_2_power: 'USB-C 2 Leistung',
+    usbc_3_power: 'USB-C 3 Leistung',
+    usba_1_power: 'USB-A Leistung',
+    ac_output_power_switch: 'AC Ausgang',
+    dc_output_power_switch: 'DC Ausgang',
+    dc_input_power_switch: 'Solar-Eingang',
+    ac_fast_charge_switch: 'Schnellladen',
+    display_switch: 'Display',
+    port_memory_switch: 'Port-Speicher',
+    max_soc: 'Oberes Ladelimit',
+    min_soc: 'Unteres Entladelimit',
+    ac_input_limit: 'Max. Ladeleistung',
+    ac_input_limit_max: 'Hardware-Max',
+    display_mode: 'Display-Helligkeit',
+    display_timeout_seconds: 'Display-Timeout',
+    ac_output_mode: 'AC Modus',
+    ac_output_timeout_seconds: 'AC Auto-Aus',
+    dc_output_timeout_seconds: 'DC Auto-Aus',
+    dc_12v_output_mode: '12V Modus',
+    device_timeout_minutes: 'Standby-Timer',
+    usbc_1_status: 'USB-C 1 Status',
+    usbc_2_status: 'USB-C 2 Status',
+    usbc_3_status: 'USB-C 3 Status',
+    usba_1_status: 'USB-A Status',
+    device_sn: 'Seriennummer',
+    device_pn: 'Modellnummer',
+    utc_timestamp: 'Server-Zeit (UTC)',
+    msg_timestamp: 'MQTT Nachricht-Zeit',
+    unknown_2: 'Unbekannt (FW)',
+    unknown_3: 'Unbekannt (FW)',
+};
+
 const UNITS = {
     dc_input_power_total:'W', ac_output_power:'W', dc_output_power_total:'W',
     output_power_total:'W', ac_input_power:'W', ac_input_power_a7:'W',
@@ -119,49 +201,6 @@ const UNITS = {
     temperature:'°C',
     ac_output_timeout_seconds:'s', dc_output_timeout_seconds:'s',
     display_timeout_seconds:'s', device_timeout_minutes:'min',
-};
-
-const DESC = {
-    battery_soc: 'Akku-Ladezustand',
-    battery_soh: 'Akku-Gesundheit',
-    temperature: 'Gerätetemperatur',
-    dc_input_power_total: 'Solar-Einspeisung (Panels)',
-    ac_input_power: 'Netz-Einspeisung (Ladekabel)',
-    ac_input_power_a7: 'Netz-Einspeisung (intern)',
-    output_power_total: 'Gesamtverbrauch alle Ausgänge',
-    ac_output_power: 'AC 230V Ausgang',
-    dc_output_power_total: 'DC Ausgänge gesamt',
-    usbc_1_power: 'USB-C Port 1 Leistung',
-    usbc_2_power: 'USB-C Port 2 Leistung',
-    usbc_3_power: 'USB-C Port 3 Leistung',
-    usba_1_power: 'USB-A Port Leistung',
-    ac_output_power_switch: 'AC Ausgang An/Aus',
-    dc_output_power_switch: 'DC Ausgang An/Aus',
-    dc_input_power_switch: 'Solar-Eingang An/Aus',
-    ac_fast_charge_switch: 'Schnellladen An/Aus',
-    display_switch: 'Display An/Aus',
-    port_memory_switch: 'Port-Speicher (merkt An/Aus)',
-    max_soc: 'Oberes Ladelimit',
-    min_soc: 'Unteres Entladelimit',
-    ac_input_limit: 'Max. Netz-Ladeleistung',
-    ac_input_limit_max: 'Hardware-Max Ladeleistung',
-    display_mode: 'Display-Helligkeit (0-3)',
-    display_timeout_seconds: 'Display-Timeout',
-    ac_output_mode: 'AC Ausgangs-Modus',
-    ac_output_timeout_seconds: 'AC Auto-Aus Timer',
-    dc_output_timeout_seconds: 'DC Auto-Aus Timer',
-    dc_12v_output_mode: '12V Ausgangs-Modus',
-    device_timeout_minutes: 'Geräte-Standby Timer',
-    usbc_1_status: 'USB-C 1 Status (0=idle 1=out 2=in)',
-    usbc_2_status: 'USB-C 2 Status',
-    usbc_3_status: 'USB-C 3 Status',
-    usba_1_status: 'USB-A Status',
-    device_sn: 'Seriennummer',
-    device_pn: 'Modellnummer',
-    utc_timestamp: 'Server-Uhrzeit (UTC)',
-    msg_timestamp: 'MQTT Nachricht-Zeit',
-    unknown_2: 'Unbekannt (Firmware)',
-    unknown_3: 'Unbekannt (Firmware)',
 };
 
 const ORDER = [
@@ -213,7 +252,6 @@ let els = {};
 
 function buildGrid(fields) {
     const g = document.getElementById('g');
-    // Use ORDER, then append any fields not in ORDER
     const keys = [...ORDER.filter(k => k in fields)];
     for (const k of Object.keys(fields)) {
         if (!keys.includes(k)) keys.push(k);
@@ -221,30 +259,27 @@ function buildGrid(fields) {
     g.innerHTML = '';
     els = {};
     for (const k of keys) {
+        const desc = DESC[k] || '';
         const div = document.createElement('div');
         div.className = 'f';
-        div.id = 'f-' + k;
-        const desc = DESC[k] || '';
-        div.innerHTML = `<div class="f-name">${k}</div>`
+        // Layout: Description (top) → Value (middle) → Prev (change) → Field name (bottom)
+        div.innerHTML = `<div class="f-desc">${desc}</div>`
             + `<div class="f-val" id="v-${k}">—</div>`
             + `<div class="f-prev" id="p-${k}"></div>`
-            + (desc ? `<div class="f-desc">${desc}</div>` : '');
+            + `<div class="f-name">${k}</div>`;
         g.appendChild(div);
         els[k] = { box: div, val: div.querySelector('.f-val'), prev: div.querySelector('.f-prev') };
     }
 }
 
 function update(fields) {
-    // First call: build the grid
     if (Object.keys(els).length === 0) buildGrid(fields);
 
-    // First: remove orange from ALL fields
     for (const el of Object.values(els)) {
         el.box.classList.remove('changed-now');
         el.prev.textContent = '';
     }
 
-    // Then: update values and mark only the ones that changed THIS cycle
     for (const [k, v] of Object.entries(fields)) {
         const el = els[k];
         if (!el) continue;
