@@ -541,7 +541,7 @@ header h1 {
 }
 
 .chart-box h3 {
-    font-size: 0.75rem;
+    font-size: 0.85rem;
     color: var(--text-dim);
     text-transform: uppercase;
     letter-spacing: 0.05em;
@@ -3340,83 +3340,6 @@ body.light-mode .log-table td {
     .chart-wrap-tall {
         height: 220px;
     }
-}
-
-/* === Sticky Bottom Navigation (iOS-style Tab Bar) === */
-.mobile-tab-bar {
-    display: none;
-}
-
-@media (max-width: 600px) {
-    .mobile-tab-bar {
-        position: fixed;
-        bottom: 0;
-        left: 0;
-        right: 0;
-        display: flex;
-        justify-content: space-around;
-        align-items: flex-start;
-        padding: 6px 0;
-        padding-bottom: max(6px, env(safe-area-inset-bottom, 0px));
-        background: rgba(20, 20, 20, 0.88);
-        backdrop-filter: blur(20px) saturate(180%);
-        -webkit-backdrop-filter: blur(20px) saturate(180%);
-        border-top: 0.5px solid rgba(255, 255, 255, 0.12);
-        z-index: 1000;
-    }
-
-    body.light-mode .mobile-tab-bar {
-        background: rgba(245, 245, 245, 0.88);
-        border-top-color: rgba(0, 0, 0, 0.12);
-    }
-
-    /* Pad container so content isn't hidden behind nav */
-    .container {
-        padding-bottom: calc(72px + env(safe-area-inset-bottom, 0px));
-    }
-
-    /* PWA standalone mode: extra bottom padding for home indicator */
-    @media (display-mode: standalone) {
-        .mobile-tab-bar {
-            padding-bottom: max(16px, env(safe-area-inset-bottom, 16px));
-        }
-        .container {
-            padding-bottom: calc(80px + env(safe-area-inset-bottom, 16px));
-        }
-    }
-}
-
-.tab-bar-item {
-    display: flex;
-    flex-direction: column;
-    align-items: center;
-    justify-content: center;
-    gap: 2px;
-    flex: 1;
-    padding: 4px 0;
-    background: none;
-    border: none;
-    color: var(--text-dim);
-    font-size: 0.55rem;
-    font-weight: 500;
-    font-family: inherit;
-    cursor: pointer;
-    -webkit-tap-highlight-color: transparent;
-    transition: color 0.2s;
-}
-
-.tab-bar-item svg {
-    width: 22px;
-    height: 22px;
-    fill: none;
-    stroke: currentColor;
-    stroke-width: 1.8;
-    stroke-linecap: round;
-    stroke-linejoin: round;
-}
-
-.tab-bar-item.active {
-    color: var(--solar);
 }
 
 /* === Collapsible Sections === */
