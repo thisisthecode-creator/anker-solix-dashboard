@@ -3,99 +3,99 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
-    <meta name="theme-color" content="#0a0a0a">
     <title>MQTT Monitor · Anker Solix</title>
     <style>
         * { margin: 0; padding: 0; box-sizing: border-box; }
 
-        /* === Dark mode (default) === */
         :root {
-            --bg: #0a0a0a; --card: #111; --border: #1e1e1e; --text: #e8e8e8;
-            --dim: #555; --desc: #444; --zero: #333;
-            --solar: #f59e0b; --green: #22c55e; --blue: #3b82f6;
-            --red: #ef4444; --purple: #a855f7;
-            --change-bg: rgba(245,158,11,0.08);
-            --pill-bg: rgba(34,197,94,0.15);
+            --bg: #0b0b0f; --card: #141419; --border: #232328;
+            --text: #eaeaea; --dim: #6b6b78; --desc: #50505c;
+            --solar: #f59e0b; --green: #22c55e; --blue: #60a5fa;
+            --red: #f87171; --purple: #c084fc; --zero: #2a2a30;
+            --change-bg: rgba(245,158,11,0.07); --change-border: #f59e0b;
+            --shadow: 0 1px 3px rgba(0,0,0,0.4);
         }
-        /* === Light mode === */
         .light {
-            --bg: #f5f5f5; --card: #fff; --border: #e0e0e0; --text: #1a1a1a;
-            --dim: #888; --desc: #999; --zero: #ccc;
-            --change-bg: rgba(245,158,11,0.1);
+            --bg: #f0f1f5; --card: #ffffff; --border: #e2e3e8;
+            --text: #1a1a2e; --dim: #8888a0; --desc: #9999aa;
+            --zero: #c8c8d0; --change-bg: rgba(245,158,11,0.08);
+            --shadow: 0 1px 3px rgba(0,0,0,0.08);
         }
 
         body {
-            font-family: 'SF Mono', 'Fira Code', 'JetBrains Mono', ui-monospace, monospace;
+            font-family: -apple-system, BlinkMacSystemFont, 'SF Pro Display', 'Inter', system-ui, sans-serif;
             background: var(--bg); color: var(--text);
-            min-height: 100vh; padding: 12px;
-            -webkit-font-smoothing: antialiased;
+            min-height: 100vh; padding: 16px 20px;
             transition: background 0.3s, color 0.3s;
         }
 
-        .top-bar {
-            display: flex; align-items: center; gap: 8px;
-            margin-bottom: 10px; flex-wrap: wrap;
+        /* Header */
+        .hdr {
+            display: flex; align-items: center; gap: 10px;
+            margin-bottom: 20px; flex-wrap: wrap;
         }
-        a.back { color: var(--dim); text-decoration: none; font-size: 0.65rem; }
-        a.back:hover { color: var(--text); }
-        .top-bar h1 { font-size: 0.9rem; font-weight: 800; color: var(--solar); letter-spacing: 0.03em; }
-        .pill {
-            font-size: 0.55rem; padding: 2px 8px; border-radius: 10px;
-            font-weight: 700; letter-spacing: 0.04em;
+        .hdr a { color: var(--dim); text-decoration: none; font-size: 0.75rem; font-weight: 500; }
+        .hdr a:hover { color: var(--text); }
+        .hdr h1 { font-size: 1.05rem; font-weight: 800; color: var(--solar); }
+        .badge {
+            font-size: 0.6rem; padding: 3px 10px; border-radius: 20px;
+            font-weight: 700; letter-spacing: 0.03em;
         }
-        .pill-live { background: rgba(34,197,94,0.15); color: var(--green); border: 1px solid rgba(34,197,94,0.3); }
-        .pill-off { background: rgba(239,68,68,0.12); color: var(--red); border: 1px solid rgba(239,68,68,0.25); }
-        .pill-info { background: rgba(59,130,246,0.08); color: var(--blue); border: 1px solid rgba(59,130,246,0.2); }
-        .pill-ts { background: rgba(168,85,247,0.1); color: var(--purple); border: 1px solid rgba(168,85,247,0.2); }
-
-        /* Theme toggle button */
+        .b-live { background: rgba(34,197,94,0.12); color: var(--green); border: 1px solid rgba(34,197,94,0.25); }
+        .b-off { background: rgba(248,113,113,0.1); color: var(--red); border: 1px solid rgba(248,113,113,0.2); }
+        .b-info { background: rgba(96,165,250,0.08); color: var(--blue); border: 1px solid rgba(96,165,250,0.15); }
+        .b-time { background: rgba(192,132,252,0.08); color: var(--purple); border: 1px solid rgba(192,132,252,0.15); }
         .theme-btn {
-            margin-left: auto; cursor: pointer; background: none; border: 1px solid var(--border);
-            border-radius: 8px; padding: 3px 10px; font-size: 0.7rem; color: var(--dim);
-            transition: all 0.2s;
+            margin-left: auto; cursor: pointer; background: var(--card); border: 1px solid var(--border);
+            border-radius: 10px; padding: 5px 14px; font-size: 0.75rem; color: var(--dim);
+            font-weight: 600; transition: all 0.2s;
         }
         .theme-btn:hover { border-color: var(--solar); color: var(--solar); }
 
+        /* Grid: exactly 5 per row with generous spacing */
         .grid {
             display: grid;
             grid-template-columns: repeat(5, 1fr);
-            gap: 6px;
+            gap: 12px;
         }
 
+        /* Field card */
         .f {
             background: var(--card); border: 1px solid var(--border);
-            border-radius: 8px; padding: 8px 10px;
-            transition: border-color 0.3s, background 0.3s;
+            border-radius: 14px; padding: 14px 16px;
+            box-shadow: var(--shadow);
+            transition: border-color 0.3s, background 0.3s, box-shadow 0.3s;
             display: flex; flex-direction: column;
+            min-height: 90px;
         }
         .f.changed-now {
-            border-color: var(--solar);
+            border-color: var(--change-border);
             background: var(--change-bg);
+            box-shadow: 0 0 12px rgba(245,158,11,0.15);
         }
 
-        /* Description on TOP (small, gray) */
+        /* Description on top */
         .f-desc {
-            font-size: 0.45rem; color: var(--desc);
-            line-height: 1.3; margin-bottom: 4px;
-            min-height: 1.3em;
+            font-size: 0.65rem; color: var(--desc); font-weight: 500;
+            margin-bottom: 8px; line-height: 1.3;
         }
-        /* Value in the MIDDLE (big, colored) */
+        /* Big value */
         .f-val {
-            font-size: 1rem; font-weight: 700;
+            font-size: 1.35rem; font-weight: 800;
             font-variant-numeric: tabular-nums;
-            line-height: 1.1; flex: 1;
+            line-height: 1; flex: 1;
+            font-family: 'SF Mono', ui-monospace, monospace;
         }
-        /* Previous value (only shown on change) */
+        /* Previous value on change */
         .f-prev {
-            font-size: 0.42rem; color: var(--solar); margin-top: 2px;
-            font-style: italic; min-height: 0.9em;
+            font-size: 0.58rem; color: var(--solar); margin-top: 6px;
+            font-weight: 600; min-height: 0.8em;
         }
-        /* Field name at BOTTOM (small, dim) */
-        .f-name {
-            font-size: 0.45rem; color: var(--dim);
-            text-transform: uppercase; letter-spacing: 0.06em;
-            font-weight: 600; margin-top: 4px;
-            white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+        /* Technical field name at bottom */
+        .f-key {
+            font-size: 0.5rem; color: var(--dim); margin-top: 8px;
+            font-family: 'SF Mono', ui-monospace, monospace;
+            letter-spacing: 0.02em; opacity: 0.7;
         }
 
         /* Value colors */
@@ -105,69 +105,71 @@
         .c-temp { color: var(--blue); }
         .c-on { color: var(--green); }
         .c-off { color: var(--zero); }
-        .c-id { color: var(--purple); font-size: 0.65rem; }
+        .c-id { color: var(--purple); font-size: 0.8rem; }
         .c-default { color: var(--text); }
 
         .foot {
-            margin-top: 16px; text-align: center;
-            font-size: 0.5rem; color: var(--dim);
+            margin-top: 24px; text-align: center;
+            font-size: 0.6rem; color: var(--dim);
         }
 
-        @media (max-width: 600px) {
-            .grid { gap: 3px; }
-            .f { padding: 5px 6px; }
-            .f-val { font-size: 0.7rem; }
-            .f-name { font-size: 0.35rem; }
-            .f-desc { font-size: 0.33rem; }
-            .f-prev { font-size: 0.33rem; }
+        /* Mobile: keep 5 columns but more compact */
+        @media (max-width: 700px) {
+            body { padding: 10px 8px; }
+            .grid { gap: 6px; }
+            .f { padding: 10px 10px; min-height: 70px; border-radius: 10px; }
+            .f-desc { font-size: 0.52rem; margin-bottom: 5px; }
+            .f-val { font-size: 0.9rem; }
+            .f-prev { font-size: 0.45rem; margin-top: 4px; }
+            .f-key { font-size: 0.4rem; margin-top: 5px; }
+            .hdr h1 { font-size: 0.85rem; }
         }
     </style>
 </head>
 <body>
-    <div class="top-bar">
-        <a href="/" class="back">← Dashboard</a>
+    <div class="hdr">
+        <a href="/">← Dashboard</a>
         <h1>MQTT RAW MONITOR</h1>
-        <span class="pill pill-off" id="pill">OFFLINE</span>
-        <span class="pill pill-info" id="pillN">0 fields</span>
-        <span class="pill pill-ts" id="pillTs">--:--:--</span>
-        <button class="theme-btn" id="themeBtn" onclick="toggleTheme()">☀ Light</button>
+        <span class="badge b-off" id="pill">OFFLINE</span>
+        <span class="badge b-info" id="pillN">—</span>
+        <span class="badge b-time" id="pillTs">--:--:--</span>
+        <button class="theme-btn" id="themeBtn" onclick="toggleTheme()">☀️ Light</button>
     </div>
     <div class="grid" id="g"></div>
-    <div class="foot">Live alle 3s · Orange = Änderung jetzt · Nur RAM</div>
+    <div class="foot">Live alle 3 Sekunden · Orange = gerade geändert · Nur im RAM</div>
 
 <script>
-// === Theme toggle ===
+// Theme
 function toggleTheme() {
-    const isLight = document.body.classList.toggle('light');
-    localStorage.setItem('mqtt-theme', isLight ? 'light' : 'dark');
-    document.getElementById('themeBtn').textContent = isLight ? '🌙 Dark' : '☀ Light';
+    const on = document.body.classList.toggle('light');
+    localStorage.setItem('mqtt-theme', on ? 'light' : 'dark');
+    document.getElementById('themeBtn').textContent = on ? '🌙 Dark' : '☀️ Light';
 }
-// Restore saved theme
 if (localStorage.getItem('mqtt-theme') === 'light') {
     document.body.classList.add('light');
     document.getElementById('themeBtn').textContent = '🌙 Dark';
 }
 
-// === Field metadata ===
+// Field descriptions (German)
 const DESC = {
     battery_soc: 'Akku-Ladezustand',
     battery_soh: 'Akku-Gesundheit',
-    temperature: 'Gerätetemperatur',
+    temperature: 'Geräte-Temperatur',
     dc_input_power_total: 'Solar-Einspeisung',
     ac_input_power: 'Netz-Einspeisung',
-    ac_input_power_a7: 'Netz intern',
+    ac_input_power_a7: 'Netz (intern)',
     output_power_total: 'Gesamt-Verbrauch',
     ac_output_power: 'AC 230V Ausgang',
-    dc_output_power_total: 'DC Ausgänge gesamt',
-    usbc_1_power: 'USB-C 1 Leistung',
-    usbc_2_power: 'USB-C 2 Leistung',
-    usbc_3_power: 'USB-C 3 Leistung',
-    usba_1_power: 'USB-A Leistung',
+    dc_output_power_total: 'DC Ausgänge',
+    usbc_1_power: 'USB-C 1',
+    usbc_2_power: 'USB-C 2',
+    usbc_3_power: 'USB-C 3',
+    usba_1_power: 'USB-A',
     ac_output_power_switch: 'AC Ausgang',
     dc_output_power_switch: 'DC Ausgang',
     dc_input_power_switch: 'Solar-Eingang',
     ac_fast_charge_switch: 'Schnellladen',
-    display_switch: 'Display',
+    display_switch: 'Display An/Aus',
     port_memory_switch: 'Port-Speicher',
     max_soc: 'Oberes Ladelimit',
     min_soc: 'Unteres Entladelimit',
@@ -186,10 +188,10 @@ const DESC = {
     usba_1_status: 'USB-A Status',
     device_sn: 'Seriennummer',
     device_pn: 'Modellnummer',
-    utc_timestamp: 'Server-Zeit (UTC)',
-    msg_timestamp: 'MQTT Nachricht-Zeit',
-    unknown_2: 'Unbekannt (FW)',
-    unknown_3: 'Unbekannt (FW)',
+    utc_timestamp: 'Server-Zeit',
+    msg_timestamp: 'Nachrichten-Zeit',
+    unknown_2: 'Firmware (unbekannt)',
+    unknown_3: 'Firmware (unbekannt)',
 };
 
 const UNITS = {
@@ -204,120 +206,89 @@ const UNITS = {
 };
 
 const ORDER = [
-    'battery_soc','battery_soh','temperature',
-    'dc_input_power_total','ac_input_power','output_power_total',
-    'ac_output_power','dc_output_power_total',
-    'usbc_1_power','usbc_2_power','usbc_3_power','usba_1_power',
-    'ac_output_power_switch','dc_output_power_switch','dc_input_power_switch',
-    'ac_fast_charge_switch','display_switch','port_memory_switch',
-    'max_soc','min_soc','ac_input_limit','ac_input_limit_max',
-    'display_mode','display_timeout_seconds','ac_output_mode',
-    'ac_output_timeout_seconds','dc_output_timeout_seconds','dc_12v_output_mode',
-    'device_timeout_minutes',
+    'battery_soc','battery_soh','temperature','dc_input_power_total','ac_input_power',
+    'output_power_total','ac_output_power','dc_output_power_total','usbc_1_power','usbc_2_power',
+    'usbc_3_power','usba_1_power','ac_output_power_switch','dc_output_power_switch','dc_input_power_switch',
+    'ac_fast_charge_switch','display_switch','port_memory_switch','max_soc','min_soc',
+    'ac_input_limit','ac_input_limit_max','display_mode','display_timeout_seconds','ac_output_mode',
+    'ac_output_timeout_seconds','dc_output_timeout_seconds','dc_12v_output_mode','device_timeout_minutes',
     'usbc_1_status','usbc_2_status','usbc_3_status','usba_1_status',
     'ac_input_power_a7','unknown_2','unknown_3',
     'device_sn','device_pn','utc_timestamp','msg_timestamp',
 ];
 
-function colorClass(key, val) {
-    if (key.endsWith('_switch') || key === 'port_memory_switch')
-        return val == 1 ? 'c-on' : 'c-off';
-    if (key === 'temperature') return 'c-temp';
-    if (key === 'battery_soc' || key === 'battery_soh' || key === 'max_soc' || key === 'min_soc') return 'c-pct';
-    if (key.endsWith('_power') || key.endsWith('_power_total'))
-        return val > 0 ? 'c-power' : 'c-zero';
-    if (key === 'device_sn' || key === 'device_pn') return 'c-id';
-    if (val === 0 || val === '' || val == null) return 'c-zero';
+function colorClass(k, v) {
+    if (k.endsWith('_switch') || k === 'port_memory_switch') return v == 1 ? 'c-on' : 'c-off';
+    if (k === 'temperature') return 'c-temp';
+    if (k.includes('soc') || k.includes('soh')) return 'c-pct';
+    if (k.endsWith('_power') || k.endsWith('_power_total')) return v > 0 ? 'c-power' : 'c-zero';
+    if (k === 'device_sn' || k === 'device_pn') return 'c-id';
+    if (v === 0 || v === '' || v == null) return 'c-zero';
     return 'c-default';
 }
 
-function fmt(key, val) {
-    const u = UNITS[key] || '';
-    if (key === 'utc_timestamp' || key === 'msg_timestamp') {
+function fmt(k, v) {
+    const u = UNITS[k] || '';
+    if (k === 'utc_timestamp' || k === 'msg_timestamp') {
         try {
-            const ms = typeof val === 'number' ? (val > 1e12 ? val : val * 1000) : Date.parse(val);
-            const d = new Date(ms);
-            if (!isNaN(d)) return d.toLocaleTimeString('de-DE');
+            const ms = typeof v === 'number' ? (v > 1e12 ? v : v * 1000) : Date.parse(v);
+            return new Date(ms).toLocaleTimeString('de-DE');
         } catch(e) {}
     }
-    if (key.endsWith('_switch') || key === 'port_memory_switch')
-        return val == 1 ? 'AN' : 'AUS';
-    if (typeof val === 'number')
-        return (Number.isInteger(val) ? val : val.toFixed(1)) + (u ? ' '+u : '');
-    return String(val ?? '—') + (u ? ' '+u : '');
+    if (k.endsWith('_switch') || k === 'port_memory_switch') return v == 1 ? 'AN' : 'AUS';
+    if (typeof v === 'number') return (Number.isInteger(v) ? v : v.toFixed(1)) + (u ? ' '+u : '');
+    return String(v ?? '—') + (u ? ' '+u : '');
 }
 
-let prev = {};
-let els = {};
+let prev = {}, els = {};
 
 function buildGrid(fields) {
     const g = document.getElementById('g');
     const keys = [...ORDER.filter(k => k in fields)];
-    for (const k of Object.keys(fields)) {
-        if (!keys.includes(k)) keys.push(k);
-    }
+    for (const k of Object.keys(fields)) if (!keys.includes(k)) keys.push(k);
     g.innerHTML = '';
     els = {};
     for (const k of keys) {
-        const desc = DESC[k] || '';
-        const div = document.createElement('div');
-        div.className = 'f';
-        // Layout: Description (top) → Value (middle) → Prev (change) → Field name (bottom)
-        div.innerHTML = `<div class="f-desc">${desc}</div>`
-            + `<div class="f-val" id="v-${k}">—</div>`
-            + `<div class="f-prev" id="p-${k}"></div>`
-            + `<div class="f-name">${k}</div>`;
-        g.appendChild(div);
-        els[k] = { box: div, val: div.querySelector('.f-val'), prev: div.querySelector('.f-prev') };
+        const d = document.createElement('div');
+        d.className = 'f';
+        d.innerHTML =
+            `<div class="f-desc">${DESC[k] || ''}</div>`
+          + `<div class="f-val">—</div>`
+          + `<div class="f-prev"></div>`
+          + `<div class="f-key">${k}</div>`;
+        g.appendChild(d);
+        els[k] = { box: d, val: d.querySelector('.f-val'), prev: d.querySelector('.f-prev') };
     }
 }
 
 function update(fields) {
-    if (Object.keys(els).length === 0) buildGrid(fields);
-
-    for (const el of Object.values(els)) {
-        el.box.classList.remove('changed-now');
-        el.prev.textContent = '';
-    }
-
+    if (!Object.keys(els).length) buildGrid(fields);
+    for (const e of Object.values(els)) { e.box.classList.remove('changed-now'); e.prev.textContent = ''; }
     for (const [k, v] of Object.entries(fields)) {
-        const el = els[k];
-        if (!el) continue;
-        const oldVal = prev[k];
-        const changed = oldVal !== undefined && String(oldVal) !== String(v);
-
-        el.val.textContent = fmt(k, v);
-        el.val.className = 'f-val ' + colorClass(k, v);
-
-        if (changed) {
-            el.box.classList.add('changed-now');
-            el.prev.textContent = 'vorher: ' + fmt(k, oldVal);
-        }
+        const e = els[k]; if (!e) continue;
+        const old = prev[k];
+        const changed = old !== undefined && String(old) !== String(v);
+        e.val.textContent = fmt(k, v);
+        e.val.className = 'f-val ' + colorClass(k, v);
+        if (changed) { e.box.classList.add('changed-now'); e.prev.textContent = '← ' + fmt(k, old); }
     }
     prev = { ...fields };
 }
 
 async function poll() {
     try {
-        const res = await fetch('/api/mqtt-raw');
-        if (res.status === 401) { window.location.href = '/auth/login'; return; }
-        const d = await res.json();
-
-        const pill = document.getElementById('pill');
-        pill.textContent = d.connected ? 'LIVE' : 'OFFLINE';
-        pill.className = 'pill ' + (d.connected ? 'pill-live' : 'pill-off');
-
-        document.getElementById('pillN').textContent = d.field_count + ' fields';
+        const r = await fetch('/api/mqtt-raw');
+        if (r.status === 401) { location.href = '/auth/login'; return; }
+        const d = await r.json();
+        const p = document.getElementById('pill');
+        p.textContent = d.connected ? 'LIVE' : 'OFFLINE';
+        p.className = 'badge ' + (d.connected ? 'b-live' : 'b-off');
+        document.getElementById('pillN').textContent = d.field_count + ' Felder';
         document.getElementById('pillTs').textContent = (d.timestamp || '').slice(11, 19) || '--:--:--';
-
-        if (d.fields && Object.keys(d.fields).length > 0) {
-            update(d.fields);
-        }
-    } catch(e) { console.warn('Poll:', e); }
+        if (d.fields && Object.keys(d.fields).length) update(d.fields);
+    } catch(e) {}
 }
-
-poll();
-setInterval(poll, 3000);
+poll(); setInterval(poll, 3000);
 </script>
 </body>
 </html>
