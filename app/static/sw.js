@@ -1,4 +1,4 @@
-const CACHE = 'solar-v101';
+const CACHE = 'solar-v102';
 const API_CACHE = 'solar-api-v1';
 const API_CACHE_MAX_AGE = 5 * 60 * 1000; // 5 minutes
 
@@ -28,6 +28,9 @@ self.addEventListener('fetch', e => {
 
   // WebSocket - skip
   if (url.pathname === '/ws') return;
+
+  // MQTT monitor + raw API - always network, never cache
+  if (url.pathname.startsWith('/mqtt-monitor') || url.pathname.startsWith('/api/mqtt-')) return;
 
   // API calls: network-first, cache-fallback with 5min TTL
   if (url.pathname.startsWith('/api/')) {
