@@ -26,6 +26,7 @@
             font-family: -apple-system, BlinkMacSystemFont, 'SF Pro Display', 'Inter', system-ui, sans-serif;
             background: var(--bg); color: var(--text);
             min-height: 100vh; padding: 16px 20px;
+            padding-top: max(16px, env(safe-area-inset-top, 16px));
             transition: background 0.3s, color 0.3s;
         }
 
@@ -165,15 +166,38 @@
     <div class="foot">Live alle 3 Sekunden · Orange = gerade geändert · Nur im RAM</div>
 
 <script>
-// Theme
-function toggleTheme() {
-    const on = document.body.classList.toggle('light');
-    localStorage.setItem('mqtt-theme', on ? 'light' : 'dark');
-    document.getElementById('themeBtn').textContent = on ? '🌙 Dark' : '☀️ Light';
+// Theme - syncs with main dashboard (themeMode: auto/dark/light)
+const themeIcons = { auto: '🌗', dark: '🌙', light: '☀️' };
+let themeMode = localStorage.getItem('themeMode') || 'auto';
+
+function getAutoDark() {
+    return window.matchMedia && window.matchMedia('(prefers-color-scheme: dark)').matches;
 }
-if (localStorage.getItem('mqtt-theme') === 'light') {
-    document.body.classList.add('light');
-    document.getElementById('themeBtn').textContent = '🌙 Dark';
+
+function applyTheme() {
+    let isDark;
+    if (themeMode === 'auto') isDark = getAutoDark();
+    else isDark = themeMode === 'dark';
+    document.body.classList.toggle('light', !isDark);
+    const btn = document.getElementById('themeBtn');
+    btn.textContent = themeIcons[themeMode] + ' ' + (themeMode === 'auto' ? 'Auto' : isDark ? 'Dark' : 'Light');
+}
+
+function toggleTheme() {
+    if (themeMode === 'auto') themeMode = 'dark';
+    else if (themeMode === 'dark') themeMode = 'light';
+    else themeMode = 'auto';
+    localStorage.setItem('themeMode', themeMode);
+    const isDark = themeMode === 'auto' ? getAutoDark() : themeMode === 'dark';
+    localStorage.setItem('theme', isDark ? 'dark' : 'light');
+    applyTheme();
+}
+
+applyTheme();
+if (window.matchMedia) {
+    window.matchMedia('(prefers-color-scheme: dark)').addEventListener('change', () => {
+        if (themeMode === 'auto') applyTheme();
+    });
 }
 
 // Field descriptions (German)

@@ -2719,85 +2719,13 @@ document.addEventListener('keydown', (e) => {
 // ============================================================================
 // Mobile Bottom Tab Bar - Navigation + Active State
 // ============================================================================
-(function initMobileTabBar() {
-    const tabBar = document.getElementById('mobileTabBar');
-    if (!tabBar) return;
-
-    const tabs = tabBar.querySelectorAll('.tab-bar-item');
-
-    // Section IDs mapped to tab targets for IntersectionObserver
-    const sectionMap = [
-        { target: 'top', ids: ['dashOverview'] },
-        { target: 'forecastBox', ids: ['forecastBox', 'forecastVsRealBox'] },
-        { target: 'powerFlowSection', ids: ['powerFlowSection', 'flowAnimatedSection', 'batteryCycleSection'] },
-        { target: 'amortSection', ids: ['amortSection'] },
-        { target: 'deviceInfoSection', ids: ['deviceInfoSection', 'techSpecsSection', 'dataBackupSection'] },
-    ];
-
-    // Click handlers
-    tabs.forEach(tab => {
-        tab.addEventListener('click', () => {
-            const target = tab.dataset.target;
-            if (target === 'top') {
-                window.scrollTo({ top: 0, behavior: 'smooth' });
-            } else {
-                const el = document.getElementById(target);
-                if (el) el.scrollIntoView({ behavior: 'smooth', block: 'start' });
-            }
-        });
-    });
-
-    // Active state via IntersectionObserver
-    let activeTarget = 'top';
-
-    function setActiveTab(target) {
-        if (target === activeTarget) return;
-        activeTarget = target;
-        tabs.forEach(t => t.classList.toggle('active', t.dataset.target === target));
-    }
-
-    const visibleSections = new Set();
-
-    const observer = new IntersectionObserver((entries) => {
-        entries.forEach(entry => {
-            if (entry.isIntersecting) {
-                visibleSections.add(entry.target.id);
-            } else {
-                visibleSections.delete(entry.target.id);
-            }
-        });
-
-        // Find the first (top-most in DOM order) visible section's tab
-        for (const group of sectionMap) {
-            for (const id of group.ids) {
-                if (visibleSections.has(id)) {
-                    setActiveTab(group.target);
-                    return;
-                }
-            }
-        }
-
-        // If nothing visible (scrolled to very top), default to Dashboard
-        if (window.scrollY < 100) setActiveTab('top');
-    }, { threshold: 0.15 });
-
-    sectionMap.forEach(group => {
-        group.ids.forEach(id => {
-            const el = document.getElementById(id);
-            if (el) observer.observe(el);
-        });
-    });
-})();
-
 // ============================================================================
 // Collapsible Sections
 // ============================================================================
 (function initCollapsibleSections() {
-    // Sections to make collapsible (by ID or query). First N stay open by default.
-    const ALWAYS_OPEN_IDS = new Set([
-        'dashOverview', 'forecastBox', 'forecastVsRealBox',
-        'powerFlowSection', 'flowAnimatedSection'
-    ]);
+    // Everything up to and including flowAnimatedSection (Energie-Bilanz) stays open.
+    // Everything after is collapsed by default.
+    const CUTOFF_ID = 'flowAnimatedSection';
 
     // Select all section-like containers
     const sections = document.querySelectorAll('.today-box[id], .chart-box');
@@ -2810,6 +2738,15 @@ document.addEventListener('keydown', (e) => {
         try { localStorage.setItem('collapsedSections', JSON.stringify(states)); }
         catch {}
     }
+
+    // Build set of IDs that are at or before the cutoff in DOM order
+    let reachedCutoff = false;
+    const openByDefault = new Set();
+    sections.forEach(s => {
+        if (reachedCutoff) return;
+        if (s.id) openByDefault.add(s.id);
+        if (s.id === CUTOFF_ID) reachedCutoff = true;
+    });
 
     sections.forEach((section, idx) => {
         // Find the header (h2 or h3)
@@ -2843,7 +2780,7 @@ document.addEventListener('keydown', (e) => {
         header.appendChild(chevron);
 
         // Determine initial state
-        const isDefaultOpen = ALWAYS_OPEN_IDS.has(sectionId);
+        const isDefaultOpen = openByDefault.has(sectionId);
         const isCollapsed = sectionId in savedState
             ? savedState[sectionId]
             : !isDefaultOpen;
