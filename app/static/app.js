@@ -2715,3 +2715,170 @@ document.addEventListener('keydown', (e) => {
         alert('Shortcuts:\n  h — Heatmap\n  s — Statistics\n  c — Battery cycles\n  e — Energy flow\n  b — Break-even\n  f — Forecast compare\n  a — Anomaly');
     }
 });
+
+// ============================================================================
+// Mobile Bottom Tab Bar - Navigation + Active State
+// ============================================================================
+(function initMobileTabBar() {
+    const tabBar = document.getElementById('mobileTabBar');
+    if (!tabBar) return;
+
+    const tabs = tabBar.querySelectorAll('.tab-bar-item');
+
+    // Section IDs mapped to tab targets for IntersectionObserver
+    const sectionMap = [
+        { target: 'top', ids: ['dashOverview'] },
+        { target: 'forecastBox', ids: ['forecastBox', 'forecastVsRealBox'] },
+        { target: 'powerFlowSection', ids: ['powerFlowSection', 'flowAnimatedSection', 'batteryCycleSection'] },
+        { target: 'amortSection', ids: ['amortSection'] },
+        { target: 'deviceInfoSection', ids: ['deviceInfoSection', 'techSpecsSection', 'dataBackupSection'] },
+    ];
+
+    // Click handlers
+    tabs.forEach(tab => {
+        tab.addEventListener('click', () => {
+            const target = tab.dataset.target;
+            if (target === 'top') {
+                window.scrollTo({ top: 0, behavior: 'smooth' });
+            } else {
+                const el = document.getElementById(target);
+                if (el) el.scrollIntoView({ behavior: 'smooth', block: 'start' });
+            }
+        });
+    });
+
+    // Active state via IntersectionObserver
+    let activeTarget = 'top';
+
+    function setActiveTab(target) {
+        if (target === activeTarget) return;
+        activeTarget = target;
+        tabs.forEach(t => t.classList.toggle('active', t.dataset.target === target));
+    }
+
+    const visibleSections = new Set();
+
+    const observer = new IntersectionObserver((entries) => {
+        entries.forEach(entry => {
+            if (entry.isIntersecting) {
+                visibleSections.add(entry.target.id);
+            } else {
+                visibleSections.delete(entry.target.id);
+            }
+        });
+
+        // Find the first (top-most in DOM order) visible section's tab
+        for (const group of sectionMap) {
+            for (const id of group.ids) {
+                if (visibleSections.has(id)) {
+                    setActiveTab(group.target);
+                    return;
+                }
+            }
+        }
+
+        // If nothing visible (scrolled to very top), default to Dashboard
+        if (window.scrollY < 100) setActiveTab('top');
+    }, { threshold: 0.15 });
+
+    sectionMap.forEach(group => {
+        group.ids.forEach(id => {
+            const el = document.getElementById(id);
+            if (el) observer.observe(el);
+        });
+    });
+})();
+
+// ============================================================================
+// Collapsible Sections
+// ============================================================================
+(function initCollapsibleSections() {
+    // Sections to make collapsible (by ID or query). First N stay open by default.
+    const ALWAYS_OPEN_IDS = new Set([
+        'dashOverview', 'forecastBox', 'forecastVsRealBox',
+        'powerFlowSection', 'flowAnimatedSection'
+    ]);
+
+    // Select all section-like containers
+    const sections = document.querySelectorAll('.today-box[id], .chart-box');
+    const savedState = (() => {
+        try { return JSON.parse(localStorage.getItem('collapsedSections') || '{}'); }
+        catch { return {}; }
+    })();
+
+    function saveState(states) {
+        try { localStorage.setItem('collapsedSections', JSON.stringify(states)); }
+        catch {}
+    }
+
+    sections.forEach((section, idx) => {
+        // Find the header (h2 or h3)
+        const header = section.querySelector('h2, h3');
+        if (!header) return;
+
+        // Generate a stable ID for state persistence
+        const sectionId = section.id || 'section-' + idx;
+        if (!section.id) section.id = sectionId;
+
+        // Skip the ticker and hidden compat elements
+        if (section.classList.contains('ticker')) return;
+        if (section.style.display === 'none') return;
+
+        // Wrap all children after the header in a section-body div
+        const body = document.createElement('div');
+        body.className = 'section-body';
+        const children = Array.from(section.children);
+        let afterHeader = false;
+        for (const child of children) {
+            if (child === header) { afterHeader = true; continue; }
+            if (afterHeader) body.appendChild(child);
+        }
+        section.appendChild(body);
+
+        // Add chevron to header
+        header.classList.add('section-header');
+        const chevron = document.createElement('span');
+        chevron.className = 'chevron';
+        chevron.textContent = '\u25BC';
+        header.appendChild(chevron);
+
+        // Determine initial state
+        const isDefaultOpen = ALWAYS_OPEN_IDS.has(sectionId);
+        const isCollapsed = sectionId in savedState
+            ? savedState[sectionId]
+            : !isDefaultOpen;
+
+        if (isCollapsed) {
+            section.classList.add('section-collapsed');
+        } else {
+            body.style.maxHeight = 'none';
+        }
+
+        // Click handler
+        header.addEventListener('click', (e) => {
+            // Don't toggle if clicking a link or button inside header
+            if (e.target.closest('a, button:not(.section-header)')) return;
+
+            const collapsed = section.classList.contains('section-collapsed');
+            if (collapsed) {
+                // Expand
+                section.classList.remove('section-collapsed');
+                body.style.maxHeight = body.scrollHeight + 'px';
+                requestAnimationFrame(() => {
+                    setTimeout(() => { body.style.maxHeight = 'none'; }, 350);
+                });
+            } else {
+                // Collapse
+                body.style.maxHeight = body.scrollHeight + 'px';
+                requestAnimationFrame(() => {
+                    body.style.maxHeight = '0px';
+                    section.classList.add('section-collapsed');
+                });
+            }
+
+            // Persist
+            savedState[sectionId] = !collapsed;
+            saveState(savedState);
+        });
+    });
+})();
