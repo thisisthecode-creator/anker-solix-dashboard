@@ -37,7 +37,7 @@
 
         .grid {
             display: grid;
-            grid-template-columns: repeat(auto-fill, minmax(150px, 1fr));
+            grid-template-columns: repeat(5, 1fr);
             gap: 6px;
         }
 
@@ -64,8 +64,12 @@
             font-variant-numeric: tabular-nums;
             line-height: 1.1;
         }
+        .f-desc {
+            font-size: 0.45rem; color: #444; margin-top: 3px;
+            line-height: 1.3;
+        }
         .f-prev {
-            font-size: 0.48rem; color: var(--dim); margin-top: 2px;
+            font-size: 0.45rem; color: var(--solar); margin-top: 2px;
             font-style: italic;
         }
 
@@ -84,11 +88,13 @@
             font-size: 0.5rem; color: #333;
         }
 
-        @media (max-width: 400px) {
-            .grid { grid-template-columns: 1fr 1fr; gap: 4px; }
-            .f { padding: 6px 8px; min-height: 44px; }
-            .f-val { font-size: 0.85rem; }
-            .f-name { font-size: 0.45rem; }
+        @media (max-width: 600px) {
+            .grid { grid-template-columns: repeat(5, 1fr); gap: 3px; }
+            .f { padding: 5px 6px; min-height: 40px; }
+            .f-val { font-size: 0.7rem; }
+            .f-name { font-size: 0.38rem; }
+            .f-desc { font-size: 0.35rem; }
+            .f-prev { font-size: 0.35rem; }
         }
     </style>
 </head>
@@ -113,6 +119,49 @@ const UNITS = {
     temperature:'°C',
     ac_output_timeout_seconds:'s', dc_output_timeout_seconds:'s',
     display_timeout_seconds:'s', device_timeout_minutes:'min',
+};
+
+const DESC = {
+    battery_soc: 'Akku-Ladezustand',
+    battery_soh: 'Akku-Gesundheit',
+    temperature: 'Gerätetemperatur',
+    dc_input_power_total: 'Solar-Einspeisung (Panels)',
+    ac_input_power: 'Netz-Einspeisung (Ladekabel)',
+    ac_input_power_a7: 'Netz-Einspeisung (intern)',
+    output_power_total: 'Gesamtverbrauch alle Ausgänge',
+    ac_output_power: 'AC 230V Ausgang',
+    dc_output_power_total: 'DC Ausgänge gesamt',
+    usbc_1_power: 'USB-C Port 1 Leistung',
+    usbc_2_power: 'USB-C Port 2 Leistung',
+    usbc_3_power: 'USB-C Port 3 Leistung',
+    usba_1_power: 'USB-A Port Leistung',
+    ac_output_power_switch: 'AC Ausgang An/Aus',
+    dc_output_power_switch: 'DC Ausgang An/Aus',
+    dc_input_power_switch: 'Solar-Eingang An/Aus',
+    ac_fast_charge_switch: 'Schnellladen An/Aus',
+    display_switch: 'Display An/Aus',
+    port_memory_switch: 'Port-Speicher (merkt An/Aus)',
+    max_soc: 'Oberes Ladelimit',
+    min_soc: 'Unteres Entladelimit',
+    ac_input_limit: 'Max. Netz-Ladeleistung',
+    ac_input_limit_max: 'Hardware-Max Ladeleistung',
+    display_mode: 'Display-Helligkeit (0-3)',
+    display_timeout_seconds: 'Display-Timeout',
+    ac_output_mode: 'AC Ausgangs-Modus',
+    ac_output_timeout_seconds: 'AC Auto-Aus Timer',
+    dc_output_timeout_seconds: 'DC Auto-Aus Timer',
+    dc_12v_output_mode: '12V Ausgangs-Modus',
+    device_timeout_minutes: 'Geräte-Standby Timer',
+    usbc_1_status: 'USB-C 1 Status (0=idle 1=out 2=in)',
+    usbc_2_status: 'USB-C 2 Status',
+    usbc_3_status: 'USB-C 3 Status',
+    usba_1_status: 'USB-A Status',
+    device_sn: 'Seriennummer',
+    device_pn: 'Modellnummer',
+    utc_timestamp: 'Server-Uhrzeit (UTC)',
+    msg_timestamp: 'MQTT Nachricht-Zeit',
+    unknown_2: 'Unbekannt (Firmware)',
+    unknown_3: 'Unbekannt (Firmware)',
 };
 
 const ORDER = [
@@ -175,9 +224,11 @@ function buildGrid(fields) {
         const div = document.createElement('div');
         div.className = 'f';
         div.id = 'f-' + k;
+        const desc = DESC[k] || '';
         div.innerHTML = `<div class="f-name">${k}</div>`
             + `<div class="f-val" id="v-${k}">—</div>`
-            + `<div class="f-prev" id="p-${k}"></div>`;
+            + `<div class="f-prev" id="p-${k}"></div>`
+            + (desc ? `<div class="f-desc">${desc}</div>` : '');
         g.appendChild(div);
         els[k] = { box: div, val: div.querySelector('.f-val'), prev: div.querySelector('.f-prev') };
     }
