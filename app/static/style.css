@@ -3370,9 +3370,9 @@ body.light-mode .log-table td {
         border-top-color: rgba(0, 0, 0, 0.12);
     }
 
-    /* Pad body so content isn't hidden behind nav */
-    body {
-        padding-bottom: calc(56px + env(safe-area-inset-bottom, 0px));
+    /* Pad container so content isn't hidden behind nav */
+    .container {
+        padding-bottom: calc(72px + env(safe-area-inset-bottom, 0px));
     }
 }
 
