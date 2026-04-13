@@ -61,6 +61,10 @@ header h1 {
     font-size: 1.4rem;
     font-weight: 700;
     letter-spacing: -0.02em;
+    min-width: 0;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
 }
 
 .status {
@@ -752,6 +756,7 @@ header h1 {
 .log-table-wrap {
     max-height: 600px;
     overflow-y: auto;
+    overflow-x: auto;
     -webkit-overflow-scrolling: touch;
 }
 
@@ -3299,4 +3304,140 @@ body.light-mode .log-table td {
     .card-value {
         font-size: 2.2rem;
     }
+}
+
+/* === Mobile Fixes === */
+
+/* Fix 3: MQTT toggle grid - 4 cols on narrow, 3 on very narrow */
+@media (max-width: 480px) {
+    .mqtt-metric-toggles {
+        grid-template-columns: repeat(4, 1fr);
+    }
+}
+@media (max-width: 360px) {
+    .mqtt-metric-toggles {
+        grid-template-columns: repeat(3, 1fr);
+    }
+}
+
+/* Fix 5: Forecast accuracy table responsive */
+@media (max-width: 480px) {
+    .fc-acc-row {
+        grid-template-columns: 1fr 1fr;
+        gap: 6px 8px;
+    }
+    .fc-acc-row > .fc-acc-source {
+        grid-column: 1 / -1;
+    }
+}
+
+/* Fix 7: Chart heights on very small phones */
+@media (max-width: 400px) {
+    .mqtt-toggle {
+        font-size: 0.5rem;
+        padding: 3px 4px;
+    }
+    .chart-wrap-tall {
+        height: 220px;
+    }
+}
+
+/* === Sticky Bottom Navigation (iOS-style Tab Bar) === */
+.mobile-tab-bar {
+    display: none;
+}
+
+@media (max-width: 600px) {
+    .mobile-tab-bar {
+        position: fixed;
+        bottom: 0;
+        left: 0;
+        right: 0;
+        display: flex;
+        justify-content: space-around;
+        align-items: center;
+        height: 56px;
+        padding-bottom: env(safe-area-inset-bottom, 0px);
+        background: rgba(20, 20, 20, 0.88);
+        backdrop-filter: blur(20px) saturate(180%);
+        -webkit-backdrop-filter: blur(20px) saturate(180%);
+        border-top: 0.5px solid rgba(255, 255, 255, 0.12);
+        z-index: 1000;
+    }
+
+    body.light-mode .mobile-tab-bar {
+        background: rgba(245, 245, 245, 0.88);
+        border-top-color: rgba(0, 0, 0, 0.12);
+    }
+
+    /* Pad body so content isn't hidden behind nav */
+    body {
+        padding-bottom: calc(56px + env(safe-area-inset-bottom, 0px));
+    }
+}
+
+.tab-bar-item {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    gap: 2px;
+    flex: 1;
+    padding: 4px 0;
+    background: none;
+    border: none;
+    color: var(--text-dim);
+    font-size: 0.55rem;
+    font-weight: 500;
+    font-family: inherit;
+    cursor: pointer;
+    -webkit-tap-highlight-color: transparent;
+    transition: color 0.2s;
+}
+
+.tab-bar-item svg {
+    width: 22px;
+    height: 22px;
+    fill: none;
+    stroke: currentColor;
+    stroke-width: 1.8;
+    stroke-linecap: round;
+    stroke-linejoin: round;
+}
+
+.tab-bar-item.active {
+    color: var(--solar);
+}
+
+/* === Collapsible Sections === */
+.section-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    cursor: pointer;
+    -webkit-tap-highlight-color: transparent;
+    user-select: none;
+}
+
+.section-header .chevron {
+    font-size: 0.7rem;
+    color: var(--text-dim);
+    transition: transform 0.3s ease;
+    flex-shrink: 0;
+    margin-left: 8px;
+}
+
+.section-collapsed .section-header .chevron {
+    transform: rotate(-90deg);
+}
+
+.section-body {
+    transition: max-height 0.35s ease, opacity 0.25s ease;
+    overflow: hidden;
+}
+
+.section-collapsed .section-body {
+    max-height: 0 !important;
+    opacity: 0;
+    pointer-events: none;
 }
