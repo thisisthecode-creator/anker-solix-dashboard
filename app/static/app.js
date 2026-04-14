@@ -1452,6 +1452,7 @@ async function loadMonthlyForecast() {
             }
         }
 
+
         if (_monthlyFcChart) _monthlyFcChart.destroy();
         _monthlyFcChart = new Chart($('chart_monthly_forecast'), {
             type: 'bar',
