@@ -30,13 +30,25 @@
             transition: background 0.3s, color 0.3s;
         }
 
+        /* Back bar - always visible, separate from header */
+        .back-bar {
+            display: flex; align-items: center; justify-content: space-between;
+            margin-bottom: 12px;
+        }
+        .back-btn {
+            display: inline-flex; align-items: center; gap: 6px;
+            color: var(--solar); text-decoration: none; font-size: 0.85rem; font-weight: 600;
+            padding: 8px 14px; border-radius: 10px;
+            background: rgba(245,158,11,0.1); border: 1px solid rgba(245,158,11,0.25);
+            -webkit-tap-highlight-color: transparent;
+        }
+        .back-btn:active { opacity: 0.7; }
+
         /* Header */
         .hdr {
             display: flex; align-items: center; gap: 10px;
             margin-bottom: 20px; flex-wrap: wrap;
         }
-        .hdr a { color: var(--dim); text-decoration: none; font-size: 0.75rem; font-weight: 500; }
-        .hdr a:hover { color: var(--text); }
         .hdr h1 { font-size: 1.05rem; font-weight: 800; color: var(--solar); }
         .badge {
             font-size: 0.6rem; padding: 3px 10px; border-radius: 20px;
@@ -47,7 +59,7 @@
         .b-info { background: rgba(96,165,250,0.08); color: var(--blue); border: 1px solid rgba(96,165,250,0.15); }
         .b-time { background: rgba(192,132,252,0.08); color: var(--purple); border: 1px solid rgba(192,132,252,0.15); }
         .theme-btn {
-            margin-left: auto; cursor: pointer; background: var(--card); border: 1px solid var(--border);
+            cursor: pointer; background: var(--card); border: 1px solid var(--border);
             border-radius: 10px; padding: 5px 14px; font-size: 0.75rem; color: var(--dim);
             font-weight: 600; transition: all 0.2s;
         }
@@ -121,9 +133,11 @@
 
         /* Mobile */
         @media (max-width: 640px) {
-            body { padding: 12px 10px; }
-            .hdr { gap: 6px; margin-bottom: 14px; }
-            .hdr h1 { font-size: 0.9rem; }
+            body { padding: 12px 10px; padding-top: max(12px, env(safe-area-inset-top, 12px)); }
+            .back-bar { margin-bottom: 8px; }
+            .back-btn { font-size: 0.8rem; padding: 10px 16px; width: 100%; justify-content: center; border-radius: 12px; }
+            .hdr { gap: 6px; margin-bottom: 10px; }
+            .hdr h1 { font-size: 0.85rem; }
             .badge { font-size: 0.52rem; padding: 2px 8px; }
             .theme-btn { padding: 4px 10px; font-size: 0.65rem; border-radius: 8px; }
 
@@ -154,13 +168,15 @@
     </style>
 </head>
 <body>
+    <div class="back-bar">
+        <a href="/" class="back-btn">← Dashboard</a>
+        <button class="theme-btn" id="themeBtn" onclick="toggleTheme()">☀️ Light</button>
+    </div>
     <div class="hdr">
-        <a href="/">← Dashboard</a>
         <h1>MQTT RAW MONITOR</h1>
         <span class="badge b-off" id="pill">OFFLINE</span>
         <span class="badge b-info" id="pillN">—</span>
         <span class="badge b-time" id="pillTs">--:--:--</span>
-        <button class="theme-btn" id="themeBtn" onclick="toggleTheme()">☀️ Light</button>
     </div>
     <div class="grid" id="g"></div>
     <div class="foot">Live alle 3 Sekunden · Orange = gerade geändert · Nur im RAM</div>
