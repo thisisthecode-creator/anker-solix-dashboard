@@ -10,7 +10,7 @@
     <link rel="icon" href="/static/icon-192.png" type="image/png">
     <link rel="apple-touch-icon" href="/static/apple-touch-icon.png">
     <title>Solar Dashboard</title>
-    <link rel="stylesheet" href="/static/style.css?v=64">
+    <link rel="stylesheet" href="/static/style.css?v=65">
     <script src="https://cdn.jsdelivr.net/npm/chart.js@4"></script>
 </head>
 <body>
@@ -366,6 +366,18 @@
             <div class="chart-wrap" style="height:220px"><canvas id="chart_peak_output"></canvas></div>
         </section>
 
+        <!-- Charging Analysis -->
+        <section class="today-box" id="chargingAnalysisSection" style="display:none">
+            <h2>Lade-Analyse</h2>
+            <p style="color:var(--text-dim);font-size:.85rem;margin:-.5rem 0 .75rem">Seriell vs. Parallel: Wie schnell ladt die Batterie bei unterschiedlicher Solarleistung?</p>
+            <div class="mfc-kpi-row" id="chargingKpis"></div>
+            <div style="display:grid;grid-template-columns:1fr 1fr;gap:1rem">
+                <div class="chart-wrap" style="height:240px"><canvas id="chart_charging_scatter"></canvas></div>
+                <div class="chart-wrap" style="height:240px"><canvas id="chart_charging_rate_bars"></canvas></div>
+            </div>
+            <div class="chart-wrap" style="height:200px;margin-top:1rem"><canvas id="chart_charging_duration"></canvas></div>
+        </section>
+
         <!-- SOH Trend -->
         <section class="today-box" id="sohChartSection">
             <h2 data-i18n="batteryHealth">Batterie-Gesundheit (SOH %)</h2>
@@ -655,6 +667,6 @@
 
     </div>
 
-    <script src="/static/app.js?v=64"></script>
+    <script src="/static/app.js?v=65"></script>
 </body>
 </html>
