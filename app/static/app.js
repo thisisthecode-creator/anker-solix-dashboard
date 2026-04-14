@@ -2728,7 +2728,7 @@ document.addEventListener('keydown', (e) => {
     const CUTOFF_ID = 'flowAnimatedSection';
 
     // Select all section-like containers
-    const sections = document.querySelectorAll('.today-box[id], .chart-box');
+    const sections = document.querySelectorAll('.today-box[id]');
     const savedState = (() => {
         try { return JSON.parse(localStorage.getItem('collapsedSections') || '{}'); }
         catch { return {}; }

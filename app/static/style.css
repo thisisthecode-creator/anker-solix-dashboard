@@ -3074,7 +3074,7 @@ body.light-mode .log-table td {
 }
 
 .fc-acc-title {
-    font-size: 0.75rem;
+    font-size: 0.85rem;
     color: var(--text-dim);
     text-transform: uppercase;
     letter-spacing: 0.04em;
@@ -3367,6 +3367,10 @@ body.light-mode .log-table td {
 .section-body {
     transition: max-height 0.35s ease, opacity 0.25s ease;
     overflow: hidden;
+}
+
+.section-collapsed .section-header {
+    margin-bottom: 0 !important;
 }
 
 .section-collapsed .section-body {
