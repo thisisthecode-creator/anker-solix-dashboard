@@ -2778,7 +2778,7 @@ async function loadFlowVariants(days) {
                 + row('🔋↑', 'In Akku gespeichert', batIn, '#60a5fa', '↓')
                 + row('🔋↓', 'Aus Akku entnommen', batOut, '#c084fc', '↑')
                 + row('🏠', 'Aus Netz bezogen', grid, '#888', '→')
-                + row('❌', 'Verluste', loss, '#ef4444', '')
+                + (loss > 0 ? row('❌', 'Verluste', loss, '#ef4444', '') : '')
                 + `<div style="text-align:center;margin-top:8px;font-size:0.75rem;color:var(--text-dim)">Gesamt verbraucht: <strong style="color:var(--text)">${fmt2.format(load)} kWh</strong></div>`;
         }
     } catch (e) { console.warn('Flow variants error:', e); }

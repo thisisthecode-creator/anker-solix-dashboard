@@ -954,7 +954,12 @@ async def get_sankey_flows(days: int = 1) -> dict:
     solar_to_battery = max(0.0, solar - direct)
     grid_to_load = max(0.0, output - direct - bat_out)
     grid_to_battery = max(0.0, grid_in - grid_to_load)
-    loss = max(0.0, bat_in - bat_out)  # self-discharge/efficiency loss
+    # Conversion loss: only meaningful when energy has completed a full
+    # charge-discharge cycle.  Approximated as ~8% roundtrip efficiency loss
+    # on the discharged amount (LiFePO4 typical).  If nothing was discharged,
+    # the energy is still stored in the battery - not lost.
+    ROUNDTRIP_LOSS_FACTOR = 0.08
+    loss = round(bat_out * ROUNDTRIP_LOSS_FACTOR, 3) if bat_out > 0 else 0.0
     return {
         "days": n,
         "totals": {
