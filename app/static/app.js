@@ -1318,58 +1318,81 @@ async function loadForecast() {
 
 function updateExpectedSolar() {}
 
-// === Monthly Solar Forecast (this year, based on last year's historical GTI) ===
+// === Monthly Solar Forecast: Last Year vs This Year vs Prognose ===
 let _monthlyFcChart = null;
 async function loadMonthlyForecast() {
     try {
         const now = new Date();
         const thisYear = now.getFullYear();
-        // Fetch last year's full data as basis for this year's forecast
-        const startDate = (thisYear - 1) + '-01-01';
-        const endDate = (thisYear - 1) + '-12-31';
+        const lastYear = thisYear - 1;
+        const currentMonth = now.getMonth(); // 0-based
 
+        // 1) Fetch last year's GTI from Open-Meteo archive
         const stripResults = await Promise.all(CURVE_STRIPS.map(s =>
             fetch('https://archive-api.open-meteo.com/v1/archive?latitude=52.1928&longitude=21.0103'
                 + '&hourly=global_tilted_irradiance'
                 + '&tilt=' + s.tilt + '&azimuth=' + AZIMUTH
                 + '&timezone=Europe%2FWarsaw'
-                + '&start_date=' + startDate
-                + '&end_date=' + endDate
+                + '&start_date=' + lastYear + '-01-01'
+                + '&end_date=' + lastYear + '-12-31'
             ).then(r => r.json()).then(d => d.hourly)
         ));
-
         if (!stripResults[0] || !stripResults[0].time) return;
 
-        // Aggregate last year's GTI by month number (1-12)
-        const monthlyKwh = {};
+        const lastYearKwh = {};
         const times = stripResults[0].time;
         for (let i = 0; i < times.length; i++) {
-            const mm = times[i].slice(5, 7); // "01"-"12"
+            const mm = times[i].slice(5, 7);
             let weightedGTI = 0;
             for (let s = 0; s < CURVE_STRIPS.length; s++) {
                 weightedGTI += (stripResults[s].global_tilted_irradiance[i] || 0) * CURVE_STRIPS[s].weight;
             }
-            const kwh = weightedGTI / 1000 * PANEL_KWP * PANEL_EFFICIENCY;
-            monthlyKwh[mm] = (monthlyKwh[mm] || 0) + kwh;
+            lastYearKwh[mm] = (lastYearKwh[mm] || 0) + weightedGTI / 1000 * PANEL_KWP * PANEL_EFFICIENCY;
         }
 
-        // Build Jan-Dec for this year
+        // 2) Fetch this year's actual production from server
+        const dailyRes = await fetch('/api/daily?days=365');
+        const dailyData = await dailyRes.json();
+        const thisYearActual = {};
+        for (const d of dailyData) {
+            if (!d.date.startsWith(String(thisYear))) continue;
+            const mm = d.date.slice(5, 7);
+            thisYearActual[mm] = (thisYearActual[mm] || 0) + (d.solar_kwh || 0);
+        }
+
+        // 3) Build 3 datasets: last year, this year real, this year forecast
         const monthNames = LANG === 'de'
             ? ['Jan', 'Feb', 'Mär', 'Apr', 'Mai', 'Jun', 'Jul', 'Aug', 'Sep', 'Okt', 'Nov', 'Dez']
             : ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
-        const currentMonth = now.getMonth(); // 0-based
-        const labels = [];
-        const values = [];
+
+        const labels = monthNames.slice();
+        const lastYearData = [];
+        const thisYearReal = [];
+        const thisYearForecast = [];
+
         for (let m = 0; m < 12; m++) {
             const mm = String(m + 1).padStart(2, '0');
-            labels.push(monthNames[m]);
-            values.push(Math.round((monthlyKwh[mm] || 0) * 100) / 100);
+            const ly = Math.round((lastYearKwh[mm] || 0) * 100) / 100;
+            lastYearData.push(ly);
+            if (m < currentMonth) {
+                // Completed month - show actual
+                thisYearReal.push(Math.round((thisYearActual[mm] || 0) * 100) / 100);
+                thisYearForecast.push(0);
+            } else if (m === currentMonth) {
+                // Current month - show actual so far
+                thisYearReal.push(Math.round((thisYearActual[mm] || 0) * 100) / 100);
+                thisYearForecast.push(0);
+            } else {
+                // Future month - show forecast from last year
+                thisYearReal.push(0);
+                thisYearForecast.push(ly);
+            }
         }
 
-        const total = values.reduce((s, v) => s + v, 0);
-        const peak = Math.max(...values);
-        const peakMonth = monthNames[values.indexOf(peak)];
-        const avg = total / 12;
+        const totalReal = thisYearReal.reduce((s, v) => s + v, 0);
+        const totalForecast = thisYearForecast.reduce((s, v) => s + v, 0);
+        const totalExpected = totalReal + totalForecast;
+        const totalLastYear = lastYearData.reduce((s, v) => s + v, 0);
 
         const section = $('monthlyForecastSection');
         if (!section) return;
@@ -1379,36 +1402,53 @@ async function loadMonthlyForecast() {
 
         const sumEl = $('monthlyFcSummary');
         if (sumEl) {
-            sumEl.innerHTML = '<span>~' + Math.round(total * 10) / 10 + ' kWh ' + (LANG === 'de' ? 'erwartet ' + thisYear : 'expected ' + thisYear) + '</span>'
-                + '<span>⌀ ' + Math.round(avg * 10) / 10 + ' kWh/' + (LANG === 'de' ? 'Monat' : 'month') + '</span>'
-                + '<span>Peak: ' + Math.round(peak * 10) / 10 + ' kWh ' + peakMonth + '</span>';
+            sumEl.innerHTML = '<span>' + lastYear + ': ' + Math.round(totalLastYear * 10) / 10 + ' kWh</span>'
+                + '<span>' + thisYear + ': ' + Math.round(totalReal * 10) / 10 + ' kWh</span>'
+                + '<span>~' + Math.round(totalExpected * 10) / 10 + ' kWh ' + (LANG === 'de' ? 'erwartet' : 'expected') + '</span>';
         }
-
-        // Past months = solid, current = highlighted, future = dimmed
-        const bgColors = values.map((v, i) => {
-            if (i < currentMonth) return '#f59e0b';
-            if (i === currentMonth) return '#fbbf24';
-            return 'rgba(245,158,11,0.3)';
-        });
 
         if (_monthlyFcChart) _monthlyFcChart.destroy();
         _monthlyFcChart = new Chart($('chart_monthly_forecast'), {
             type: 'bar',
             data: {
                 labels: labels,
-                datasets: [{
-                    data: values,
-                    backgroundColor: bgColors,
-                    borderColor: '#f59e0b',
-                    borderWidth: 1,
-                    borderRadius: 3
-                }]
+                datasets: [
+                    {
+                        label: String(lastYear),
+                        data: lastYearData,
+                        backgroundColor: 'rgba(148,163,184,0.3)',
+                        borderColor: 'rgba(148,163,184,0.6)',
+                        borderWidth: 1,
+                        borderRadius: 3
+                    },
+                    {
+                        label: thisYear + ' ' + (LANG === 'de' ? 'Real' : 'Actual'),
+                        data: thisYearReal,
+                        backgroundColor: '#f59e0b',
+                        borderColor: '#f59e0b',
+                        borderWidth: 1,
+                        borderRadius: 3
+                    },
+                    {
+                        label: thisYear + ' ' + (LANG === 'de' ? 'Prognose' : 'Forecast'),
+                        data: thisYearForecast,
+                        backgroundColor: 'rgba(245,158,11,0.3)',
+                        borderColor: '#f59e0b',
+                        borderWidth: 1,
+                        borderDash: [3, 3],
+                        borderRadius: 3
+                    }
+                ]
             },
             options: {
                 responsive: true, maintainAspectRatio: false, animation: false,
+                interaction: { intersect: false, mode: 'index' },
                 plugins: {
-                    legend: { display: false },
-                    tooltip: { callbacks: { label: ctx => fmt2.format(ctx.parsed.y) + ' kWh (' + (LANG === 'de' ? 'Prognose' : 'forecast') + ')' } }
+                    legend: { display: true, position: 'top', labels: { boxWidth: 10, font: { size: 9 } } },
+                    tooltip: { callbacks: { label: ctx => {
+                        if (ctx.parsed.y === 0) return null;
+                        return ctx.dataset.label + ': ' + fmt2.format(ctx.parsed.y) + ' kWh';
+                    } } }
                 },
                 scales: {
                     y: { beginAtZero: true, grid: { color: chartGridColor() }, ticks: { maxTicksLimit: 5, callback: v => v + ' kWh' } },
