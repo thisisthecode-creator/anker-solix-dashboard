@@ -10,7 +10,7 @@
     <link rel="icon" href="/static/icon-192.png" type="image/png">
     <link rel="apple-touch-icon" href="/static/apple-touch-icon.png">
     <title>Solar Dashboard</title>
-    <link rel="stylesheet" href="/static/style.css?v=48">
+    <link rel="stylesheet" href="/static/style.css?v=49">
     <script src="https://cdn.jsdelivr.net/npm/chart.js@4"></script>
 </head>
 <body>
@@ -129,16 +129,11 @@
             <div class="forecast-grid" id="forecastGrid"></div>
         </section>
 
-        <!-- Hourly Forecast: today (with actual overlay) + tomorrow -->
+        <!-- Hourly Forecast: today with actual overlay -->
         <section class="today-box" id="hourlyForecastTodaySection" style="display:none">
-            <h2>Stündliche Prognose - Heute <span class="forecast-accuracy-badge" id="hourlyFcAccuracy" style="font-size:0.55rem"></span></h2>
+            <h2>Stündliche Prognose <span class="forecast-accuracy-badge" id="hourlyFcAccuracy" style="font-size:0.55rem"></span></h2>
             <div id="hourlyFcTodaySummary" style="font-size:0.7rem;color:var(--text-dim);margin-bottom:10px;display:flex;gap:16px;flex-wrap:wrap"></div>
             <div class="chart-wrap" style="height:180px"><canvas id="chart_hourly_forecast_today"></canvas></div>
-        </section>
-
-        <section class="today-box" id="hourlyForecastSection" style="display:none">
-            <h2>Stündliche Prognose - Morgen</h2>
-            <div class="chart-wrap" style="height:180px"><canvas id="chart_hourly_forecast"></canvas></div>
         </section>
 
         <!-- MQTT Ticker -->
@@ -628,6 +623,6 @@
 
     </div>
 
-    <script src="/static/app.js?v=48"></script>
+    <script src="/static/app.js?v=49"></script>
 </body>
 </html>

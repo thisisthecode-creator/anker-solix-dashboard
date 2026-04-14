@@ -1283,7 +1283,7 @@ async function loadForecast() {
             const kwh = weightedGTI / 1000 * PANEL_KWP * PANEL_EFFICIENCY;
             window._forecastHourly[hBase.time[i]] = Math.round(kwh * 1000) / 1000;
         }
-        buildHourlyForecastChart();
+        buildHourlyForecastToday();
 
         updateExpectedSolar();
 
@@ -1296,80 +1296,6 @@ async function loadForecast() {
 }
 
 function updateExpectedSolar() {}
-
-// === Hourly Forecast Chart (tomorrow) ===
-let _hourlyFcChart = null;
-function buildHourlyForecastChart() {
-    if (!window._forecastHourly) return;
-    const tomorrow = new Date();
-    tomorrow.setDate(tomorrow.getDate() + 1);
-    const tomorrowStr = tomorrow.toISOString().slice(0, 10);
-
-    const hours = [];
-    const values = [];
-    for (const [ts, kwh] of Object.entries(window._forecastHourly)) {
-        if (ts.startsWith(tomorrowStr) && kwh > 0) {
-            hours.push(ts.slice(11, 16));
-            values.push(Math.round(kwh * 1000) / 1000);
-        }
-    }
-    if (!hours.length) return;
-
-    const total = values.reduce((s, v) => s + v, 0);
-    const peak = Math.max(...values);
-    const peakHour = hours[values.indexOf(peak)];
-
-    const section = $('hourlyForecastSection');
-    if (!section) return;
-
-    // Update title with date and summary
-    const dayName = t('dayNames')[tomorrow.getDay()];
-    const dateStr = tomorrow.getDate() + '.' + (tomorrow.getMonth() + 1) + '.';
-    const h2 = section.querySelector('h2');
-    h2.innerHTML = (LANG === 'de' ? 'Stündliche Prognose' : 'Hourly Forecast')
-        + ' - ' + dayName + ' ' + dateStr;
-
-    // Add/update summary below title
-    let sumEl = $('hourlyFcSummary');
-    if (!sumEl) {
-        sumEl = document.createElement('div');
-        sumEl.id = 'hourlyFcSummary';
-        sumEl.style.cssText = 'font-size:0.7rem;color:var(--text-dim);margin-bottom:10px;display:flex;gap:16px;flex-wrap:wrap';
-        h2.parentNode.insertBefore(sumEl, h2.nextSibling);
-    }
-    const sunH = window._forecastSunshine && window._forecastSunshine[tomorrowStr] != null
-        ? window._forecastSunshine[tomorrowStr] : hours.length;
-    sumEl.innerHTML = '<span>' + Math.round(total * 100) / 100 + ' kWh ' + (LANG === 'de' ? 'gesamt' : 'total') + '</span>'
-        + '<span>' + (LANG === 'de' ? 'Peak' : 'Peak') + ': ' + Math.round(peak * 1000) + ' Wh ' + (LANG === 'de' ? 'um' : 'at') + ' ' + peakHour + '</span>'
-        + '<span>🔆 ' + sunH + 'h ' + (LANG === 'de' ? 'Sonne' : 'sun') + '</span>';
-
-    if (_hourlyFcChart) _hourlyFcChart.destroy();
-    _hourlyFcChart = new Chart($('chart_hourly_forecast'), {
-        type: 'bar',
-        data: {
-            labels: hours,
-            datasets: [{
-                data: values,
-                backgroundColor: values.map(v => v === peak ? '#f59e0b' : 'rgba(245,158,11,0.35)'),
-                borderColor: '#f59e0b',
-                borderWidth: 1,
-                borderRadius: 3
-            }]
-        },
-        options: {
-            responsive: true, maintainAspectRatio: false, animation: false,
-            plugins: {
-                legend: { display: false },
-                tooltip: { callbacks: { label: ctx => Math.round(ctx.parsed.y * 1000) + ' Wh' } }
-            },
-            scales: {
-                y: { beginAtZero: true, grid: { color: chartGridColor() }, ticks: { maxTicksLimit: 5, callback: v => Math.round(v * 1000) + ' Wh' } },
-                x: { grid: { display: false }, ticks: { font: { size: 9 } } }
-            }
-        }
-    });
-    section.style.display = '';
-}
 
 // === Hourly Forecast vs Actual (today) ===
 let _hourlyTodayChart = null;
