@@ -1265,6 +1265,20 @@ async function loadForecast() {
             const gti = dailyGTI[d.time[i]] || 0;
             window._forecastKwh[d.time[i]] = Math.round(gti / 1000 * PANEL_KWP * PANEL_EFFICIENCY * 100) / 100;
         }
+
+        // Store hourly kWh forecast for hourly chart
+        window._forecastHourly = {};
+        for (let i = 0; i < hBase.time.length; i++) {
+            let weightedGTI = 0;
+            for (let s = 0; s < CURVE_STRIPS.length; s++) {
+                const gti = stripResults[s].global_tilted_irradiance[i] || 0;
+                weightedGTI += gti * CURVE_STRIPS[s].weight;
+            }
+            const kwh = weightedGTI / 1000 * PANEL_KWP * PANEL_EFFICIENCY;
+            window._forecastHourly[hBase.time[i]] = Math.round(kwh * 1000) / 1000;
+        }
+        buildHourlyForecastChart();
+
         updateExpectedSolar();
 
         $('forecastBox').style.display = '';
@@ -1276,6 +1290,78 @@ async function loadForecast() {
 }
 
 function updateExpectedSolar() {}
+
+// === Hourly Forecast Chart (tomorrow) ===
+let _hourlyFcChart = null;
+function buildHourlyForecastChart() {
+    if (!window._forecastHourly) return;
+    const tomorrow = new Date();
+    tomorrow.setDate(tomorrow.getDate() + 1);
+    const tomorrowStr = tomorrow.toISOString().slice(0, 10);
+
+    const hours = [];
+    const values = [];
+    for (const [ts, kwh] of Object.entries(window._forecastHourly)) {
+        if (ts.startsWith(tomorrowStr) && kwh > 0) {
+            hours.push(ts.slice(11, 16));
+            values.push(Math.round(kwh * 1000) / 1000);
+        }
+    }
+    if (!hours.length) return;
+
+    const total = values.reduce((s, v) => s + v, 0);
+    const peak = Math.max(...values);
+    const peakHour = hours[values.indexOf(peak)];
+
+    const section = $('hourlyForecastSection');
+    if (!section) return;
+
+    // Update title with date and summary
+    const dayName = t('dayNames')[tomorrow.getDay()];
+    const dateStr = tomorrow.getDate() + '.' + (tomorrow.getMonth() + 1) + '.';
+    const h2 = section.querySelector('h2');
+    h2.innerHTML = (LANG === 'de' ? 'Stündliche Prognose' : 'Hourly Forecast')
+        + ' - ' + dayName + ' ' + dateStr;
+
+    // Add/update summary below title
+    let sumEl = $('hourlyFcSummary');
+    if (!sumEl) {
+        sumEl = document.createElement('div');
+        sumEl.id = 'hourlyFcSummary';
+        sumEl.style.cssText = 'font-size:0.7rem;color:var(--text-dim);margin-bottom:10px;display:flex;gap:16px;flex-wrap:wrap';
+        h2.parentNode.insertBefore(sumEl, h2.nextSibling);
+    }
+    sumEl.innerHTML = '<span>' + Math.round(total * 100) / 100 + ' kWh ' + (LANG === 'de' ? 'gesamt' : 'total') + '</span>'
+        + '<span>' + (LANG === 'de' ? 'Peak' : 'Peak') + ': ' + Math.round(peak * 1000) + ' Wh ' + (LANG === 'de' ? 'um' : 'at') + ' ' + peakHour + '</span>'
+        + '<span>' + hours.length + 'h ' + (LANG === 'de' ? 'Sonne' : 'sun') + '</span>';
+
+    if (_hourlyFcChart) _hourlyFcChart.destroy();
+    _hourlyFcChart = new Chart($('chart_hourly_forecast'), {
+        type: 'bar',
+        data: {
+            labels: hours,
+            datasets: [{
+                data: values,
+                backgroundColor: values.map(v => v === peak ? '#f59e0b' : 'rgba(245,158,11,0.35)'),
+                borderColor: '#f59e0b',
+                borderWidth: 1,
+                borderRadius: 3
+            }]
+        },
+        options: {
+            responsive: true, maintainAspectRatio: false, animation: false,
+            plugins: {
+                legend: { display: false },
+                tooltip: { callbacks: { label: ctx => Math.round(ctx.parsed.y * 1000) + ' Wh' } }
+            },
+            scales: {
+                y: { beginAtZero: true, grid: { color: chartGridColor() }, ticks: { maxTicksLimit: 5, callback: v => Math.round(v * 1000) + ' Wh' } },
+                x: { grid: { display: false }, ticks: { font: { size: 9 } } }
+            }
+        }
+    });
+    section.style.display = '';
+}
 
 loadForecast();
 setInterval(loadForecast, 3600000);
@@ -1569,10 +1655,27 @@ async function loadForecastVsReal() {
             return days[dt.getDay()] + ' ' + dt.getDate() + '.';
         });
 
-        const forecastData = dates.map(d => window._forecastKwh[d] || 0);
+        const todayStr = new Date().toISOString().slice(0, 10);
+        const currentHour = new Date().getHours();
+
+        // For today: scale forecast to only include hours up to now
+        const forecastData = dates.map(d => {
+            if (d === todayStr && window._forecastHourly) {
+                let partialKwh = 0;
+                for (let h = 0; h <= currentHour; h++) {
+                    const key = d + 'T' + String(h).padStart(2, '0') + ':00';
+                    partialKwh += window._forecastHourly[key] || 0;
+                }
+                return Math.round(partialKwh * 100) / 100;
+            }
+            return window._forecastKwh[d] || 0;
+        });
         const actualData = dates.map(d => dailyMap[d] || 0);
 
-        // Calculate per-day accuracy
+        // For display: show full-day forecast as reference
+        const fullDayForecast = dates.map(d => window._forecastKwh[d] || 0);
+
+        // Calculate per-day accuracy (using time-adjusted forecast for today)
         const accuracyData = dates.map((d, i) => {
             const f = forecastData[i], a = actualData[i];
             if (f > 0 && a > 0) return Math.max(0, Math.round((1 - Math.abs(f - a) / f) * 100));
@@ -1595,8 +1698,12 @@ async function loadForecastVsReal() {
                 plugins: {
                     legend: { display: true, position: 'top', labels: { boxWidth: 12, font: { size: 10 } } },
                     tooltip: { callbacks: { label: ctx => {
+                        const idx = ctx.dataIndex;
                         let tip = ctx.dataset.label + ': ' + fmt2.format(ctx.parsed.y) + ' kWh';
-                        if (ctx.datasetIndex === 1 && accuracyData[ctx.dataIndex] != null) tip += ' (' + accuracyData[ctx.dataIndex] + '%)';
+                        if (ctx.datasetIndex === 0 && dates[idx] === todayStr && fullDayForecast[idx] !== forecastData[idx]) {
+                            tip += ' (bis ' + currentHour + ':00, ' + (LANG === 'de' ? 'Tagesges.' : 'full day') + ': ' + fmt2.format(fullDayForecast[idx]) + ' kWh)';
+                        }
+                        if (ctx.datasetIndex === 1 && accuracyData[idx] != null) tip += ' (' + accuracyData[idx] + '%)';
                         return tip;
                     } } }
                 },
