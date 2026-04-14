@@ -10,7 +10,7 @@
     <link rel="icon" href="/static/icon-192.png" type="image/png">
     <link rel="apple-touch-icon" href="/static/apple-touch-icon.png">
     <title>Solar Dashboard</title>
-    <link rel="stylesheet" href="/static/style.css?v=62">
+    <link rel="stylesheet" href="/static/style.css?v=63">
     <script src="https://cdn.jsdelivr.net/npm/chart.js@4"></script>
 </head>
 <body>
@@ -322,6 +322,32 @@
             <div class="chart-wrap"><canvas id="chart_daily_bars"></canvas></div>
         </section>
 
+        <!-- Autarkie-Trend -->
+        <section class="today-box" id="autarkieTrendSection" style="display:none">
+            <h2>Autarkie-Trend</h2>
+            <div class="mfc-kpi-row" id="autarkieKpis"></div>
+            <div class="tab-bar autarkie-tabs" id="autarkieTabs">
+                <button class="tab active" data-autdays="30">30 Tage</button>
+                <button class="tab" data-autdays="90">90 Tage</button>
+                <button class="tab" data-autdays="365">1 Jahr</button>
+            </div>
+            <div class="chart-wrap" style="height:200px"><canvas id="chart_autarkie_trend"></canvas></div>
+        </section>
+
+        <!-- Wetter-Korrelation -->
+        <section class="today-box" id="weatherCorrelationSection" style="display:none">
+            <h2>Wetter-Korrelation</h2>
+            <div id="weatherCorrelationSummary" class="wc-summary"></div>
+            <div class="chart-wrap" style="height:220px"><canvas id="chart_weather_correlation"></canvas></div>
+        </section>
+
+        <!-- Eigenverbrauchs-Optimierung -->
+        <section class="today-box" id="selfConsumptionOptSection" style="display:none">
+            <h2>Eigenverbrauchs-Optimierung</h2>
+            <div class="mfc-kpi-row" id="selfConsOptKpis"></div>
+            <div class="chart-wrap" style="height:220px"><canvas id="chart_self_consumption_opt"></canvas></div>
+        </section>
+
         <!-- SOH Trend -->
         <section class="today-box" id="sohChartSection">
             <h2 data-i18n="batteryHealth">Batterie-Gesundheit (SOH %)</h2>
@@ -611,6 +637,6 @@
 
     </div>
 
-    <script src="/static/app.js?v=62"></script>
+    <script src="/static/app.js?v=63"></script>
 </body>
 </html>

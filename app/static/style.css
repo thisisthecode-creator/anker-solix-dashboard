@@ -2470,6 +2470,31 @@ body.light-mode .log-table td {
 .mfc-kpi-trend.down { color: var(--red); }
 .mfc-kpi-trend.flat { color: var(--text-dim); }
 
+/* Autarkie Tabs */
+.autarkie-tabs { margin-bottom: 10px; }
+
+/* Weather Correlation Summary */
+.wc-summary {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px;
+    margin-bottom: 12px;
+}
+.wc-chip {
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+    padding: 4px 10px;
+    border-radius: 8px;
+    background: var(--bg);
+    border: 1px solid var(--card-border);
+    font-size: 0.65rem;
+    white-space: nowrap;
+}
+.wc-chip-icon { font-size: 0.85rem; }
+.wc-chip-value { font-weight: 700; color: var(--solar); }
+.wc-chip-pct { color: var(--text-dim); font-size: 0.55rem; }
+
 /* Heatmap Calendar */
 .heatmap-wrap {
     overflow-x: auto;

@@ -1815,6 +1815,383 @@ async function loadDailyBars() {
 
 loadDailyBars();
 
+// === Autarkie-Trend ===
+let _autarkieChart = null;
+let _autarkieData = null;
+
+async function loadAutarkieTrend(days) {
+    try {
+        if (!_autarkieData) {
+            const res = await fetch('/api/daily?days=365');
+            _autarkieData = await res.json();
+        }
+        const data = _autarkieData.slice(0, days);
+        if (!data.length) return;
+
+        const labels = data.map(d => {
+            const dt = new Date(d.date);
+            return dt.getDate() + '.' + (dt.getMonth() + 1) + '.';
+        });
+        const autarkieValues = data.map(d => d.autarkie_pct || 0);
+        const eigenverbrauchValues = data.map(d => d.direct_use_pct || 0);
+
+        // KPI cards
+        const validAut = autarkieValues.filter(v => v > 0);
+        const validEigen = eigenverbrauchValues.filter(v => v > 0);
+        const avgAut = validAut.length ? Math.round(validAut.reduce((s, v) => s + v, 0) / validAut.length) : 0;
+        const avgEigen = validEigen.length ? Math.round(validEigen.reduce((s, v) => s + v, 0) / validEigen.length) : 0;
+        const maxAut = validAut.length ? Math.round(Math.max(...validAut)) : 0;
+        const daysAbove80 = validAut.filter(v => v >= 80).length;
+
+        const kpiEl = $('autarkieKpis');
+        if (kpiEl) {
+            kpiEl.innerHTML =
+                '<div class="mfc-kpi">'
+                    + '<div class="mfc-kpi-label">' + (LANG === 'de' ? 'Autarkie' : 'Self-sufficiency') + '</div>'
+                    + '<div class="mfc-kpi-value green">' + avgAut + '%</div>'
+                    + '<div class="mfc-kpi-sub">\u00D8 ' + validAut.length + (LANG === 'de' ? ' Tage' : ' days') + '</div>'
+                + '</div>'
+                + '<div class="mfc-kpi">'
+                    + '<div class="mfc-kpi-label">' + (LANG === 'de' ? 'Eigenverbrauch' : 'Self-consumption') + '</div>'
+                    + '<div class="mfc-kpi-value amber">' + avgEigen + '%</div>'
+                    + '<div class="mfc-kpi-sub">\u00D8 ' + validEigen.length + (LANG === 'de' ? ' Tage' : ' days') + '</div>'
+                + '</div>'
+                + '<div class="mfc-kpi">'
+                    + '<div class="mfc-kpi-label">' + (LANG === 'de' ? 'Tage \u226580%' : 'Days \u226580%') + '</div>'
+                    + '<div class="mfc-kpi-value dim">' + daysAbove80 + '</div>'
+                    + '<div class="mfc-kpi-sub">Max ' + maxAut + '%</div>'
+                + '</div>';
+        }
+
+        if (_autarkieChart) _autarkieChart.destroy();
+        _autarkieChart = new Chart($('chart_autarkie_trend'), {
+            type: 'line',
+            data: {
+                labels: labels,
+                datasets: [
+                    {
+                        label: LANG === 'de' ? 'Autarkie %' : 'Self-sufficiency %',
+                        data: autarkieValues,
+                        borderColor: '#22c55e', backgroundColor: 'rgba(34,197,94,0.1)',
+                        fill: true, tension: 0.35, borderWidth: 2,
+                        pointRadius: days > 90 ? 0 : 2, pointHoverRadius: 4,
+                        pointBackgroundColor: '#22c55e'
+                    },
+                    {
+                        label: LANG === 'de' ? 'Eigenverbrauch %' : 'Self-consumption %',
+                        data: eigenverbrauchValues,
+                        borderColor: '#f59e0b', backgroundColor: 'rgba(245,158,11,0.08)',
+                        fill: true, tension: 0.35, borderWidth: 2,
+                        pointRadius: days > 90 ? 0 : 2, pointHoverRadius: 4,
+                        pointBackgroundColor: '#f59e0b'
+                    }
+                ]
+            },
+            options: {
+                responsive: true, maintainAspectRatio: false, animation: false,
+                interaction: { intersect: false, mode: 'index' },
+                plugins: {
+                    legend: { display: true, position: 'top', labels: { boxWidth: 10, font: { size: 9 } } },
+                    tooltip: { callbacks: { label: ctx => ctx.dataset.label + ': ' + Math.round(ctx.parsed.y) + '%' } }
+                },
+                scales: {
+                    y: { min: 0, max: 100, grid: { color: chartGridColor() }, ticks: { maxTicksLimit: 5, callback: v => v + '%' } },
+                    x: { grid: { display: false }, ticks: { maxTicksLimit: days > 90 ? 8 : 10, maxRotation: 45, font: { size: 9 } } }
+                }
+            }
+        });
+        $('autarkieTrendSection').style.display = '';
+    } catch (e) { console.warn('Autarkie trend error:', e); }
+}
+
+loadAutarkieTrend(30);
+
+// Tab switching for Autarkie
+document.querySelectorAll('#autarkieTabs .tab').forEach(btn => {
+    btn.addEventListener('click', () => {
+        document.querySelectorAll('#autarkieTabs .tab').forEach(b => b.classList.remove('active'));
+        btn.classList.add('active');
+        loadAutarkieTrend(parseInt(btn.dataset.autdays));
+    });
+});
+
+// === Wetter-Korrelation ===
+let _weatherCorrChart = null;
+
+async function loadWeatherCorrelation() {
+    try {
+        const dailyRes = await fetch('/api/daily?days=365');
+        const dailyData = await dailyRes.json();
+        if (dailyData.length < 7) return;
+
+        // Determine date range from daily data
+        const dates = dailyData.map(d => d.date).sort();
+        const startDate = dates[0];
+        const endDate = dates[dates.length - 1];
+
+        // Fetch historical weather codes from Open-Meteo archive
+        const weatherRes = await fetch(
+            'https://archive-api.open-meteo.com/v1/archive?latitude=52.1928&longitude=21.0103'
+            + '&daily=weather_code,sunshine_duration,cloud_cover_mean'
+            + '&timezone=Europe%2FWarsaw'
+            + '&start_date=' + startDate + '&end_date=' + endDate
+        );
+        const weatherData = await weatherRes.json();
+        if (!weatherData.daily || !weatherData.daily.time) return;
+
+        // Build weather lookup by date
+        const weatherByDate = {};
+        for (let i = 0; i < weatherData.daily.time.length; i++) {
+            weatherByDate[weatherData.daily.time[i]] = {
+                code: weatherData.daily.weather_code[i],
+                sunshine: weatherData.daily.sunshine_duration[i] || 0,
+                cloud: weatherData.daily.cloud_cover_mean[i] || 0
+            };
+        }
+
+        // Categorize WMO weather codes into groups
+        function weatherCategory(code) {
+            if (code <= 1) return 'sunny';
+            if (code <= 2) return 'partly';
+            if (code <= 3) return 'cloudy';
+            if (code >= 51) return 'rain';
+            return 'fog'; // 45, 48
+        }
+
+        const catConfig = {
+            sunny:  { label: LANG === 'de' ? 'Sonnig' : 'Sunny',         icon: '\u2600\uFE0F', color: '#f59e0b' },
+            partly: { label: LANG === 'de' ? 'Teilw. bew.' : 'Partly cl.', icon: '\u26C5',      color: '#fbbf24' },
+            cloudy: { label: LANG === 'de' ? 'Bew\u00F6lkt' : 'Overcast',  icon: '\u2601\uFE0F', color: '#94a3b8' },
+            rain:   { label: LANG === 'de' ? 'Regen' : 'Rain',           icon: '\uD83C\uDF27\uFE0F', color: '#60a5fa' },
+            fog:    { label: LANG === 'de' ? 'Nebel' : 'Fog',            icon: '\uD83C\uDF2B\uFE0F', color: '#cbd5e1' }
+        };
+
+        // Aggregate production per category
+        const catData = {};
+        for (const cat of Object.keys(catConfig)) catData[cat] = { total: 0, count: 0, values: [] };
+
+        for (const d of dailyData) {
+            const w = weatherByDate[d.date];
+            if (!w || d.solar_kwh == null) continue;
+            const cat = weatherCategory(w.code);
+            catData[cat].total += d.solar_kwh;
+            catData[cat].count++;
+            catData[cat].values.push(d.solar_kwh);
+        }
+
+        // Build chart data - only categories with data
+        const cats = Object.keys(catConfig).filter(c => catData[c].count > 0);
+        const sunnyAvg = catData.sunny.count > 0 ? catData.sunny.total / catData.sunny.count : 1;
+
+        // Summary chips
+        const summaryEl = $('weatherCorrelationSummary');
+        if (summaryEl) {
+            summaryEl.innerHTML = cats.map(c => {
+                const avg = catData[c].total / catData[c].count;
+                const pct = sunnyAvg > 0 ? Math.round(avg / sunnyAvg * 100) : 0;
+                return '<div class="wc-chip">'
+                    + '<span class="wc-chip-icon">' + catConfig[c].icon + '</span>'
+                    + '<span>' + catConfig[c].label + '</span>'
+                    + '<span class="wc-chip-value">' + fmt2.format(avg) + ' kWh</span>'
+                    + (c !== 'sunny' ? '<span class="wc-chip-pct">(' + pct + '% ' + (LANG === 'de' ? 'v. Sonne' : 'of sunny') + ')</span>' : '')
+                    + '</div>';
+            }).join('');
+        }
+
+        const labels = cats.map(c => catConfig[c].label);
+        const avgValues = cats.map(c => Math.round(catData[c].total / catData[c].count * 100) / 100);
+        const colors = cats.map(c => catConfig[c].color);
+        const counts = cats.map(c => catData[c].count);
+
+        // Box plot-style: show min, avg, max per category
+        const minValues = cats.map(c => Math.round(Math.min(...catData[c].values) * 100) / 100);
+        const maxValues = cats.map(c => Math.round(Math.max(...catData[c].values) * 100) / 100);
+
+        if (_weatherCorrChart) _weatherCorrChart.destroy();
+        _weatherCorrChart = new Chart($('chart_weather_correlation'), {
+            type: 'bar',
+            data: {
+                labels: labels,
+                datasets: [
+                    {
+                        label: LANG === 'de' ? '\u00D8 Ertrag' : '\u00D8 Yield',
+                        data: avgValues,
+                        backgroundColor: colors.map(c => c + 'cc'),
+                        borderColor: colors,
+                        borderWidth: 1,
+                        borderRadius: 6,
+                        barPercentage: 0.6
+                    }
+                ]
+            },
+            options: {
+                responsive: true, maintainAspectRatio: false, animation: false,
+                indexAxis: 'y',
+                plugins: {
+                    legend: { display: false },
+                    tooltip: { callbacks: { label: ctx => {
+                        const i = ctx.dataIndex;
+                        return '\u00D8 ' + fmt2.format(avgValues[i]) + ' kWh'
+                            + ' (Min ' + fmt2.format(minValues[i]) + ', Max ' + fmt2.format(maxValues[i]) + ')'
+                            + ' - ' + counts[i] + (LANG === 'de' ? ' Tage' : ' days');
+                    } } }
+                },
+                scales: {
+                    x: { beginAtZero: true, grid: { color: chartGridColor() }, ticks: { callback: v => v + ' kWh' } },
+                    y: { grid: { display: false } }
+                }
+            },
+            plugins: [{
+                id: 'barLabels',
+                afterDatasetsDraw(chart) {
+                    const ctx2 = chart.ctx;
+                    const meta = chart.getDatasetMeta(0);
+                    ctx2.font = 'bold 10px system-ui';
+                    ctx2.textBaseline = 'middle';
+                    meta.data.forEach((bar, i) => {
+                        const pct = sunnyAvg > 0 ? Math.round(avgValues[i] / sunnyAvg * 100) : 0;
+                        ctx2.fillStyle = '#fff';
+                        ctx2.textAlign = 'left';
+                        ctx2.fillText(fmt2.format(avgValues[i]) + ' kWh', bar.x + 6, bar.y);
+                        ctx2.font = '9px system-ui';
+                        ctx2.fillStyle = '#888';
+                        ctx2.fillText('(' + counts[i] + 'd)', bar.x + 6, bar.y + 12);
+                        ctx2.font = 'bold 10px system-ui';
+                    });
+                }
+            }]
+        });
+        $('weatherCorrelationSection').style.display = '';
+    } catch (e) { console.warn('Weather correlation error:', e); }
+}
+
+loadWeatherCorrelation();
+
+// === Eigenverbrauchs-Optimierung ===
+let _selfConsOptChart = null;
+
+async function loadSelfConsumptionOpt() {
+    try {
+        const res = await fetch('/api/daily?days=90');
+        const data = await res.json();
+        if (!data.length) return;
+
+        // Aggregate totals
+        let totalSolar = 0, totalDirectUse = 0, totalBatteryIn = 0, totalBatteryOut = 0;
+        let totalCharge = 0, totalOutput = 0;
+        for (const d of data) {
+            totalSolar += d.solar_kwh || 0;
+            totalDirectUse += d.direct_use_kwh || 0;
+            totalBatteryIn += d.battery_in_kwh || 0;
+            totalBatteryOut += d.battery_out_kwh || 0;
+            totalCharge += d.total_charge_kwh || 0;
+            totalOutput += d.total_output_kwh || 0;
+        }
+
+        // Solar allocation: where does produced solar go?
+        const batteryLoss = Math.max(0, totalBatteryIn - totalBatteryOut);
+        const surplus = Math.max(0, totalSolar - totalDirectUse - totalBatteryIn);
+
+        // Self-consumption rate = (directUse + batteryIn) / solar
+        const selfConsRate = totalSolar > 0 ? Math.round((totalDirectUse + totalBatteryIn) / totalSolar * 100) : 0;
+        // Autarky rate = (directUse + batteryOut) / output
+        const autarkyRate = totalOutput > 0 ? Math.round((totalDirectUse + totalBatteryOut) / totalOutput * 100) : 0;
+        // Battery efficiency
+        const rte = totalBatteryIn > 0 ? Math.round(totalBatteryOut / totalBatteryIn * 100) : 0;
+
+        const kpiEl = $('selfConsOptKpis');
+        if (kpiEl) {
+            kpiEl.innerHTML =
+                '<div class="mfc-kpi">'
+                    + '<div class="mfc-kpi-label">' + (LANG === 'de' ? 'Eigenverbrauch' : 'Self-consumption') + '</div>'
+                    + '<div class="mfc-kpi-value amber">' + selfConsRate + '%</div>'
+                    + '<div class="mfc-kpi-sub">' + fmt.format(totalDirectUse + totalBatteryIn) + ' / ' + fmt.format(totalSolar) + ' kWh</div>'
+                + '</div>'
+                + '<div class="mfc-kpi">'
+                    + '<div class="mfc-kpi-label">' + (LANG === 'de' ? 'Netz-Anteil' : 'Grid share') + '</div>'
+                    + '<div class="mfc-kpi-value dim">' + (totalOutput > 0 ? Math.round(totalCharge / totalOutput * 100) : 0) + '%</div>'
+                    + '<div class="mfc-kpi-sub">' + fmt.format(totalCharge) + ' kWh ' + (LANG === 'de' ? 'vom Netz' : 'from grid') + '</div>'
+                + '</div>'
+                + '<div class="mfc-kpi">'
+                    + '<div class="mfc-kpi-label">' + (LANG === 'de' ? 'Batterie-Effizienz' : 'Battery RTE') + '</div>'
+                    + '<div class="mfc-kpi-value' + (rte >= 85 ? ' green' : ' amber') + '">' + rte + '%</div>'
+                    + '<div class="mfc-kpi-sub">' + fmt.format(batteryLoss) + ' kWh ' + (LANG === 'de' ? 'Verlust' : 'loss') + '</div>'
+                + '</div>';
+        }
+
+        // Stacked bar: where solar energy goes (per month)
+        const monthlyBreakdown = {};
+        for (const d of data) {
+            const mm = d.date.slice(0, 7); // YYYY-MM
+            if (!monthlyBreakdown[mm]) monthlyBreakdown[mm] = { direct: 0, battery: 0, grid: 0, surplus: 0 };
+            const mb = monthlyBreakdown[mm];
+            mb.direct += d.direct_use_kwh || 0;
+            mb.battery += d.battery_in_kwh || 0;
+            mb.grid += d.total_charge_kwh || 0;
+            const daySurplus = Math.max(0, (d.solar_kwh || 0) - (d.direct_use_kwh || 0) - (d.battery_in_kwh || 0));
+            mb.surplus += daySurplus;
+        }
+
+        const months = Object.keys(monthlyBreakdown).sort();
+        const monthLabels = months.map(m => {
+            const [y, mm] = m.split('-');
+            const names = LANG === 'de'
+                ? ['Jan', 'Feb', 'M\u00E4r', 'Apr', 'Mai', 'Jun', 'Jul', 'Aug', 'Sep', 'Okt', 'Nov', 'Dez']
+                : ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
+            return names[parseInt(mm) - 1] + ' ' + y.slice(2);
+        });
+
+        if (_selfConsOptChart) _selfConsOptChart.destroy();
+        _selfConsOptChart = new Chart($('chart_self_consumption_opt'), {
+            type: 'bar',
+            data: {
+                labels: monthLabels,
+                datasets: [
+                    {
+                        label: LANG === 'de' ? 'Direktverbrauch' : 'Direct use',
+                        data: months.map(m => Math.round(monthlyBreakdown[m].direct * 10) / 10),
+                        backgroundColor: '#f59e0b',
+                        borderRadius: 2
+                    },
+                    {
+                        label: LANG === 'de' ? 'Batterie' : 'Battery',
+                        data: months.map(m => Math.round(monthlyBreakdown[m].battery * 10) / 10),
+                        backgroundColor: '#22c55e',
+                        borderRadius: 2
+                    },
+                    {
+                        label: LANG === 'de' ? 'Netz-Ladung' : 'Grid charge',
+                        data: months.map(m => Math.round(monthlyBreakdown[m].grid * 10) / 10),
+                        backgroundColor: '#60a5fa',
+                        borderRadius: 2
+                    },
+                    {
+                        label: LANG === 'de' ? '\u00DCberschuss' : 'Surplus',
+                        data: months.map(m => Math.round(monthlyBreakdown[m].surplus * 10) / 10),
+                        backgroundColor: 'rgba(148,163,184,0.3)',
+                        borderRadius: 2
+                    }
+                ]
+            },
+            options: {
+                responsive: true, maintainAspectRatio: false, animation: false,
+                interaction: { intersect: false, mode: 'index' },
+                scales: {
+                    x: { stacked: true, grid: { display: false }, ticks: { font: { size: 9 } } },
+                    y: { stacked: true, beginAtZero: true, grid: { color: chartGridColor() }, ticks: { maxTicksLimit: 5, callback: v => v + ' kWh' } }
+                },
+                plugins: {
+                    legend: { display: true, position: 'top', labels: { boxWidth: 10, font: { size: 9 } } },
+                    tooltip: { callbacks: { label: ctx => ctx.dataset.label + ': ' + fmt.format(ctx.parsed.y) + ' kWh' } }
+                }
+            }
+        });
+        $('selfConsumptionOptSection').style.display = '';
+    } catch (e) { console.warn('Self-consumption opt error:', e); }
+}
+
+loadSelfConsumptionOpt();
+
 // === SOH Trend Chart ===
 async function loadSohChart() {
     try {
