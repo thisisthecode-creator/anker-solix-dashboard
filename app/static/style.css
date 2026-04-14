@@ -1358,45 +1358,79 @@ header h1 {
     border-radius: 10px;
     background: var(--bg);
     border: 1px solid var(--card-border);
-    opacity: 0.4;
-    transition: opacity 0.3s, border-color 0.3s;
+    opacity: 0.35;
+    transition: opacity 0.4s, border-color 0.4s, box-shadow 0.4s, background 0.4s;
 }
 
 .pf-node.active {
     opacity: 1;
-    animation: pfActivePulse 2s ease-in-out infinite;
 }
 
 .pf-v-inputs .pf-node.active {
     border-color: var(--solar);
-    box-shadow: 0 0 0 1px var(--solar), 0 0 8px rgba(245, 158, 11, 0.35);
+    background: rgba(245, 158, 11, 0.06);
+    box-shadow: 0 0 0 1px rgba(245, 158, 11, 0.3), 0 0 12px rgba(245, 158, 11, 0.2);
+    animation: pfPulseIn 2s ease-in-out infinite;
 }
 
 .pf-v-outputs .pf-node.active {
     border-color: var(--green);
-    box-shadow: 0 0 0 1px var(--green), 0 0 8px rgba(34, 197, 94, 0.35);
+    background: rgba(34, 197, 94, 0.06);
+    box-shadow: 0 0 0 1px rgba(34, 197, 94, 0.3), 0 0 12px rgba(34, 197, 94, 0.2);
+    animation: pfPulseOut 2s ease-in-out infinite;
 }
 
-@keyframes pfActivePulse {
-    0%, 100% { box-shadow: 0 0 0 1px currentColor, 0 0 8px rgba(245, 158, 11, 0.35); }
-    50%      { box-shadow: 0 0 0 1px currentColor, 0 0 14px rgba(245, 158, 11, 0.55); }
+@keyframes pfPulseIn {
+    0%, 100% { box-shadow: 0 0 0 1px rgba(245,158,11,0.3), 0 0 8px rgba(245,158,11,0.15); }
+    50%      { box-shadow: 0 0 0 1px rgba(245,158,11,0.5), 0 0 18px rgba(245,158,11,0.35); }
+}
+@keyframes pfPulseOut {
+    0%, 100% { box-shadow: 0 0 0 1px rgba(34,197,94,0.3), 0 0 8px rgba(34,197,94,0.15); }
+    50%      { box-shadow: 0 0 0 1px rgba(34,197,94,0.5), 0 0 18px rgba(34,197,94,0.35); }
 }
 
-/* Arrow lines: dim by default, animate when power flows */
+/* Active node watt value gets colored */
+.pf-v-inputs .pf-node.active .pf-watt { color: var(--solar); }
+.pf-v-outputs .pf-node.active .pf-watt { color: var(--green); }
+
+/* Flow connector lines between sections */
 .pf-v-arrow {
-    color: var(--text-dim);
-    transition: color 0.3s;
+    position: relative;
+    height: 24px;
+    width: 2px;
+    background: var(--card-border);
+    margin: 0 auto;
+    overflow: visible;
+    transition: background 0.3s;
 }
+.pf-v-arrow .pf-dots { display: none; }
+
 .pf-v-arrow.pf-line-active {
-    color: var(--solar);
-    animation: pfArrowFlow 1.2s ease-in-out infinite;
+    background: rgba(245, 158, 11, 0.3);
+}
+.pf-v-arrow.pf-line-active::after {
+    content: '';
+    position: absolute;
+    left: -3px;
+    width: 8px;
+    height: 8px;
+    border-radius: 50%;
+    background: var(--solar);
+    box-shadow: 0 0 8px var(--solar);
+    animation: pfDotFlow 1s ease-in-out infinite;
 }
 .pf-v-arrow.pf-line-active.pf-line-out {
-    color: var(--green);
+    background: rgba(34, 197, 94, 0.3);
 }
-@keyframes pfArrowFlow {
-    0%, 100% { transform: translateY(0); opacity: 0.5; }
-    50%      { transform: translateY(3px); opacity: 1; }
+.pf-v-arrow.pf-line-active.pf-line-out::after {
+    background: var(--green);
+    box-shadow: 0 0 8px var(--green);
+}
+
+@keyframes pfDotFlow {
+    0%   { top: -4px; opacity: 0.3; }
+    50%  { opacity: 1; }
+    100% { top: calc(100% - 4px); opacity: 0.3; }
 }
 
 /* Battery visual glow when charging/discharging */
@@ -1404,16 +1438,22 @@ header h1 {
     box-shadow: 0 0 12px var(--solar), inset 0 0 4px rgba(245, 158, 11, 0.4);
     animation: pfBatCharge 1.6s ease-in-out infinite;
 }
+.pf-bat-visual.pf-bat-charging .pf-bat-body {
+    border-color: var(--solar);
+}
+.pf-bat-visual.pf-bat-charging .pf-bat-tip {
+    background: var(--solar);
+}
 .pf-bat-visual.pf-bat-discharging .pf-bat-fill {
     box-shadow: 0 0 12px var(--green), inset 0 0 4px rgba(34, 197, 94, 0.4);
     animation: pfBatDischarge 1.6s ease-in-out infinite;
 }
 @keyframes pfBatCharge {
-    0%, 100% { opacity: 0.85; }
+    0%, 100% { opacity: 0.7; }
     50%      { opacity: 1; }
 }
 @keyframes pfBatDischarge {
-    0%, 100% { opacity: 0.85; }
+    0%, 100% { opacity: 0.7; }
     50%      { opacity: 1; }
 }
 
@@ -1513,7 +1553,7 @@ header h1 {
     width: 100%;
     height: 0%;
     background: var(--green);
-    opacity: 0.35;
+    opacity: 0.3;
     transition: height 0.5s ease;
 }
 
@@ -1524,10 +1564,16 @@ header h1 {
     align-items: center;
     justify-content: center;
     font-size: 1.3rem;
-    font-weight: 700;
-    color: var(--green);
+    font-weight: 800;
+    color: var(--text);
+    text-shadow: 0 1px 3px rgba(0,0,0,0.5);
     z-index: 1;
     font-variant-numeric: tabular-nums;
+}
+
+body.light-mode .pf-bat-pct {
+    color: #1a1a2e;
+    text-shadow: 0 1px 3px rgba(255,255,255,0.6);
 }
 
 .pf-bat-tip {
@@ -2475,30 +2521,26 @@ body.light-mode .log-table td {
 
 .pf-v-load-header {
     display: flex;
-    justify-content: space-between;
+    justify-content: center;
     align-items: center;
-    gap: 12px;
-    padding: 10px 16px;
-    margin: 8px 0 12px;
-    background: var(--card-bg);
-    border: 1px solid var(--card-border);
-    border-radius: 10px;
+    gap: 10px;
+    padding: 6px 0;
+    margin: 4px 0 8px;
 }
 .pf-v-load-label {
-    font-size: 0.72rem;
+    font-size: 0.7rem;
     color: var(--text-dim);
     text-transform: uppercase;
     letter-spacing: 0.06em;
     font-weight: 600;
     display: inline-flex;
     align-items: center;
-    gap: 8px;
+    gap: 6px;
     line-height: 1;
 }
 .pf-v-load-label::before {
-    content: "\26A1"; /* lightning bolt */
-    font-size: 1rem;
-    color: var(--solar);
+    content: "\26A1";
+    font-size: 0.85rem;
     line-height: 1;
 }
 .pf-v-load-total {
