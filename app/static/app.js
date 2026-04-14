@@ -1763,10 +1763,11 @@ async function loadForecastVsReal() {
         // For display: show full-day forecast as reference
         const fullDayForecast = dates.map(d => window._forecastKwh[d] || 0);
 
-        // Calculate per-day accuracy (using time-adjusted forecast for today)
+        // Calculate per-day accuracy (same formula as overall: divide by max)
         const accuracyData = dates.map((d, i) => {
             const f = forecastData[i], a = actualData[i];
-            if (f > 0 && a > 0) return Math.max(0, Math.round((1 - Math.abs(f - a) / f) * 100));
+            const m = Math.max(f, a);
+            if (f > 0 && a > 0 && m > 0) return Math.max(0, Math.round((1 - Math.abs(f - a) / m) * 100));
             return null;
         });
 
