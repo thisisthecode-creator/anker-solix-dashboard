@@ -1378,10 +1378,6 @@ async function buildHourlyForecastToday() {
             }
         }
 
-        // Accuracy from totals: |totalFc - totalAct| / max(totalFc, totalAct)
-        const maxTotal = Math.max(totalFc, totalAct);
-        const accuracy = maxTotal > 0 ? Math.max(0, Math.round((1 - Math.abs(totalFc - totalAct) / maxTotal) * 100)) : null;
-
         const section = $('hourlyForecastTodaySection');
         if (!section) return;
 
@@ -1389,13 +1385,8 @@ async function buildHourlyForecastToday() {
         const dayName = t('dayNames')[new Date().getDay()];
         const dateStr = new Date().getDate() + '.' + (new Date().getMonth() + 1) + '.';
         const h2 = section.querySelector('h2');
-        const badge = $('hourlyFcAccuracy');
-        h2.childNodes[0].textContent = (LANG === 'de' ? 'Stündliche Prognose' : 'Hourly Forecast')
-            + ' - ' + dayName + ' ' + dateStr + ' ';
-        if (badge && accuracy != null) {
-            badge.textContent = (LANG === 'de' ? 'Genauigkeit' : 'Accuracy') + ': ' + accuracy + '%';
-            badge.style.color = accuracy >= 80 ? 'var(--green)' : accuracy >= 60 ? 'var(--yellow, #eab308)' : 'var(--red, #ef4444)';
-        }
+        h2.textContent = (LANG === 'de' ? 'Stündliche Prognose' : 'Hourly Forecast')
+            + ' - ' + dayName + ' ' + dateStr;
 
         // Summary
         const sumEl = $('hourlyFcTodaySummary');
