@@ -2431,6 +2431,45 @@ body.light-mode .log-table td {
     letter-spacing: 0;
 }
 
+/* Monthly Forecast KPI Row */
+.mfc-kpi-row {
+    display: grid;
+    grid-template-columns: 1fr 1fr 1fr;
+    gap: 8px;
+    margin-bottom: 14px;
+}
+.mfc-kpi {
+    text-align: center;
+    padding: 10px 6px;
+    background: var(--bg);
+    border-radius: 10px;
+    border: 1px solid var(--card-border);
+}
+.mfc-kpi-label {
+    font-size: 0.6rem;
+    color: var(--text-dim);
+    text-transform: uppercase;
+    letter-spacing: 0.04em;
+    margin-bottom: 4px;
+}
+.mfc-kpi-value {
+    font-size: 1.15rem;
+    font-weight: 700;
+    font-variant-numeric: tabular-nums;
+}
+.mfc-kpi-value.amber { color: var(--solar); }
+.mfc-kpi-value.green { color: var(--green); }
+.mfc-kpi-value.dim   { color: var(--text-dim); }
+.mfc-kpi-sub {
+    font-size: 0.55rem;
+    color: var(--text-dim);
+    margin-top: 2px;
+}
+.mfc-kpi-trend { font-size: 0.6rem; font-weight: 600; }
+.mfc-kpi-trend.up   { color: var(--green); }
+.mfc-kpi-trend.down { color: var(--red); }
+.mfc-kpi-trend.flat { color: var(--text-dim); }
+
 /* Heatmap Calendar */
 .heatmap-wrap {
     overflow-x: auto;

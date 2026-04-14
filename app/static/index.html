@@ -10,7 +10,7 @@
     <link rel="icon" href="/static/icon-192.png" type="image/png">
     <link rel="apple-touch-icon" href="/static/apple-touch-icon.png">
     <title>Solar Dashboard</title>
-    <link rel="stylesheet" href="/static/style.css?v=61">
+    <link rel="stylesheet" href="/static/style.css?v=62">
     <script src="https://cdn.jsdelivr.net/npm/chart.js@4"></script>
 </head>
 <body>
@@ -136,11 +136,21 @@
             <div class="chart-wrap" style="height:180px"><canvas id="chart_hourly_forecast_today"></canvas></div>
         </section>
 
+        <!-- Forecast vs. Reality Chart -->
+        <section class="today-box" id="forecastVsRealBox" style="display:none">
+            <h2>
+                <span data-i18n="forecastVsReal">Prognose vs. Real</span>
+                <span class="forecast-accuracy-badge" id="forecastAccuracy" title="MAPE">--</span>
+            </h2>
+            <div class="chart-wrap"><canvas id="chart_forecast_vs_real"></canvas></div>
+        </section>
+
         <!-- Monthly Solar Forecast: Last Year vs This Year -->
         <section class="today-box" id="monthlyForecastSection" style="display:none">
             <h2 id="monthlyFcTitle">Solar-Prognose</h2>
-            <div id="monthlyFcSummary" style="font-size:0.7rem;color:var(--text-dim);margin-bottom:10px;display:flex;gap:16px;flex-wrap:wrap"></div>
-            <div class="chart-wrap" style="height:220px"><canvas id="chart_monthly_forecast"></canvas></div>
+            <div class="mfc-kpi-row" id="monthlyFcKpis"></div>
+            <div id="monthlyFcSummary" style="display:none"></div>
+            <div class="chart-wrap" style="height:240px"><canvas id="chart_monthly_forecast"></canvas></div>
         </section>
 
         <!-- MQTT Ticker -->
@@ -296,15 +306,6 @@
                 <button class="tab" data-flowvar="365" data-i18n="year">Jahr</button>
             </div>
             <div class="flow-anim-grid" id="flowAnimatedContent"></div>
-        </section>
-
-        <!-- Forecast vs. Reality Chart (after Energie-Bilanz, collapsed by default) -->
-        <section class="today-box" id="forecastVsRealBox" style="display:none">
-            <h2>
-                <span data-i18n="forecastVsReal">Prognose vs. Real</span>
-                <span class="forecast-accuracy-badge" id="forecastAccuracy" title="MAPE">--</span>
-            </h2>
-            <div class="chart-wrap"><canvas id="chart_forecast_vs_real"></canvas></div>
         </section>
 
         <!-- Energy & Savings elements kept hidden for JS compat -->
@@ -610,6 +611,6 @@
 
     </div>
 
-    <script src="/static/app.js?v=61"></script>
+    <script src="/static/app.js?v=62"></script>
 </body>
 </html>
