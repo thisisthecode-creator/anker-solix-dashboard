@@ -1297,6 +1297,96 @@ async function loadForecast() {
 
 function updateExpectedSolar() {}
 
+// === Monthly Solar Forecast (12 months historical GTI from Open-Meteo) ===
+let _monthlyFcChart = null;
+async function loadMonthlyForecast() {
+    try {
+        const endDate = new Date();
+        const startDate = new Date();
+        startDate.setFullYear(startDate.getFullYear() - 1);
+        const fmtDate = d => d.toISOString().slice(0, 10);
+
+        const stripResults = await Promise.all(CURVE_STRIPS.map(s =>
+            fetch('https://archive-api.open-meteo.com/v1/archive?latitude=52.1928&longitude=21.0103'
+                + '&hourly=global_tilted_irradiance'
+                + '&tilt=' + s.tilt + '&azimuth=' + AZIMUTH
+                + '&timezone=Europe%2FWarsaw'
+                + '&start_date=' + fmtDate(startDate)
+                + '&end_date=' + fmtDate(endDate)
+            ).then(r => r.json()).then(d => d.hourly)
+        ));
+
+        if (!stripResults[0] || !stripResults[0].time) return;
+
+        // Aggregate weighted GTI by month → kWh
+        const monthlyKwh = {};
+        const times = stripResults[0].time;
+        for (let i = 0; i < times.length; i++) {
+            const month = times[i].slice(0, 7); // "2025-04"
+            let weightedGTI = 0;
+            for (let s = 0; s < CURVE_STRIPS.length; s++) {
+                weightedGTI += (stripResults[s].global_tilted_irradiance[i] || 0) * CURVE_STRIPS[s].weight;
+            }
+            const kwh = weightedGTI / 1000 * PANEL_KWP * PANEL_EFFICIENCY;
+            monthlyKwh[month] = (monthlyKwh[month] || 0) + kwh;
+        }
+
+        const months = Object.keys(monthlyKwh).sort();
+        if (!months.length) return;
+
+        const monthNames = LANG === 'de'
+            ? ['Jan', 'Feb', 'Mär', 'Apr', 'Mai', 'Jun', 'Jul', 'Aug', 'Sep', 'Okt', 'Nov', 'Dez']
+            : ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
+        const labels = months.map(m => {
+            const mi = parseInt(m.slice(5, 7), 10) - 1;
+            return monthNames[mi] + ' ' + m.slice(2, 4);
+        });
+        const values = months.map(m => Math.round(monthlyKwh[m] * 100) / 100);
+        const total = values.reduce((s, v) => s + v, 0);
+        const peak = Math.max(...values);
+        const peakMonth = labels[values.indexOf(peak)];
+        const avg = total / values.length;
+
+        const section = $('monthlyForecastSection');
+        if (!section) return;
+
+        const sumEl = $('monthlyFcSummary');
+        if (sumEl) {
+            sumEl.innerHTML = '<span>' + Math.round(total * 10) / 10 + ' kWh ' + (LANG === 'de' ? 'gesamt' : 'total') + '</span>'
+                + '<span>⌀ ' + Math.round(avg * 10) / 10 + ' kWh/' + (LANG === 'de' ? 'Monat' : 'month') + '</span>'
+                + '<span>Peak: ' + Math.round(peak * 10) / 10 + ' kWh ' + peakMonth + '</span>';
+        }
+
+        if (_monthlyFcChart) _monthlyFcChart.destroy();
+        _monthlyFcChart = new Chart($('chart_monthly_forecast'), {
+            type: 'bar',
+            data: {
+                labels: labels,
+                datasets: [{
+                    data: values,
+                    backgroundColor: values.map(v => v === peak ? '#f59e0b' : 'rgba(245,158,11,0.35)'),
+                    borderColor: '#f59e0b',
+                    borderWidth: 1,
+                    borderRadius: 3
+                }]
+            },
+            options: {
+                responsive: true, maintainAspectRatio: false, animation: false,
+                plugins: {
+                    legend: { display: false },
+                    tooltip: { callbacks: { label: ctx => fmt2.format(ctx.parsed.y) + ' kWh' } }
+                },
+                scales: {
+                    y: { beginAtZero: true, grid: { color: chartGridColor() }, ticks: { maxTicksLimit: 5, callback: v => v + ' kWh' } },
+                    x: { grid: { display: false }, ticks: { font: { size: 9 } } }
+                }
+            }
+        });
+        section.style.display = '';
+    } catch (e) { console.warn('Monthly forecast error:', e); }
+}
+loadMonthlyForecast();
+
 // === Hourly Forecast vs Actual (today) ===
 let _hourlyTodayChart = null;
 
