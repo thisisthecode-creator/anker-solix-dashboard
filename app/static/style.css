@@ -3484,3 +3484,10 @@ body.light-mode .log-table td {
     opacity: 0;
     pointer-events: none;
 }
+
+/* Charging analysis: stack 2-col grid on mobile */
+@media (max-width: 600px) {
+    #chargingAnalysisSection > div[style*="grid-template-columns"] {
+        grid-template-columns: 1fr !important;
+    }
+}

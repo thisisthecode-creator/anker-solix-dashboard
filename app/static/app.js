@@ -2382,6 +2382,218 @@ async function loadPeakOutput() {
 
 loadPeakOutput();
 
+// === Charging Analysis (Serial vs Parallel) ===
+let _chargingScatterChart = null;
+let _chargingRateBarsChart = null;
+let _chargingDurationChart = null;
+
+async function loadChargingAnalysis() {
+    try {
+        const res = await fetch('/api/charging-sessions?days=90');
+        const result = await res.json();
+        const sessions = result.sessions || [];
+        const stats = result.stats || {};
+        if (!sessions.length) return;
+
+        // KPI cards
+        const kpiEl = $('chargingKpis');
+        if (kpiEl) {
+            const estH = Math.floor(stats.est_full_charge_min / 60);
+            const estM = stats.est_full_charge_min % 60;
+            kpiEl.innerHTML =
+                '<div class="mfc-kpi">'
+                    + '<div class="mfc-kpi-label">' + (LANG === 'de' ? 'Ladegeschwindigkeit' : 'Charge rate') + '</div>'
+                    + '<div class="mfc-kpi-value amber">' + stats.avg_rate_pct_h + '%/h</div>'
+                    + '<div class="mfc-kpi-sub">Max ' + stats.max_rate_pct_h + '%/h</div>'
+                + '</div>'
+                + '<div class="mfc-kpi">'
+                    + '<div class="mfc-kpi-label">' + (LANG === 'de' ? '\u00D8 Ladedauer' : 'Avg duration') + '</div>'
+                    + '<div class="mfc-kpi-value green">' + stats.avg_duration_min + ' min</div>'
+                    + '<div class="mfc-kpi-sub">\u00D8 +' + stats.avg_soc_gained + '% SOC</div>'
+                + '</div>'
+                + '<div class="mfc-kpi">'
+                    + '<div class="mfc-kpi-label">' + (LANG === 'de' ? '0-100% geschatzt' : '0-100% est.') + '</div>'
+                    + '<div class="mfc-kpi-value dim">' + estH + 'h ' + estM + 'min</div>'
+                    + '<div class="mfc-kpi-sub">' + stats.total_sessions + ' Sessions</div>'
+                + '</div>';
+        }
+
+        // 1) Scatter: Solar power vs Charging rate
+        const scatterPoints = sessions.map(s => ({
+            x: s.avg_solar_w,
+            y: s.rate_pct_h
+        }));
+
+        if (_chargingScatterChart) _chargingScatterChart.destroy();
+        _chargingScatterChart = new Chart($('chart_charging_scatter'), {
+            type: 'scatter',
+            data: {
+                datasets: [{
+                    label: LANG === 'de' ? 'Solar W vs. Laderate %/h' : 'Solar W vs. Charge rate %/h',
+                    data: scatterPoints,
+                    backgroundColor: 'rgba(245,158,11,0.5)',
+                    borderColor: '#f59e0b',
+                    pointRadius: 5,
+                    pointHoverRadius: 7
+                }]
+            },
+            options: {
+                responsive: true, maintainAspectRatio: false,
+                plugins: {
+                    legend: { display: false },
+                    title: {
+                        display: true,
+                        text: LANG === 'de' ? 'Solarleistung vs. Laderate' : 'Solar power vs. Charge rate',
+                        color: '#ccc', font: { size: 13 }
+                    },
+                    tooltip: {
+                        callbacks: {
+                            label: function(ctx) {
+                                return ctx.raw.x + 'W \u2192 ' + ctx.raw.y + '%/h';
+                            }
+                        }
+                    }
+                },
+                scales: {
+                    x: {
+                        title: { display: true, text: 'Solar (W)', color: '#aaa' },
+                        ticks: { color: '#aaa' }, grid: { color: 'rgba(255,255,255,0.06)' }
+                    },
+                    y: {
+                        title: { display: true, text: '%/h', color: '#aaa' },
+                        ticks: { color: '#aaa' }, grid: { color: 'rgba(255,255,255,0.06)' }
+                    }
+                }
+            }
+        });
+
+        // 2) Bar chart: Charging rate by solar power bracket
+        const bp = stats.by_solar_power || {};
+        const bracketLabels = ['< 50W', '50-100W', '> 100W'];
+        const bracketRates = [
+            (bp.low_0_50W || {}).avg_rate || 0,
+            (bp.mid_50_100W || {}).avg_rate || 0,
+            (bp.high_100W_plus || {}).avg_rate || 0
+        ];
+        const bracketCounts = [
+            (bp.low_0_50W || {}).count || 0,
+            (bp.mid_50_100W || {}).count || 0,
+            (bp.high_100W_plus || {}).count || 0
+        ];
+
+        if (_chargingRateBarsChart) _chargingRateBarsChart.destroy();
+        _chargingRateBarsChart = new Chart($('chart_charging_rate_bars'), {
+            type: 'bar',
+            data: {
+                labels: bracketLabels,
+                datasets: [{
+                    label: LANG === 'de' ? 'Laderate %/h' : 'Charge rate %/h',
+                    data: bracketRates,
+                    backgroundColor: ['rgba(239,68,68,0.6)', 'rgba(245,158,11,0.6)', 'rgba(34,197,94,0.6)'],
+                    borderColor: ['#ef4444', '#f59e0b', '#22c55e'],
+                    borderWidth: 1
+                }]
+            },
+            options: {
+                responsive: true, maintainAspectRatio: false,
+                indexAxis: 'y',
+                plugins: {
+                    legend: { display: false },
+                    title: {
+                        display: true,
+                        text: LANG === 'de' ? 'Laderate nach Solarleistung' : 'Charge rate by solar power',
+                        color: '#ccc', font: { size: 13 }
+                    },
+                    tooltip: {
+                        callbacks: {
+                            afterLabel: function(ctx) {
+                                return bracketCounts[ctx.dataIndex] + ' Sessions';
+                            }
+                        }
+                    }
+                },
+                scales: {
+                    x: {
+                        title: { display: true, text: '%/h', color: '#aaa' },
+                        ticks: { color: '#aaa' }, grid: { color: 'rgba(255,255,255,0.06)' }
+                    },
+                    y: {
+                        ticks: { color: '#aaa' }, grid: { display: false }
+                    }
+                }
+            }
+        });
+
+        // 3) Timeline: recent charging sessions (duration + SOC gained)
+        const recent = sessions.slice(-30);
+        const durLabels = recent.map(s => s.date.slice(5) + ' ' + s.start);
+        const durValues = recent.map(s => s.duration_min);
+        const socValues = recent.map(s => s.soc_gained);
+
+        if (_chargingDurationChart) _chargingDurationChart.destroy();
+        _chargingDurationChart = new Chart($('chart_charging_duration'), {
+            type: 'bar',
+            data: {
+                labels: durLabels,
+                datasets: [
+                    {
+                        label: LANG === 'de' ? 'Dauer (min)' : 'Duration (min)',
+                        data: durValues,
+                        backgroundColor: 'rgba(245,158,11,0.5)',
+                        borderColor: '#f59e0b',
+                        borderWidth: 1,
+                        yAxisID: 'y'
+                    },
+                    {
+                        label: LANG === 'de' ? 'SOC-Gewinn (%)' : 'SOC gained (%)',
+                        data: socValues,
+                        type: 'line',
+                        borderColor: '#22c55e',
+                        backgroundColor: 'rgba(34,197,94,0.1)',
+                        fill: true,
+                        tension: 0.3,
+                        pointRadius: 2,
+                        yAxisID: 'y1'
+                    }
+                ]
+            },
+            options: {
+                responsive: true, maintainAspectRatio: false,
+                plugins: {
+                    legend: { labels: { color: '#aaa', boxWidth: 12 } },
+                    tooltip: {
+                        callbacks: {
+                            afterBody: function(items) {
+                                const i = items[0].dataIndex;
+                                const s = recent[i];
+                                return s.start_soc + '% \u2192 ' + s.end_soc + '% | ' + s.avg_solar_w + 'W';
+                            }
+                        }
+                    }
+                },
+                scales: {
+                    x: { ticks: { color: '#aaa', maxRotation: 45, maxTicksLimit: 15 }, grid: { display: false } },
+                    y: {
+                        position: 'left',
+                        title: { display: true, text: 'min', color: '#aaa' },
+                        ticks: { color: '#aaa' }, grid: { color: 'rgba(255,255,255,0.06)' }
+                    },
+                    y1: {
+                        position: 'right',
+                        title: { display: true, text: '%', color: '#aaa' },
+                        ticks: { color: '#aaa' },
+                        grid: { display: false }
+                    }
+                }
+            }
+        });
+
+        $('chargingAnalysisSection').style.display = '';
+    } catch (e) { console.warn('Charging analysis error:', e); }
+}
+
+loadChargingAnalysis();
+
 // === SOH Trend Chart ===
 async function loadSohChart() {
     try {

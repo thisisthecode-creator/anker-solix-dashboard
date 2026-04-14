@@ -1096,3 +1096,121 @@ async def get_forecast_accuracy(days: int = 60) -> dict:
             ],
         }
     return out
+
+
+# === Charging session analysis ================================================
+
+async def get_charging_sessions(days: int = 90) -> dict:
+    """Analyse raw readings to extract battery charging sessions.
+
+    A charging session starts when SOC begins rising and ends when it stops
+    rising for more than 10 minutes or SOC drops.  Returns individual sessions
+    plus aggregate stats useful for serial-vs-parallel panel comparison.
+    """
+    readings = await get_readings(hours=days * 24)
+    if len(readings) < 10:
+        return {"sessions": [], "stats": {}}
+
+    # Sort chronologically
+    readings.sort(key=lambda r: r["timestamp"])
+
+    sessions: list[dict] = []
+    sess_start = None
+    sess_start_soc = 0
+    last_ts = None
+    last_soc = 0
+    peak_solar_in_sess = 0
+    solar_sum = 0
+    solar_samples = 0
+
+    def _ts(s: str) -> datetime:
+        return datetime.fromisoformat(s.replace("+02:00", "").replace("+01:00", ""))
+
+    def _close_session(end_ts_str, end_soc):
+        nonlocal sess_start, sess_start_soc, peak_solar_in_sess, solar_sum, solar_samples
+        if sess_start is None:
+            return
+        start = _ts(sess_start)
+        end = _ts(end_ts_str)
+        dur_min = (end - start).total_seconds() / 60
+        soc_gained = end_soc - sess_start_soc
+        if dur_min >= 5 and soc_gained >= 3:
+            avg_solar = round(solar_sum / max(1, solar_samples), 1)
+            rate_pct_h = round(soc_gained / (dur_min / 60), 1) if dur_min > 0 else 0
+            sessions.append({
+                "date": sess_start[:10],
+                "start": sess_start[11:16],
+                "end": end_ts_str[11:16],
+                "start_soc": sess_start_soc,
+                "end_soc": end_soc,
+                "soc_gained": soc_gained,
+                "duration_min": round(dur_min),
+                "rate_pct_h": rate_pct_h,
+                "avg_solar_w": avg_solar,
+                "peak_solar_w": peak_solar_in_sess,
+            })
+        sess_start = None
+        peak_solar_in_sess = 0
+        solar_sum = 0
+        solar_samples = 0
+
+    for r in readings:
+        ts_str = r["timestamp"]
+        soc = r["battery_soc"]
+        solar = r.get("solar_watts", 0)
+
+        if last_ts is not None:
+            gap_min = (_ts(ts_str) - _ts(last_ts)).total_seconds() / 60
+
+            if soc > last_soc and solar > 0:
+                if sess_start is None:
+                    sess_start = last_ts
+                    sess_start_soc = last_soc
+                    peak_solar_in_sess = 0
+                    solar_sum = 0
+                    solar_samples = 0
+                peak_solar_in_sess = max(peak_solar_in_sess, solar)
+                solar_sum += solar
+                solar_samples += 1
+            elif sess_start is not None:
+                if soc < last_soc or gap_min > 10:
+                    _close_session(last_ts, last_soc)
+
+        last_ts = ts_str
+        last_soc = soc
+
+    if sess_start is not None:
+        _close_session(last_ts, last_soc)
+
+    if sessions:
+        rates = [s["rate_pct_h"] for s in sessions]
+        durations = [s["duration_min"] for s in sessions]
+        soc_gains = [s["soc_gained"] for s in sessions]
+        avg_solars = [s["avg_solar_w"] for s in sessions]
+
+        low = [s for s in sessions if s["avg_solar_w"] < 50]
+        mid = [s for s in sessions if 50 <= s["avg_solar_w"] < 100]
+        high = [s for s in sessions if s["avg_solar_w"] >= 100]
+
+        def _avg(lst, key):
+            vals = [s[key] for s in lst]
+            return round(sum(vals) / len(vals), 1) if vals else 0
+
+        stats = {
+            "total_sessions": len(sessions),
+            "avg_rate_pct_h": round(sum(rates) / len(rates), 1),
+            "max_rate_pct_h": round(max(rates), 1),
+            "avg_duration_min": round(sum(durations) / len(durations)),
+            "avg_soc_gained": round(sum(soc_gains) / len(soc_gains), 1),
+            "avg_solar_w": round(sum(avg_solars) / len(avg_solars), 1),
+            "est_full_charge_min": round(100 / (sum(rates) / len(rates))) if sum(rates) > 0 else 0,
+            "by_solar_power": {
+                "low_0_50W": {"count": len(low), "avg_rate": _avg(low, "rate_pct_h")},
+                "mid_50_100W": {"count": len(mid), "avg_rate": _avg(mid, "rate_pct_h")},
+                "high_100W_plus": {"count": len(high), "avg_rate": _avg(high, "rate_pct_h")},
+            },
+        }
+    else:
+        stats = {}
+
+    return {"sessions": sessions[-200:], "stats": stats}
