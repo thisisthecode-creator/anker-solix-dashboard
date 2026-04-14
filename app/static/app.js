@@ -1363,8 +1363,165 @@ function buildHourlyForecastChart() {
     section.style.display = '';
 }
 
+// === Hourly Forecast vs Actual (today) ===
+let _hourlyTodayChart = null;
+
+async function buildHourlyForecastToday() {
+    if (!window._forecastHourly) return;
+    const todayStr = new Date().toISOString().slice(0, 10);
+    const currentHour = new Date().getHours();
+
+    // Collect today's hourly forecast (all hours with predicted production)
+    const forecastByHour = {};
+    for (const [ts, kwh] of Object.entries(window._forecastHourly)) {
+        if (ts.startsWith(todayStr)) {
+            const h = parseInt(ts.slice(11, 13), 10);
+            forecastByHour[h] = kwh;
+        }
+    }
+
+    // Fetch actual readings for today and aggregate solar_watts per hour into kWh
+    try {
+        const res = await fetch('/api/readings?hours=24');
+        const rows = await res.json();
+        if (!rows.length) return;
+
+        const actualByHour = {};
+        const countByHour = {};
+        for (const r of rows) {
+            if (!r.timestamp) continue;
+            const ts = r.timestamp;
+            const day = ts.slice(0, 10);
+            if (day !== todayStr) continue;
+            const h = parseInt(ts.slice(11, 13), 10);
+            if (!actualByHour[h]) { actualByHour[h] = 0; countByHour[h] = 0; }
+            actualByHour[h] += (r.solar_watts || 0);
+            countByHour[h]++;
+        }
+
+        // Convert average watts per hour to kWh (avg_watts * 1h / 1000)
+        for (const h of Object.keys(actualByHour)) {
+            const avgW = actualByHour[h] / (countByHour[h] || 1);
+            actualByHour[h] = Math.round(avgW / 1000 * 1000) / 1000; // kWh with 3 decimals
+        }
+
+        // Find active solar range (first and last hour with actual production)
+        const activeHours = Object.keys(actualByHour)
+            .map(Number)
+            .filter(h => actualByHour[h] > 0.001)
+            .sort((a, b) => a - b);
+
+        const startHour = activeHours.length ? activeHours[0] : null;
+        const endHour = activeHours.length ? Math.min(activeHours[activeHours.length - 1], currentHour) : null;
+
+        // Build chart data: show all forecast hours that have production
+        const hours = [];
+        const fcData = [];
+        const actData = [];
+        for (let h = 0; h < 24; h++) {
+            const fc = forecastByHour[h] || 0;
+            const act = h <= currentHour ? (actualByHour[h] || 0) : null;
+            if (fc > 0 || (act != null && act > 0)) {
+                hours.push(String(h).padStart(2, '0') + ':00');
+                fcData.push(Math.round(fc * 1000) / 1000);
+                actData.push(act != null ? Math.round(act * 1000) / 1000 : null);
+            }
+        }
+
+        if (!hours.length) return;
+
+        // Calculate accuracy only for active solar hours
+        let sumApe = 0, accCount = 0;
+        if (startHour != null && endHour != null) {
+            for (let h = startHour; h <= endHour; h++) {
+                const fc = forecastByHour[h] || 0;
+                const act = actualByHour[h] || 0;
+                if (fc > 0.001) {
+                    sumApe += Math.abs(fc - act) / fc;
+                    accCount++;
+                }
+            }
+        }
+
+        const accuracy = accCount > 0 ? Math.max(0, Math.round(100 - (sumApe / accCount * 100))) : null;
+        const totalFc = fcData.reduce((s, v) => s + v, 0);
+        const totalAct = actData.filter(v => v != null).reduce((s, v) => s + v, 0);
+
+        const section = $('hourlyForecastTodaySection');
+        if (!section) return;
+
+        // Update title
+        const dayName = t('dayNames')[new Date().getDay()];
+        const dateStr = new Date().getDate() + '.' + (new Date().getMonth() + 1) + '.';
+        const h2 = section.querySelector('h2');
+        const badge = $('hourlyFcAccuracy');
+        h2.childNodes[0].textContent = (LANG === 'de' ? 'Stündliche Prognose' : 'Hourly Forecast')
+            + ' - ' + dayName + ' ' + dateStr + ' ';
+        if (badge && accuracy != null) {
+            badge.textContent = (LANG === 'de' ? 'Genauigkeit' : 'Accuracy') + ': ' + accuracy + '%';
+            badge.style.color = accuracy >= 80 ? 'var(--green)' : accuracy >= 60 ? 'var(--yellow, #eab308)' : 'var(--red, #ef4444)';
+        }
+
+        // Summary
+        const sumEl = $('hourlyFcTodaySummary');
+        if (sumEl) {
+            const activeRange = startHour != null
+                ? (String(startHour).padStart(2, '0') + ':00 - ' + String(endHour).padStart(2, '0') + ':00')
+                : '--';
+            sumEl.innerHTML = '<span>' + (LANG === 'de' ? 'Prognose' : 'Forecast') + ': ' + fmt2.format(totalFc) + ' kWh</span>'
+                + '<span>' + (LANG === 'de' ? 'Real' : 'Actual') + ': ' + fmt2.format(totalAct) + ' kWh</span>'
+                + '<span>' + (LANG === 'de' ? 'Aktiv' : 'Active') + ': ' + activeRange + '</span>';
+        }
+
+        if (_hourlyTodayChart) _hourlyTodayChart.destroy();
+        _hourlyTodayChart = new Chart($('chart_hourly_forecast_today'), {
+            type: 'bar',
+            data: {
+                labels: hours,
+                datasets: [
+                    {
+                        label: t('forecast'),
+                        data: fcData,
+                        backgroundColor: 'rgba(245,158,11,0.25)',
+                        borderColor: '#f59e0b',
+                        borderWidth: 1,
+                        borderRadius: 3
+                    },
+                    {
+                        label: t('actual'),
+                        data: actData,
+                        backgroundColor: '#f59e0b',
+                        borderColor: '#f59e0b',
+                        borderWidth: 1,
+                        borderRadius: 3
+                    }
+                ]
+            },
+            options: {
+                responsive: true, maintainAspectRatio: false, animation: false,
+                interaction: { intersect: false, mode: 'index' },
+                plugins: {
+                    legend: { display: true, position: 'top', labels: { boxWidth: 10, font: { size: 9 } } },
+                    tooltip: { callbacks: { label: ctx => {
+                        if (ctx.parsed.y == null) return null;
+                        return ctx.dataset.label + ': ' + Math.round(ctx.parsed.y * 1000) + ' Wh';
+                    } } }
+                },
+                scales: {
+                    y: { beginAtZero: true, grid: { color: chartGridColor() }, ticks: { maxTicksLimit: 5, callback: v => Math.round(v * 1000) + ' Wh' } },
+                    x: { grid: { display: false }, ticks: { font: { size: 9 } } }
+                }
+            }
+        });
+        section.style.display = '';
+    } catch (e) { console.warn('Hourly forecast today error:', e); }
+}
+
 loadForecast();
 setInterval(loadForecast, 3600000);
+// Build today chart after forecast loads (needs _forecastHourly)
+setTimeout(buildHourlyForecastToday, 4000);
+setInterval(buildHourlyForecastToday, 300000); // refresh every 5 min
 
 // === Power Flow Update ===
 function updatePowerFlow(d) {
