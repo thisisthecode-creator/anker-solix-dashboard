@@ -1283,7 +1283,7 @@ async function loadForecast() {
             const kwh = weightedGTI / 1000 * PANEL_KWP * PANEL_EFFICIENCY;
             window._forecastHourly[hBase.time[i]] = Math.round(kwh * 1000) / 1000;
         }
-        buildHourlyForecastToday();
+        await buildHourlyForecastToday();
 
         updateExpectedSolar();
 
@@ -1338,6 +1338,9 @@ async function buildHourlyForecastToday() {
             const avgW = actualByHour[h] / (countByHour[h] || 1);
             actualByHour[h] = Math.round(avgW / 1000 * 1000) / 1000; // kWh with 3 decimals
         }
+
+        // Expose for daily forecast accuracy comparison
+        window._todayActualByHour = actualByHour;
 
         // Find active solar range (first and last hour with actual production)
         const activeHours = Object.keys(actualByHour)
@@ -1752,13 +1755,15 @@ async function loadForecastVsReal() {
         const todayStr = new Date().toISOString().slice(0, 10);
         const currentHour = new Date().getHours();
 
-        // For today: scale forecast to only include hours up to now
+        // For today: only sum forecast for hours that had actual production
         const forecastData = dates.map(d => {
-            if (d === todayStr && window._forecastHourly) {
+            if (d === todayStr && window._forecastHourly && window._todayActualByHour) {
                 let partialKwh = 0;
                 for (let h = 0; h <= currentHour; h++) {
-                    const key = d + 'T' + String(h).padStart(2, '0') + ':00';
-                    partialKwh += window._forecastHourly[key] || 0;
+                    if ((window._todayActualByHour[h] || 0) > 0.001) {
+                        const key = d + 'T' + String(h).padStart(2, '0') + ':00';
+                        partialKwh += window._forecastHourly[key] || 0;
+                    }
                 }
                 return Math.round(partialKwh * 100) / 100;
             }
