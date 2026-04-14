@@ -1147,7 +1147,9 @@ const CURVE_STRIPS = [
     { tilt: 70, weight: 2/5 },
     { tilt: 75, weight: 1/5 },
 ];
-const AZIMUTH = 245;
+// Open-Meteo azimuth convention: 0=south, -90=east, +90=west, ±180=north
+// Panel compass heading is 245° (WSW) → Open-Meteo = 245 - 180 = 65
+const AZIMUTH = 65;
 
 async function fetchGTI(tilt) {
     const res = await fetch(
@@ -2137,7 +2139,7 @@ async function loadSelfConsumptionOpt() {
                 + '<div class="mfc-kpi">'
                     + '<div class="mfc-kpi-label">' + (LANG === 'de' ? 'Batterie-Effizienz' : 'Battery RTE') + '</div>'
                     + '<div class="mfc-kpi-value' + (rte >= 85 ? ' green' : ' amber') + '">' + rte + '%</div>'
-                    + '<div class="mfc-kpi-sub">' + fmt.format(batteryLoss) + ' kWh ' + (LANG === 'de' ? 'Verlust' : 'loss') + '</div>'
+                    + '<div class="mfc-kpi-sub">' + fmt.format(totalBatteryIn) + ' rein / ' + fmt.format(totalBatteryOut) + ' raus</div>'
                 + '</div>';
         }
 
@@ -2562,7 +2564,7 @@ async function loadChargingAnalysis() {
                         yAxisID: 'y'
                     },
                     {
-                        label: LANG === 'de' ? 'SOC-Gewinn (%)' : 'SOC gained (%)',
+                        label: LANG === 'de' ? 'Batterie (%)' : 'Battery (%)',
                         data: socValues,
                         type: 'line',
                         borderColor: '#22c55e',
@@ -3876,7 +3878,6 @@ async function loadFlowVariants(days) {
         const batOut = t.battery_out_kwh || 0;
         const load = t.load_kwh || 0;
         const directUse = (flows.find(f => f.from === 'solar' && f.to === 'load') || {}).kwh || 0;
-        const loss = (flows.find(f => f.to === 'loss') || {}).kwh || 0;
 
         const animEl = $('flowAnimatedContent');
         if (animEl) {
@@ -3896,7 +3897,6 @@ async function loadFlowVariants(days) {
                 + row('🔋↑', 'In Akku gespeichert', batIn, '#60a5fa', '↓')
                 + row('🔋↓', 'Aus Akku entnommen', batOut, '#c084fc', '↑')
                 + row('🏠', 'Aus Netz bezogen', grid, '#888', '→')
-                + (loss > 0 ? row('❌', 'Verluste', loss, '#ef4444', '') : '')
                 + `<div style="text-align:center;margin-top:8px;font-size:0.75rem;color:var(--text-dim)">Gesamt verbraucht: <strong style="color:var(--text)">${fmt2.format(load)} kWh</strong></div>`;
         }
     } catch (e) { console.warn('Flow variants error:', e); }
