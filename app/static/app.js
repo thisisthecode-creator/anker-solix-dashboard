@@ -2873,20 +2873,27 @@ document.addEventListener('keydown', (e) => {
 
     // Select all section-like containers
     const sections = document.querySelectorAll('.today-box[id]');
+    // Reset saved state when cutoff changes (version bump clears stale prefs)
+    const COLLAPSE_VERSION = 2;
     const savedState = (() => {
-        try { return JSON.parse(localStorage.getItem('collapsedSections') || '{}'); }
-        catch { return {}; }
+        try {
+            const raw = JSON.parse(localStorage.getItem('collapsedSections') || '{}');
+            if (raw._v !== COLLAPSE_VERSION) { localStorage.removeItem('collapsedSections'); return {}; }
+            return raw;
+        } catch { return {}; }
     })();
 
     function saveState(states) {
-        try { localStorage.setItem('collapsedSections', JSON.stringify(states)); }
+        try { states._v = COLLAPSE_VERSION; localStorage.setItem('collapsedSections', JSON.stringify(states)); }
         catch {}
     }
 
     // Build set of IDs that are at or before the cutoff in DOM order
+    // Include hidden sections (display:none) so cutoff works correctly
+    const allSections = document.querySelectorAll('.today-box[id]');
     let reachedCutoff = false;
     const openByDefault = new Set();
-    sections.forEach(s => {
+    allSections.forEach(s => {
         if (reachedCutoff) return;
         if (s.id) openByDefault.add(s.id);
         if (s.id === CUTOFF_ID) reachedCutoff = true;
@@ -2901,9 +2908,8 @@ document.addEventListener('keydown', (e) => {
         const sectionId = section.id || 'section-' + idx;
         if (!section.id) section.id = sectionId;
 
-        // Skip the ticker and hidden compat elements
+        // Skip the ticker
         if (section.classList.contains('ticker')) return;
-        if (section.style.display === 'none') return;
 
         // Wrap all children after the header in a section-body div
         const body = document.createElement('div');
