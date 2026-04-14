@@ -2366,11 +2366,13 @@ function updatePowerFlow(d) {
     activate('flowUsba1', usba1 > 0.5);
     activate('flowDc12v', dc12v > 0.5);
 
-    // Animated arrows: solar/grid → battery (top arrow) + battery → load (bottom)
+    // Animated flow lines: solar/grid → battery (top) + battery → load (bottom) + load → ports
     const arrIn = $('flowArrowIn');
     const arrOut = $('flowArrowOut');
+    const arrPorts = $('flowArrowPorts');
     if (arrIn) arrIn.classList.toggle('pf-line-active', totalIn > 1);
     if (arrOut) arrOut.classList.toggle('pf-line-active', totalOut > 1);
+    if (arrPorts) arrPorts.classList.toggle('pf-line-active', totalOut > 1);
 
     // Battery charging/discharging glow — conservation equation
     // battery_net > 0 → charging, < 0 → discharging
