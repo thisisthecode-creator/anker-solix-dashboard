@@ -1003,9 +1003,7 @@ function _logFingerprint(r) {
 
 async function loadHistoricLog() {
     try {
-        // hours=87600 → up to 10 years; the archive cache + dedup keep the
-        // payload small (typical year of deduped data ~1–3 MB JSON).
-        const res = await fetch('/api/readings?hours=87600');
+        const res = await fetch('/api/readings?hours=8760');
         const rows = await res.json();
         LOG_ROWS.length = 0;
         let lastFp = '';
@@ -1126,8 +1124,22 @@ async function loadWeather() {
 loadWeather();
 setInterval(loadWeather, 3600000); // 1h (Open-Meteo updates hourly)
 
+// === Shared daily data cache (avoids 4x identical /api/daily?days=365 fetches) ===
+let _dailyCache = null;
+let _dailyCachePromise = null;
+function getDailyData() {
+    if (_dailyCache) return Promise.resolve(_dailyCache);
+    if (!_dailyCachePromise) {
+        _dailyCachePromise = fetch('/api/daily?days=365').then(r => r.json()).then(d => {
+            _dailyCache = d;
+            return d;
+        });
+    }
+    return _dailyCachePromise;
+}
+
 // === Solar Forecast ===
-const PANEL_KWP = 0.40;
+const PANEL_KWP = 0.44;
 const PANEL_EFFICIENCY = 0.85;
 
 const CURVE_STRIPS = [
@@ -1135,7 +1147,7 @@ const CURVE_STRIPS = [
     { tilt: 70, weight: 2/5 },
     { tilt: 75, weight: 1/5 },
 ];
-const AZIMUTH = 60;
+const AZIMUTH = 245;
 
 async function fetchGTI(tilt) {
     const res = await fetch(
@@ -1350,9 +1362,8 @@ async function loadMonthlyForecast() {
             lastYearKwh[mm] = (lastYearKwh[mm] || 0) + weightedGTI / 1000 * PANEL_KWP * PANEL_EFFICIENCY;
         }
 
-        // 2) Fetch this year's actual production from server
-        const dailyRes = await fetch('/api/daily?days=365');
-        const dailyData = await dailyRes.json();
+        // 2) Fetch this year's actual production from shared cache
+        const dailyData = await getDailyData();
         const thisYearActual = {};
         for (const d of dailyData) {
             if (!d.date.startsWith(String(thisYear))) continue;
@@ -1817,15 +1828,10 @@ loadDailyBars();
 
 // === Autarkie-Trend ===
 let _autarkieChart = null;
-let _autarkieData = null;
-
 async function loadAutarkieTrend(days) {
     try {
-        if (!_autarkieData) {
-            const res = await fetch('/api/daily?days=365');
-            _autarkieData = await res.json();
-        }
-        const data = _autarkieData.slice(0, days);
+        const _autarkieData = await getDailyData();
+        const data = _autarkieData.slice(0, days).slice().reverse();
         if (!data.length) return;
 
         const labels = data.map(d => {
@@ -1920,8 +1926,7 @@ let _weatherCorrChart = null;
 
 async function loadWeatherCorrelation() {
     try {
-        const dailyRes = await fetch('/api/daily?days=365');
-        const dailyData = await dailyRes.json();
+        const dailyData = await getDailyData();
         if (dailyData.length < 7) return;
 
         // Determine date range from daily data
@@ -2191,6 +2196,191 @@ async function loadSelfConsumptionOpt() {
 }
 
 loadSelfConsumptionOpt();
+
+// === Temperature vs Production (scatter) ===
+let _tempVsProdChart = null;
+
+async function loadTempVsProduction() {
+    try {
+        const data = await getDailyData();
+        const points = data.filter(d => d.avg_temp != null && d.solar_kwh > 0).map(d => ({
+            x: d.avg_temp,
+            y: d.solar_kwh
+        }));
+        if (points.length < 7) return;
+
+        if (_tempVsProdChart) _tempVsProdChart.destroy();
+        _tempVsProdChart = new Chart($('chart_temp_vs_production'), {
+            type: 'scatter',
+            data: {
+                datasets: [{
+                    label: LANG === 'de' ? 'Tagesproduktion' : 'Daily production',
+                    data: points,
+                    backgroundColor: 'rgba(245,158,11,0.5)',
+                    borderColor: '#f59e0b',
+                    pointRadius: 4,
+                    pointHoverRadius: 6
+                }]
+            },
+            options: {
+                responsive: true, maintainAspectRatio: false,
+                plugins: { legend: { display: false } },
+                scales: {
+                    x: {
+                        title: { display: true, text: LANG === 'de' ? 'Temperatur (\u00B0C)' : 'Temperature (\u00B0C)', color: '#aaa' },
+                        ticks: { color: '#aaa' }, grid: { color: 'rgba(255,255,255,0.06)' }
+                    },
+                    y: {
+                        title: { display: true, text: 'kWh', color: '#aaa' },
+                        ticks: { color: '#aaa' }, grid: { color: 'rgba(255,255,255,0.06)' }
+                    }
+                }
+            }
+        });
+        $('tempVsProductionSection').style.display = '';
+    } catch (e) { console.warn('Temp vs production error:', e); }
+}
+
+loadTempVsProduction();
+
+// === SOC Range (min/max per day) ===
+let _socRangeChart = null;
+
+async function loadSocRange() {
+    try {
+        const raw = await getDailyData();
+        const data = raw.filter(d => d.min_soc != null && d.max_soc != null).slice(0, 90).slice().reverse();
+        if (data.length < 3) return;
+
+        const labels = data.map(d => {
+            const dt = new Date(d.date);
+            return dt.getDate() + '.' + (dt.getMonth() + 1) + '.';
+        });
+
+        if (_socRangeChart) _socRangeChart.destroy();
+        _socRangeChart = new Chart($('chart_soc_range'), {
+            type: 'bar',
+            data: {
+                labels: labels,
+                datasets: [
+                    {
+                        label: 'Min SOC',
+                        data: data.map(d => d.min_soc),
+                        backgroundColor: 'rgba(255,255,255,0)',
+                        borderColor: 'transparent',
+                        borderSkipped: false,
+                        order: 1
+                    },
+                    {
+                        label: LANG === 'de' ? 'SOC-Bereich' : 'SOC Range',
+                        data: data.map(d => d.max_soc - d.min_soc),
+                        backgroundColor: 'rgba(34,197,94,0.5)',
+                        borderColor: '#22c55e',
+                        borderWidth: 1,
+                        borderSkipped: false,
+                        order: 1
+                    }
+                ]
+            },
+            options: {
+                responsive: true, maintainAspectRatio: false,
+                plugins: {
+                    legend: { display: false },
+                    tooltip: {
+                        callbacks: {
+                            label: function(ctx) {
+                                const i = ctx.dataIndex;
+                                return 'SOC: ' + data[i].min_soc + '% - ' + data[i].max_soc + '%';
+                            }
+                        }
+                    }
+                },
+                scales: {
+                    x: {
+                        stacked: true,
+                        ticks: { color: '#aaa', maxTicksLimit: 15 },
+                        grid: { display: false }
+                    },
+                    y: {
+                        stacked: true,
+                        min: 0, max: 100,
+                        ticks: { color: '#aaa', callback: v => v + '%' },
+                        grid: { color: 'rgba(255,255,255,0.06)' }
+                    }
+                }
+            }
+        });
+        $('socRangeSection').style.display = '';
+    } catch (e) { console.warn('SOC range error:', e); }
+}
+
+loadSocRange();
+
+// === Peak Output Trend ===
+let _peakOutputChart = null;
+
+async function loadPeakOutput() {
+    try {
+        const raw = await getDailyData();
+        const data = raw.filter(d => d.peak_output_w > 0).slice(0, 90).slice().reverse();
+        if (data.length < 3) return;
+
+        const labels = data.map(d => {
+            const dt = new Date(d.date);
+            return dt.getDate() + '.' + (dt.getMonth() + 1) + '.';
+        });
+        const values = data.map(d => d.peak_output_w);
+        const avgPeak = Math.round(values.reduce((s, v) => s + v, 0) / values.length);
+
+        if (_peakOutputChart) _peakOutputChart.destroy();
+        _peakOutputChart = new Chart($('chart_peak_output'), {
+            type: 'line',
+            data: {
+                labels: labels,
+                datasets: [
+                    {
+                        label: 'Peak W',
+                        data: values,
+                        borderColor: '#f59e0b',
+                        backgroundColor: 'rgba(245,158,11,0.1)',
+                        fill: true,
+                        tension: 0.3,
+                        pointRadius: 2,
+                        pointHoverRadius: 5
+                    },
+                    {
+                        label: '\u00D8 Peak',
+                        data: Array(values.length).fill(avgPeak),
+                        borderColor: 'rgba(255,255,255,0.3)',
+                        borderDash: [5, 5],
+                        borderWidth: 1,
+                        pointRadius: 0,
+                        fill: false
+                    }
+                ]
+            },
+            options: {
+                responsive: true, maintainAspectRatio: false,
+                plugins: {
+                    legend: { labels: { color: '#aaa', boxWidth: 12 } }
+                },
+                scales: {
+                    x: {
+                        ticks: { color: '#aaa', maxTicksLimit: 15 },
+                        grid: { display: false }
+                    },
+                    y: {
+                        ticks: { color: '#aaa', callback: v => v + 'W' },
+                        grid: { color: 'rgba(255,255,255,0.06)' }
+                    }
+                }
+            }
+        });
+        $('peakOutputSection').style.display = '';
+    } catch (e) { console.warn('Peak output error:', e); }
+}
+
+loadPeakOutput();
 
 // === SOH Trend Chart ===
 async function loadSohChart() {
@@ -2769,8 +2959,7 @@ if (shareBtn) shareBtn.addEventListener('click', async () => {
 // === Heatmap Calendar (GitHub-style) ===
 async function loadHeatmap() {
     try {
-        const res = await fetch('/api/daily?days=365');
-        const data = await res.json();
+        const data = await getDailyData();
         if (!data.length) return;
 
         const dailyMap = {};

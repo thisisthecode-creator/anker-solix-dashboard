@@ -1,11 +1,9 @@
-const CACHE = 'solar-v102';
+const CACHE = 'solar-v103';
 const API_CACHE = 'solar-api-v1';
 const API_CACHE_MAX_AGE = 5 * 60 * 1000; // 5 minutes
 
 const PRECACHE = [
   '/',
-  '/static/style.css',
-  '/static/app.js',
   'https://cdn.jsdelivr.net/npm/chart.js@4'
 ];
 
@@ -79,13 +77,14 @@ self.addEventListener('fetch', e => {
     return;
   }
 
-  // Static assets: cache-first, network-fallback
+  // Static assets: cache-first, network-fallback (ignore query string for cache key)
+  const cacheKey = new Request(url.origin + url.pathname);
   e.respondWith(
-    caches.match(e.request).then(cached => {
+    caches.match(cacheKey).then(cached => {
       const fetched = fetch(e.request).then(resp => {
         if (resp.ok) {
           const clone = resp.clone();
-          caches.open(CACHE).then(c => c.put(e.request, clone));
+          caches.open(CACHE).then(c => c.put(cacheKey, clone));
         }
         return resp;
       }).catch(() => cached);
