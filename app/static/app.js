@@ -1381,8 +1381,14 @@ async function buildHourlyForecastToday() {
         }
 
         const accuracy = accCount > 0 ? Math.max(0, Math.round(100 - (sumApe / accCount * 100))) : null;
-        const totalFc = fcData.reduce((s, v) => s + v, 0);
         const totalAct = actData.filter(v => v != null).reduce((s, v) => s + v, 0);
+        // Sum forecast only for active hours (where real production occurred)
+        let totalFc = 0;
+        if (startHour != null && endHour != null) {
+            for (let h = startHour; h <= endHour; h++) {
+                if ((actualByHour[h] || 0) > 0.001) totalFc += forecastByHour[h] || 0;
+            }
+        }
 
         const section = $('hourlyForecastTodaySection');
         if (!section) return;
