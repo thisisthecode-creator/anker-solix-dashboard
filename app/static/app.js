@@ -2341,59 +2341,6 @@ async function loadAnomaly() {
 loadAnomaly();
 
 // === Forecast comparison: Open-Meteo vs local ML ===
-async function loadForecastCompare() {
-    try {
-        const [mlRes, accRes] = await Promise.all([
-            fetch('/api/ml-forecast?target=solar'),
-            fetch('/api/forecast-accuracy?days=30'),
-        ]);
-        if (mlRes.ok) {
-            const d = await mlRes.json();
-            $('fcOpenmeteoVal').textContent =
-                (d.openmeteo_kwh != null) ? fmt2.format(d.openmeteo_kwh) : '--';
-            $('fcLocalVal').textContent =
-                (d.ml_kwh != null) ? fmt2.format(d.ml_kwh) : '--';
-        }
-        if (accRes.ok) {
-            const acc = await accRes.json();
-            const table = $('fcAccTable');
-            if (!table) return;
-            const keys = Object.keys(acc);
-            if (!keys.length) {
-                table.innerHTML = '<div class="fc-acc-empty">'
-                    + t('forecastAccNoData') + '</div>';
-                return;
-            }
-            // Winner: lowest MAE among sources that have at least 3 data points
-            let winner = null;
-            let winnerMae = Infinity;
-            for (const k of keys) {
-                if (acc[k].n >= 3 && acc[k].mae_kwh < winnerMae) {
-                    winnerMae = acc[k].mae_kwh;
-                    winner = k;
-                }
-            }
-            table.innerHTML = keys.map(k => {
-                const a = acc[k];
-                const label = k === 'openmeteo' ? t('forecastOpenMeteo')
-                    : (k === 'ml_solar' ? t('forecastLocal') : k);
-                const winCls = (k === winner) ? ' fc-acc-winner' : '';
-                return '<div class="fc-acc-row' + winCls + '">'
-                    + '<div class="fc-acc-source">' + label + '</div>'
-                    + '<div class="fc-acc-stat"><div class="fc-acc-stat-label">' + t('forecastAccN') + '</div>'
-                    + '<div class="fc-acc-stat-value">' + a.n + '</div></div>'
-                    + '<div class="fc-acc-stat"><div class="fc-acc-stat-label">' + t('forecastAccMae') + '</div>'
-                    + '<div class="fc-acc-stat-value">' + fmt2.format(a.mae_kwh) + '</div></div>'
-                    + '<div class="fc-acc-stat"><div class="fc-acc-stat-label">' + t('forecastAccMape') + '</div>'
-                    + '<div class="fc-acc-stat-value">' + fmt.format(a.mape_pct) + '%</div></div>'
-                    + '<div class="fc-acc-stat"><div class="fc-acc-stat-label">' + t('forecastAccBias') + '</div>'
-                    + '<div class="fc-acc-stat-value">' + fmt2.format(a.bias_kwh) + '</div></div>'
-                    + '</div>';
-            }).join('');
-        }
-    } catch (e) { console.warn('Forecast compare error:', e); }
-}
-loadForecastCompare();
 
 // ============================================================================
 // Phase 1 charts: Power-Flow animation · Sankey · Hourly Heatmap · Cumulative
@@ -2897,7 +2844,6 @@ document.addEventListener('keydown', (e) => {
         'c': 'batteryCycleSection',
         'e': 'energyFlowSection',
         'b': 'breakEvenSection',
-        'f': 'forecastCompareSection',
         'a': 'anomalySection',
     }[e.key.toLowerCase()];
 
@@ -2909,7 +2855,7 @@ document.addEventListener('keydown', (e) => {
         }
     } else if (e.key === '?') {
         e.preventDefault();
-        alert('Shortcuts:\n  h — Heatmap\n  s — Statistics\n  c — Battery cycles\n  e — Energy flow\n  b — Break-even\n  f — Forecast compare\n  a — Anomaly');
+        alert('Shortcuts:\n  h — Heatmap\n  s — Statistics\n  c — Battery cycles\n  e — Energy flow\n  b — Break-even\n  a — Anomaly');
     }
 });
 

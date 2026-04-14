@@ -10,7 +10,7 @@
     <link rel="icon" href="/static/icon-192.png" type="image/png">
     <link rel="apple-touch-icon" href="/static/apple-touch-icon.png">
     <title>Solar Dashboard</title>
-    <link rel="stylesheet" href="/static/style.css?v=55">
+    <link rel="stylesheet" href="/static/style.css?v=56">
     <script src="https://cdn.jsdelivr.net/npm/chart.js@4"></script>
 </head>
 <body>
@@ -404,26 +404,6 @@
             <div class="cycle-hint" id="anomalyDetail"></div>
         </section>
 
-        <!-- Forecast Comparison: Open-Meteo vs Local ML -->
-        <section class="today-box" id="forecastCompareSection" aria-labelledby="fcTitle">
-            <h2 id="fcTitle" data-i18n="forecastCompareTitle">Prognose-Vergleich (morgen)</h2>
-            <div class="fc-compare-row">
-                <div class="fc-compare-card">
-                    <div class="fc-compare-label" data-i18n="forecastOpenMeteo">Open-Meteo</div>
-                    <div class="fc-compare-value" id="fcOpenmeteoVal">--</div>
-                    <div class="fc-compare-unit">kWh</div>
-                </div>
-                <div class="fc-compare-card">
-                    <div class="fc-compare-label" data-i18n="forecastLocal">Eigenes Modell</div>
-                    <div class="fc-compare-value" id="fcLocalVal">--</div>
-                    <div class="fc-compare-unit">kWh</div>
-                </div>
-            </div>
-            <h3 class="fc-acc-title" data-i18n="forecastAccuracy">Genauigkeit (letzte 30 Tage)</h3>
-            <div class="fc-acc-table" id="fcAccTable">
-                <div class="fc-acc-empty" data-i18n="forecastAccNoData">Noch keine Accuracy-Daten — Modelle werden nachts trainiert.</div>
-            </div>
-        </section>
 
         <!-- Usage Patterns — 24h bar chart of avg load per hour -->
         <section class="today-box" id="usagePatternsSection">
@@ -623,6 +603,6 @@
 
     </div>
 
-    <script src="/static/app.js?v=55"></script>
+    <script src="/static/app.js?v=56"></script>
 </body>
 </html>
