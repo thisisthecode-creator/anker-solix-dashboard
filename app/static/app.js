@@ -1367,28 +1367,20 @@ async function buildHourlyForecastToday() {
 
         if (!hours.length) return;
 
-        // Calculate accuracy (weighted MAPE) only for hours with actual production
-        let sumAbsErr = 0, sumFc = 0;
+        // Sum forecast + actual only for active hours with real production
+        let totalFc = 0, totalAct = 0;
         if (startHour != null && endHour != null) {
             for (let h = startHour; h <= endHour; h++) {
-                const fc = forecastByHour[h] || 0;
-                const act = actualByHour[h] || 0;
-                if (act > 0.001 && fc > 0.001) {
-                    sumAbsErr += Math.abs(fc - act);
-                    sumFc += fc;
+                if ((actualByHour[h] || 0) > 0.001) {
+                    totalFc += forecastByHour[h] || 0;
+                    totalAct += actualByHour[h] || 0;
                 }
             }
         }
 
-        const accuracy = sumFc > 0 ? Math.max(0, Math.round(100 - (sumAbsErr / sumFc * 100))) : null;
-        const totalAct = actData.filter(v => v != null).reduce((s, v) => s + v, 0);
-        // Sum forecast only for active hours (where real production occurred)
-        let totalFc = 0;
-        if (startHour != null && endHour != null) {
-            for (let h = startHour; h <= endHour; h++) {
-                if ((actualByHour[h] || 0) > 0.001) totalFc += forecastByHour[h] || 0;
-            }
-        }
+        // Accuracy from totals: |totalFc - totalAct| / max(totalFc, totalAct)
+        const maxTotal = Math.max(totalFc, totalAct);
+        const accuracy = maxTotal > 0 ? Math.max(0, Math.round((1 - Math.abs(totalFc - totalAct) / maxTotal) * 100)) : null;
 
         const section = $('hourlyForecastTodaySection');
         if (!section) return;
@@ -2197,22 +2189,22 @@ async function loadHeatmap() {
 
 loadHeatmap();
 
-// === Forecast Accuracy (weighted MAPE) ===
+// === Forecast Accuracy (totals comparison) ===
 function updateForecastAccuracy(forecastData, actualData) {
     if (!forecastData.length || !actualData.length) return;
-    let sumAbsError = 0;
     let sumForecast = 0;
+    let sumActual = 0;
     for (let i = 0; i < forecastData.length; i++) {
         const f = forecastData[i];
         const a = actualData[i];
         if (f > 0 && a > 0) {
-            sumAbsError += Math.abs(f - a);
             sumForecast += f;
+            sumActual += a;
         }
     }
-    if (sumForecast === 0) return;
-    const wMape = sumAbsError / sumForecast * 100;
-    const accuracy = Math.max(0, Math.round(100 - wMape));
+    const maxTotal = Math.max(sumForecast, sumActual);
+    if (maxTotal === 0) return;
+    const accuracy = Math.max(0, Math.round((1 - Math.abs(sumForecast - sumActual) / maxTotal) * 100));
     const badge = $('forecastAccuracy');
     if (badge) {
         badge.textContent = t('forecastAccuracyLabel') + ': ' + accuracy + '%';
