@@ -10,7 +10,7 @@
     <link rel="icon" href="/static/icon-192.png" type="image/png">
     <link rel="apple-touch-icon" href="/static/apple-touch-icon.png">
     <title>Solar Dashboard</title>
-    <link rel="stylesheet" href="/static/style.css?v=41">
+    <link rel="stylesheet" href="/static/style.css?v=42">
     <script src="https://cdn.jsdelivr.net/npm/chart.js@4"></script>
 </head>
 <body>
@@ -127,15 +127,6 @@
             <h2 data-i18n="forecastTitle">Solar-Prognose (7 Tage)</h2>
             <div class="forecast-source" data-i18n="forecastSource">Warschau · 240° SW · konkav 45°–75° · Open-Meteo</div>
             <div class="forecast-grid" id="forecastGrid"></div>
-        </section>
-
-        <!-- Forecast vs. Reality Chart -->
-        <section class="chart-box" id="forecastVsRealBox" style="display:none">
-            <h3>
-                <span data-i18n="forecastVsReal">Prognose vs. Realität (7 Tage)</span>
-                <span class="forecast-accuracy-badge" id="forecastAccuracy" title="MAPE">--</span>
-            </h3>
-            <div class="chart-wrap"><canvas id="chart_forecast_vs_real"></canvas></div>
         </section>
 
         <!-- MQTT Ticker -->
@@ -291,6 +282,15 @@
                 <button class="tab" data-flowvar="365" data-i18n="year">Jahr</button>
             </div>
             <div class="flow-anim-grid" id="flowAnimatedContent"></div>
+        </section>
+
+        <!-- Forecast vs. Reality Chart (after Energie-Bilanz, collapsed by default) -->
+        <section class="today-box" id="forecastVsRealBox" style="display:none">
+            <h2>
+                <span data-i18n="forecastVsReal">Prognose vs. Realität (7 Tage)</span>
+                <span class="forecast-accuracy-badge" id="forecastAccuracy" title="MAPE">--</span>
+            </h2>
+            <div class="chart-wrap"><canvas id="chart_forecast_vs_real"></canvas></div>
         </section>
 
         <!-- Energy & Savings elements kept hidden for JS compat -->
@@ -507,8 +507,8 @@
         </section>
 
         <!-- MQTT Log -->
-        <section class="today-box">
-            <h2 style="display:flex;align-items:center;gap:8px;flex-wrap:wrap"><span data-i18n="mqttLog">MQTT Live-Log</span> <span class="mqtt-heartbeat" id="mqttHeartbeat"><span class="hb-dot"></span> <span id="mqttHbTime">--:--:--</span></span><a href="/mqtt-monitor" style="margin-left:auto;font-size:0.55rem;padding:3px 10px;border-radius:8px;background:rgba(245,158,11,0.12);color:#f59e0b;border:1px solid rgba(245,158,11,0.3);text-decoration:none;font-weight:600;white-space:nowrap">📡 RAW Monitor</a></h2>
+        <section class="today-box" id="mqttLogSection">
+            <h2 style="display:flex;align-items:center;gap:8px;flex-wrap:wrap"><span data-i18n="mqttLog">MQTT Live-Log</span> <span class="mqtt-heartbeat" id="mqttHeartbeat"><span class="hb-dot"></span> <span id="mqttHbTime">--:--:--</span></span></h2>
             <div class="log-table-wrap">
                 <table class="log-table" id="mqttLog">
                     <thead>
@@ -530,6 +530,13 @@
                 <span class="log-pager-info" id="logPageInfo">Seite 1 / 1</span>
                 <button class="log-pager-btn" id="logNext" onclick="logNextPage()" disabled data-i18n="next">Weiter ›</button>
             </div>
+        </section>
+
+        <!-- MQTT RAW Monitor -->
+        <section class="today-box" id="mqttMonitorSection">
+            <h2>MQTT RAW Monitor</h2>
+            <p style="font-size:0.75rem;color:var(--text-dim);margin-bottom:12px">Alle MQTT-Felder live, alle 3 Sekunden aktualisiert.</p>
+            <a href="/mqtt-monitor" class="export-btn" style="display:inline-block;text-decoration:none;text-align:center">RAW Monitor öffnen</a>
         </section>
 
         <!-- Device Info -->
@@ -592,17 +599,14 @@
             </div>
         </section>
 
-        <!-- Data Backup + CSV Export (last sections) -->
+        <!-- Data Backup + CSV Export -->
         <section class="today-box" id="dataBackupSection">
-            <h2 data-i18n="dataBackup">Daten-Backup</h2>
+            <h2 data-i18n="dataBackup">Daten-Backup & Export</h2>
             <div class="backup-row">
                 <button class="export-btn" onclick="downloadFullBackup()" data-i18n="downloadDb">DB-Export herunterladen</button>
             </div>
             <div class="backup-hint" id="backupHint"></div>
-        </section>
-
-        <section class="today-box">
-            <h2 data-i18n="dataExport">Daten Export (CSV)</h2>
+            <h4 style="font-size:0.75rem;color:var(--text-dim);text-transform:uppercase;letter-spacing:0.05em;margin:16px 0 8px">CSV Export</h4>
             <div class="export-row">
                 <button class="export-btn" onclick="downloadCSV(24)" data-i18n="today">Heute</button>
                 <button class="export-btn" onclick="downloadCSV(168)" data-i18n="week">Woche</button>
@@ -613,6 +617,6 @@
 
     </div>
 
-    <script src="/static/app.js?v=41"></script>
+    <script src="/static/app.js?v=42"></script>
 </body>
 </html>
