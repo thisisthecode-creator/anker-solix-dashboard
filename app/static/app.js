@@ -1364,13 +1364,13 @@ async function buildHourlyForecastToday() {
 
         if (!hours.length) return;
 
-        // Calculate accuracy only for active solar hours
+        // Calculate accuracy only for hours with actual production
         let sumApe = 0, accCount = 0;
         if (startHour != null && endHour != null) {
             for (let h = startHour; h <= endHour; h++) {
                 const fc = forecastByHour[h] || 0;
                 const act = actualByHour[h] || 0;
-                if (fc > 0.001) {
+                if (act > 0.001 && fc > 0.001) {
                     sumApe += Math.abs(fc - act) / fc;
                     accCount++;
                 }
