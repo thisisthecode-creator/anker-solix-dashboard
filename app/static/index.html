@@ -10,7 +10,7 @@
     <link rel="icon" href="/static/icon-192.png" type="image/png">
     <link rel="apple-touch-icon" href="/static/apple-touch-icon.png">
     <title>Solar Dashboard</title>
-    <link rel="stylesheet" href="/static/style.css?v=60">
+    <link rel="stylesheet" href="/static/style.css?v=61">
     <script src="https://cdn.jsdelivr.net/npm/chart.js@4"></script>
 </head>
 <body>
@@ -129,18 +129,18 @@
             <div class="forecast-grid" id="forecastGrid"></div>
         </section>
 
-        <!-- Monthly Solar Forecast (12 months historical) -->
-        <section class="today-box" id="monthlyForecastSection" style="display:none">
-            <h2>Solar-Prognose (Monat)</h2>
-            <div id="monthlyFcSummary" style="font-size:0.7rem;color:var(--text-dim);margin-bottom:10px;display:flex;gap:16px;flex-wrap:wrap"></div>
-            <div class="chart-wrap" style="height:200px"><canvas id="chart_monthly_forecast"></canvas></div>
-        </section>
-
         <!-- Hourly Forecast: today with actual overlay -->
         <section class="today-box" id="hourlyForecastTodaySection" style="display:none">
             <h2>Stündliche Prognose</h2>
             <div id="hourlyFcTodaySummary" style="font-size:0.7rem;color:var(--text-dim);margin-bottom:10px;display:flex;gap:16px;flex-wrap:wrap"></div>
             <div class="chart-wrap" style="height:180px"><canvas id="chart_hourly_forecast_today"></canvas></div>
+        </section>
+
+        <!-- Monthly Solar Forecast (this year, based on last year) -->
+        <section class="today-box" id="monthlyForecastSection" style="display:none">
+            <h2 id="monthlyFcTitle">Solar-Prognose</h2>
+            <div id="monthlyFcSummary" style="font-size:0.7rem;color:var(--text-dim);margin-bottom:10px;display:flex;gap:16px;flex-wrap:wrap"></div>
+            <div class="chart-wrap" style="height:200px"><canvas id="chart_monthly_forecast"></canvas></div>
         </section>
 
         <!-- MQTT Ticker -->
@@ -301,7 +301,7 @@
         <!-- Forecast vs. Reality Chart (after Energie-Bilanz, collapsed by default) -->
         <section class="today-box" id="forecastVsRealBox" style="display:none">
             <h2>
-                <span data-i18n="forecastVsReal">Prognose vs. Real (7 Tage)</span>
+                <span data-i18n="forecastVsReal">Prognose vs. Real</span>
                 <span class="forecast-accuracy-badge" id="forecastAccuracy" title="MAPE">--</span>
             </h2>
             <div class="chart-wrap"><canvas id="chart_forecast_vs_real"></canvas></div>
@@ -610,6 +610,6 @@
 
     </div>
 
-    <script src="/static/app.js?v=60"></script>
+    <script src="/static/app.js?v=61"></script>
 </body>
 </html>

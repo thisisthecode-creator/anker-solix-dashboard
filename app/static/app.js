@@ -43,6 +43,8 @@ const I18N = {
         solarPeak: 'Solar-Peak erreicht', peakAt: 'Peak bei {v} W',
         stormWarning: 'Sturmwarnung', stormBody: 'Wind {v} km/h erwartet! Panels prüfen.',
         tempWarning: 'Temperatur-Warnung', tempWarningBody: 'Powerstation bei {v}°C! Überhitzungsgefahr.',
+        standbyMode: 'Standby-Modus', standbyBody: 'Kein Solar-Eingang. System im Standby bei {v}% Akku.',
+        solarActive: 'Solar aktiv', solarActiveBody: 'Solar-Eingang erkannt: {v} W. System wieder aktiv.',
         dailyReport: 'Solar-Tagesreport', dailyReportBody: '☀️ {kwh} kWh | Peak {peak} W | {hours}h Sonne | 💰 {eur} €',
         notifNotSupported: 'Benachrichtigungen werden auf diesem Gerät nicht unterstützt. Auf iOS: App zum Homescreen hinzufügen.',
         kwhWeek: 'kWh gesamt', avgKwhDay: '⌀ kWh / Tag', sunHours: 'h Sonne',
@@ -189,6 +191,8 @@ const I18N = {
         solarPeak: 'Solar Peak Reached', peakAt: 'Peak at {v} W',
         stormWarning: 'Storm Warning', stormBody: 'Wind {v} km/h expected! Check panels.',
         tempWarning: 'Temperature Warning', tempWarningBody: 'Powerstation at {v}°C! Overheating risk.',
+        standbyMode: 'Standby Mode', standbyBody: 'No solar input. System in standby at {v}% battery.',
+        solarActive: 'Solar Active', solarActiveBody: 'Solar input detected: {v} W. System active again.',
         dailyReport: 'Solar Daily Report', dailyReportBody: '☀️ {kwh} kWh | Peak {peak} W | {hours}h Sun | 💰 {eur} €',
         notifNotSupported: 'Notifications not supported on this device. On iOS: add app to home screen first.',
         kwhWeek: 'kWh total', avgKwhDay: 'Avg kWh / Day', sunHours: 'h Sun',
@@ -454,6 +458,9 @@ if (notifBtn) {
 let notifBatteryFullSent = false;
 let notifStormSent = false;
 let notifTempHighSent = false;
+let notifStandbySent = false;
+let notifActiveSent = false;
+let lastKnownSolarWatts = -1; // -1 = no data yet
 
 function checkNotifications(d) {
     if (!notifEnabled || !('Notification' in window) || Notification.permission !== 'granted') return;
@@ -485,6 +492,20 @@ function checkNotifications(d) {
     }
     if (solar < 10) { notifSolarPeakSent = false; solarWasAbove50 = false; }
     lastSolarForPeak = solar;
+    // Standby / Active state transition
+    if (lastKnownSolarWatts >= 0) { // skip first reading
+        if (solar === 0 && lastKnownSolarWatts > 0 && !notifStandbySent) {
+            new Notification(t('standbyMode'), { body: t('standbyBody').replace('{v}', d.battery_soc), icon: '/static/icon-192.png' });
+            notifStandbySent = true;
+            notifActiveSent = false;
+        }
+        if (solar > 0 && lastKnownSolarWatts === 0 && !notifActiveSent) {
+            new Notification(t('solarActive'), { body: t('solarActiveBody').replace('{v}', fmt.format(solar)), icon: '/static/icon-192.png' });
+            notifActiveSent = true;
+            notifStandbySent = false;
+        }
+    }
+    lastKnownSolarWatts = solar;
     // Daily report after sunset
     checkDailyReport(d);
 }
@@ -1297,65 +1318,78 @@ async function loadForecast() {
 
 function updateExpectedSolar() {}
 
-// === Monthly Solar Forecast (12 months historical GTI from Open-Meteo) ===
+// === Monthly Solar Forecast (this year, based on last year's historical GTI) ===
 let _monthlyFcChart = null;
 async function loadMonthlyForecast() {
     try {
-        const endDate = new Date();
-        const startDate = new Date();
-        startDate.setFullYear(startDate.getFullYear() - 1);
-        const fmtDate = d => d.toISOString().slice(0, 10);
+        const now = new Date();
+        const thisYear = now.getFullYear();
+        // Fetch last year's full data as basis for this year's forecast
+        const startDate = (thisYear - 1) + '-01-01';
+        const endDate = (thisYear - 1) + '-12-31';
 
         const stripResults = await Promise.all(CURVE_STRIPS.map(s =>
             fetch('https://archive-api.open-meteo.com/v1/archive?latitude=52.1928&longitude=21.0103'
                 + '&hourly=global_tilted_irradiance'
                 + '&tilt=' + s.tilt + '&azimuth=' + AZIMUTH
                 + '&timezone=Europe%2FWarsaw'
-                + '&start_date=' + fmtDate(startDate)
-                + '&end_date=' + fmtDate(endDate)
+                + '&start_date=' + startDate
+                + '&end_date=' + endDate
             ).then(r => r.json()).then(d => d.hourly)
         ));
 
         if (!stripResults[0] || !stripResults[0].time) return;
 
-        // Aggregate weighted GTI by month → kWh
+        // Aggregate last year's GTI by month number (1-12)
         const monthlyKwh = {};
         const times = stripResults[0].time;
         for (let i = 0; i < times.length; i++) {
-            const month = times[i].slice(0, 7); // "2025-04"
+            const mm = times[i].slice(5, 7); // "01"-"12"
             let weightedGTI = 0;
             for (let s = 0; s < CURVE_STRIPS.length; s++) {
                 weightedGTI += (stripResults[s].global_tilted_irradiance[i] || 0) * CURVE_STRIPS[s].weight;
             }
             const kwh = weightedGTI / 1000 * PANEL_KWP * PANEL_EFFICIENCY;
-            monthlyKwh[month] = (monthlyKwh[month] || 0) + kwh;
+            monthlyKwh[mm] = (monthlyKwh[mm] || 0) + kwh;
         }
 
-        const months = Object.keys(monthlyKwh).sort();
-        if (!months.length) return;
-
+        // Build Jan-Dec for this year
         const monthNames = LANG === 'de'
             ? ['Jan', 'Feb', 'Mär', 'Apr', 'Mai', 'Jun', 'Jul', 'Aug', 'Sep', 'Okt', 'Nov', 'Dez']
             : ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
-        const labels = months.map(m => {
-            const mi = parseInt(m.slice(5, 7), 10) - 1;
-            return monthNames[mi] + ' ' + m.slice(2, 4);
-        });
-        const values = months.map(m => Math.round(monthlyKwh[m] * 100) / 100);
+        const currentMonth = now.getMonth(); // 0-based
+        const labels = [];
+        const values = [];
+        for (let m = 0; m < 12; m++) {
+            const mm = String(m + 1).padStart(2, '0');
+            labels.push(monthNames[m]);
+            values.push(Math.round((monthlyKwh[mm] || 0) * 100) / 100);
+        }
+
         const total = values.reduce((s, v) => s + v, 0);
         const peak = Math.max(...values);
-        const peakMonth = labels[values.indexOf(peak)];
-        const avg = total / values.length;
+        const peakMonth = monthNames[values.indexOf(peak)];
+        const avg = total / 12;
 
         const section = $('monthlyForecastSection');
         if (!section) return;
 
+        const titleEl = $('monthlyFcTitle');
+        if (titleEl) titleEl.textContent = (LANG === 'de' ? 'Solar-Prognose ' : 'Solar Forecast ') + thisYear;
+
         const sumEl = $('monthlyFcSummary');
         if (sumEl) {
-            sumEl.innerHTML = '<span>' + Math.round(total * 10) / 10 + ' kWh ' + (LANG === 'de' ? 'gesamt' : 'total') + '</span>'
+            sumEl.innerHTML = '<span>~' + Math.round(total * 10) / 10 + ' kWh ' + (LANG === 'de' ? 'erwartet ' + thisYear : 'expected ' + thisYear) + '</span>'
                 + '<span>⌀ ' + Math.round(avg * 10) / 10 + ' kWh/' + (LANG === 'de' ? 'Monat' : 'month') + '</span>'
                 + '<span>Peak: ' + Math.round(peak * 10) / 10 + ' kWh ' + peakMonth + '</span>';
         }
+
+        // Past months = solid, current = highlighted, future = dimmed
+        const bgColors = values.map((v, i) => {
+            if (i < currentMonth) return '#f59e0b';
+            if (i === currentMonth) return '#fbbf24';
+            return 'rgba(245,158,11,0.3)';
+        });
 
         if (_monthlyFcChart) _monthlyFcChart.destroy();
         _monthlyFcChart = new Chart($('chart_monthly_forecast'), {
@@ -1364,7 +1398,7 @@ async function loadMonthlyForecast() {
                 labels: labels,
                 datasets: [{
                     data: values,
-                    backgroundColor: values.map(v => v === peak ? '#f59e0b' : 'rgba(245,158,11,0.35)'),
+                    backgroundColor: bgColors,
                     borderColor: '#f59e0b',
                     borderWidth: 1,
                     borderRadius: 3
@@ -1374,7 +1408,7 @@ async function loadMonthlyForecast() {
                 responsive: true, maintainAspectRatio: false, animation: false,
                 plugins: {
                     legend: { display: false },
-                    tooltip: { callbacks: { label: ctx => fmt2.format(ctx.parsed.y) + ' kWh' } }
+                    tooltip: { callbacks: { label: ctx => fmt2.format(ctx.parsed.y) + ' kWh (' + (LANG === 'de' ? 'Prognose' : 'forecast') + ')' } }
                 },
                 scales: {
                     y: { beginAtZero: true, grid: { color: chartGridColor() }, ticks: { maxTicksLimit: 5, callback: v => v + ' kWh' } },
@@ -1810,6 +1844,14 @@ document.querySelectorAll('.combined-tabs .tab').forEach(btn => {
 // === Forecast vs. Reality Chart ===
 let forecastVsRealChart = null;
 
+// Persistent forecast history in localStorage for long-term accuracy
+function loadForecastHistory() {
+    try { return JSON.parse(localStorage.getItem('forecastHistory') || '{}'); } catch { return {}; }
+}
+function saveForecastHistory(hist) {
+    localStorage.setItem('forecastHistory', JSON.stringify(hist));
+}
+
 async function loadForecastVsReal() {
     try {
         if (!window._forecastKwh) return;
@@ -1852,6 +1894,18 @@ async function loadForecastVsReal() {
 
         // For display: show full-day forecast as reference
         const fullDayForecast = dates.map(d => window._forecastKwh[d] || 0);
+
+        // Persist completed days (not today, not future) to localStorage
+        const hist = loadForecastHistory();
+        dates.forEach((d, i) => {
+            if (d >= todayStr) return; // skip today and future
+            const f = window._forecastKwh[d];
+            const a = dailyMap[d];
+            if (f != null && f > 0 && a != null && a > 0) {
+                hist[d] = { f: Math.round(f * 100) / 100, a: Math.round(a * 100) / 100 };
+            }
+        });
+        saveForecastHistory(hist);
 
         // Calculate per-day accuracy (same formula as overall: divide by max)
         const accuracyData = dates.map((d, i) => {
@@ -1910,8 +1964,8 @@ async function loadForecastVsReal() {
 
         $('forecastVsRealBox').style.display = '';
 
-        // Calculate forecast accuracy (MAPE)
-        updateForecastAccuracy(forecastData, actualData);
+        // Calculate overall accuracy from full history + today
+        updateForecastAccuracy(forecastData, actualData, todayStr, dates);
     } catch (e) { console.warn('Forecast vs Real error:', e); }
 }
 
@@ -2272,16 +2326,28 @@ async function loadHeatmap() {
 loadHeatmap();
 
 // === Forecast Accuracy (totals comparison) ===
-function updateForecastAccuracy(forecastData, actualData) {
-    if (!forecastData.length || !actualData.length) return;
+function updateForecastAccuracy(forecastData, actualData, todayStr, dates) {
+    // Start with all saved historical pairs
+    const hist = loadForecastHistory();
     let sumForecast = 0;
     let sumActual = 0;
-    for (let i = 0; i < forecastData.length; i++) {
-        const f = forecastData[i];
-        const a = actualData[i];
-        if (f > 0 && a > 0) {
-            sumForecast += f;
-            sumActual += a;
+    let dayCount = 0;
+    for (const d of Object.keys(hist)) {
+        sumForecast += hist[d].f;
+        sumActual += hist[d].a;
+        dayCount++;
+    }
+    // Add today's partial data (not in history yet)
+    if (forecastData && dates) {
+        for (let i = 0; i < dates.length; i++) {
+            if (hist[dates[i]]) continue; // already counted
+            const f = forecastData[i];
+            const a = actualData[i];
+            if (f > 0 && a > 0) {
+                sumForecast += f;
+                sumActual += a;
+                dayCount++;
+            }
         }
     }
     const maxTotal = Math.max(sumForecast, sumActual);
@@ -2289,7 +2355,9 @@ function updateForecastAccuracy(forecastData, actualData) {
     const accuracy = Math.max(0, Math.round((1 - Math.abs(sumForecast - sumActual) / maxTotal) * 100));
     const badge = $('forecastAccuracy');
     if (badge) {
-        badge.textContent = t('forecastAccuracyLabel') + ': ' + accuracy + '%';
+        const label = t('forecastAccuracyLabel') + ': ' + accuracy + '%';
+        const detail = ' (' + dayCount + (LANG === 'de' ? ' Tage' : ' days') + ')';
+        badge.textContent = label + detail;
         badge.style.color = accuracy >= 80 ? 'var(--green)' : accuracy >= 60 ? 'var(--yellow)' : 'var(--red)';
     }
 }
