@@ -1365,13 +1365,18 @@ async function loadMonthlyForecast() {
         // 2) Fetch this year's actual production from shared cache
         const dailyData = await getDailyData();
         const thisYearActual = {};
+        let firstDataMonth = 11; // 0-based, find earliest month with solar data
         for (const d of dailyData) {
             if (!d.date.startsWith(String(thisYear))) continue;
+            if ((d.solar_kwh || 0) <= 0) continue;
             const mm = d.date.slice(5, 7);
-            thisYearActual[mm] = (thisYearActual[mm] || 0) + (d.solar_kwh || 0);
+            const mIdx = parseInt(mm, 10) - 1;
+            thisYearActual[mm] = (thisYearActual[mm] || 0) + d.solar_kwh;
+            if (mIdx < firstDataMonth) firstDataMonth = mIdx;
         }
 
         // 3) Build 3 datasets: last year, this year real, this year forecast
+        //    Only count from firstDataMonth onward (fair comparison)
         const monthNames = LANG === 'de'
             ? ['Jan', 'Feb', 'Mär', 'Apr', 'Mai', 'Jun', 'Jul', 'Aug', 'Sep', 'Okt', 'Nov', 'Dez']
             : ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
@@ -1385,16 +1390,17 @@ async function loadMonthlyForecast() {
             const mm = String(m + 1).padStart(2, '0');
             const ly = Math.round((lastYearKwh[mm] || 0) * 100) / 100;
             lastYearData.push(ly);
-            if (m < currentMonth) {
-                // Completed month - show actual
+            if (m < firstDataMonth) {
+                // Before system existed - no data, no forecast
+                thisYearReal.push(0);
+                thisYearForecast.push(0);
+            } else if (m < currentMonth) {
                 thisYearReal.push(Math.round((thisYearActual[mm] || 0) * 100) / 100);
                 thisYearForecast.push(0);
             } else if (m === currentMonth) {
-                // Current month - show actual so far
                 thisYearReal.push(Math.round((thisYearActual[mm] || 0) * 100) / 100);
                 thisYearForecast.push(0);
             } else {
-                // Future month - show forecast from last year
                 thisYearReal.push(0);
                 thisYearForecast.push(ly);
             }
@@ -1403,7 +1409,10 @@ async function loadMonthlyForecast() {
         const totalReal = thisYearReal.reduce((s, v) => s + v, 0);
         const totalForecast = thisYearForecast.reduce((s, v) => s + v, 0);
         const totalExpected = totalReal + totalForecast;
+        // Only compare last year's months from firstDataMonth onward
+        const totalLastYearComparable = lastYearData.slice(firstDataMonth).reduce((s, v) => s + v, 0);
         const totalLastYear = lastYearData.reduce((s, v) => s + v, 0);
+        const activeMonths = currentMonth - firstDataMonth + 1;
 
         const section = $('monthlyForecastSection');
         if (!section) return;
@@ -1411,18 +1420,21 @@ async function loadMonthlyForecast() {
         const titleEl = $('monthlyFcTitle');
         if (titleEl) titleEl.textContent = (LANG === 'de' ? 'Solar-Prognose ' : 'Solar Forecast ') + thisYear;
 
-        // KPI cards
+        // KPI cards - compare only from first data month for fairness
         const kpiEl = $('monthlyFcKpis');
         if (kpiEl) {
-            const pctVsLastYear = totalLastYear > 0
-                ? Math.round((totalReal / (totalLastYear * (currentMonth + 1) / 12)) * 100) - 100
+            // Compare real vs last year's same month range (firstDataMonth..currentMonth)
+            const lastYearSameRange = lastYearData.slice(firstDataMonth, currentMonth + 1).reduce((s, v) => s + v, 0);
+            const pctVsLastYear = lastYearSameRange > 0
+                ? Math.round((totalReal / lastYearSameRange) * 100) - 100
                 : 0;
             const trendClass = pctVsLastYear > 0 ? 'up' : pctVsLastYear < 0 ? 'down' : 'flat';
             const trendArrow = pctVsLastYear > 0 ? '\u25B2' : pctVsLastYear < 0 ? '\u25BC' : '\u2013';
             const bisherLabel = LANG === 'de' ? ' bisher' : ' so far';
             const progLabel = LANG === 'de' ? 'Jahresprognose' : 'Year Forecast';
             const progSub = LANG === 'de' ? 'Real + Prognose' : 'Actual + Forecast';
-            const monateSub = (currentMonth + 1) + (LANG === 'de' ? ' Monate' : ' months');
+            const startMonthName = monthNames[firstDataMonth];
+            const monateSub = activeMonths + (LANG === 'de' ? ' Mon. (ab ' : ' mo. (since ') + startMonthName + ')';
 
             kpiEl.innerHTML =
                 '<div class="mfc-kpi">'
@@ -1436,8 +1448,8 @@ async function loadMonthlyForecast() {
                     + '<div class="mfc-kpi-sub">' + progSub + '</div>'
                 + '</div>'
                 + '<div class="mfc-kpi">'
-                    + '<div class="mfc-kpi-label">vs. ' + lastYear + '</div>'
-                    + '<div class="mfc-kpi-value dim">' + Math.round(totalLastYear) + ' kWh</div>'
+                    + '<div class="mfc-kpi-label">vs. ' + lastYear + ' (' + startMonthName + '-' + monthNames[11] + ')</div>'
+                    + '<div class="mfc-kpi-value dim">' + Math.round(totalLastYearComparable) + ' kWh</div>'
                     + '<div class="mfc-kpi-sub"><span class="mfc-kpi-trend ' + trendClass + '">'
                         + trendArrow + ' ' + Math.abs(pctVsLastYear) + '%</span></div>'
                 + '</div>';
@@ -1448,7 +1460,12 @@ async function loadMonthlyForecast() {
         const barColors = [];
         const barBorders = [];
         for (let m = 0; m < 12; m++) {
-            if (m < currentMonth) {
+            if (m < firstDataMonth) {
+                // Before system existed - show nothing
+                thisYearCombined.push(0);
+                barColors.push('transparent');
+                barBorders.push('transparent');
+            } else if (m < currentMonth) {
                 thisYearCombined.push(thisYearReal[m]);
                 barColors.push('#f59e0b');
                 barBorders.push('#f59e0b');
