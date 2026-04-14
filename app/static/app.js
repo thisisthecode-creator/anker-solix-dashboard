@@ -1266,6 +1266,12 @@ async function loadForecast() {
             window._forecastKwh[d.time[i]] = Math.round(gti / 1000 * PANEL_KWP * PANEL_EFFICIENCY * 100) / 100;
         }
 
+        // Store sunshine hours per day for hourly charts
+        window._forecastSunshine = {};
+        for (let i = 0; i < d.time.length; i++) {
+            window._forecastSunshine[d.time[i]] = Math.round((d.sunshine_duration[i] || 0) / 3600 * 10) / 10;
+        }
+
         // Store hourly kWh forecast for hourly chart
         window._forecastHourly = {};
         for (let i = 0; i < hBase.time.length; i++) {
@@ -1331,9 +1337,11 @@ function buildHourlyForecastChart() {
         sumEl.style.cssText = 'font-size:0.7rem;color:var(--text-dim);margin-bottom:10px;display:flex;gap:16px;flex-wrap:wrap';
         h2.parentNode.insertBefore(sumEl, h2.nextSibling);
     }
+    const sunH = window._forecastSunshine && window._forecastSunshine[tomorrowStr] != null
+        ? window._forecastSunshine[tomorrowStr] : hours.length;
     sumEl.innerHTML = '<span>' + Math.round(total * 100) / 100 + ' kWh ' + (LANG === 'de' ? 'gesamt' : 'total') + '</span>'
         + '<span>' + (LANG === 'de' ? 'Peak' : 'Peak') + ': ' + Math.round(peak * 1000) + ' Wh ' + (LANG === 'de' ? 'um' : 'at') + ' ' + peakHour + '</span>'
-        + '<span>' + hours.length + 'h ' + (LANG === 'de' ? 'Sonne' : 'sun') + '</span>';
+        + '<span>🔆 ' + sunH + 'h ' + (LANG === 'de' ? 'Sonne' : 'sun') + '</span>';
 
     if (_hourlyFcChart) _hourlyFcChart.destroy();
     _hourlyFcChart = new Chart($('chart_hourly_forecast'), {
@@ -1468,9 +1476,12 @@ async function buildHourlyForecastToday() {
             const activeRange = startHour != null
                 ? (String(startHour).padStart(2, '0') + ':00 - ' + String(endHour).padStart(2, '0') + ':00')
                 : '--';
+            const todaySunH = window._forecastSunshine && window._forecastSunshine[todayStr] != null
+                ? window._forecastSunshine[todayStr] : null;
             sumEl.innerHTML = '<span>' + (LANG === 'de' ? 'Prognose' : 'Forecast') + ': ' + fmt2.format(totalFc) + ' kWh</span>'
                 + '<span>' + (LANG === 'de' ? 'Real' : 'Actual') + ': ' + fmt2.format(totalAct) + ' kWh</span>'
-                + '<span>' + (LANG === 'de' ? 'Aktiv' : 'Active') + ': ' + activeRange + '</span>';
+                + '<span>' + (LANG === 'de' ? 'Aktiv' : 'Active') + ': ' + activeRange + '</span>'
+                + (todaySunH != null ? '<span>🔆 ' + todaySunH + 'h</span>' : '');
         }
 
         if (_hourlyTodayChart) _hourlyTodayChart.destroy();
