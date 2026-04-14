@@ -8,7 +8,7 @@ const I18N = {
         connecting: 'Verbinde...', connected: 'Verbunden', disconnected: 'Getrennt',
         notifications: 'Benachrichtigungen',
         forecastTitle: 'Solar-Prognose', forecastSource: 'Warschau · 240° SW · konkav 45°–75° · Open-Meteo',
-        forecastVsReal: 'Prognose vs. Realität',
+        forecastVsReal: 'Prognose vs. Real',
         solarInput: 'Solareingabe', battery: 'Batterie', temperature: 'Temperatur', totalOutput: 'Ausgang Gesamt',
         energyFlow: 'Energiefluss',
         energySavings: 'Energie & Ersparnis',
@@ -2867,9 +2867,9 @@ document.addEventListener('keydown', (e) => {
 // Collapsible Sections
 // ============================================================================
 (function initCollapsibleSections() {
-    // Everything up to and including flowAnimatedSection (Energie-Bilanz) stays open.
+    // Everything up to and including forecastVsRealBox (Prognose vs. Real) stays open.
     // Everything after is collapsed by default.
-    const CUTOFF_ID = 'flowAnimatedSection';
+    const CUTOFF_ID = 'forecastVsRealBox';
 
     // Select all section-like containers
     const sections = document.querySelectorAll('.today-box[id]');
