@@ -209,26 +209,32 @@ async def retrain_and_save():
     return {"solar_trained": solar_trained, "load_trained": load_trained}
 
 
-def _load_solar_model() -> dict | None:
-    if not SOLAR_MODEL_PATH.exists():
+_model_cache: dict[str, tuple[float, dict]] = {}
+
+
+def _load_model_cached(path: Path) -> dict | None:
+    if not path.exists():
         return None
+    mtime = path.stat().st_mtime
+    key = str(path)
+    if key in _model_cache and _model_cache[key][0] == mtime:
+        return _model_cache[key][1]
     try:
-        with open(SOLAR_MODEL_PATH, "rb") as f:
-            return pickle.load(f)
+        with open(path, "rb") as f:
+            model = pickle.load(f)
+        _model_cache[key] = (mtime, model)
+        return model
     except Exception as e:
-        logger.warning("Failed to load solar model: %s", e)
+        logger.warning("Failed to load model %s: %s", path, e)
         return None
+
+
+def _load_solar_model() -> dict | None:
+    return _load_model_cached(SOLAR_MODEL_PATH)
 
 
 def _load_load_model() -> dict | None:
-    if not LOAD_MODEL_PATH.exists():
-        return None
-    try:
-        with open(LOAD_MODEL_PATH, "rb") as f:
-            return pickle.load(f)
-    except Exception as e:
-        logger.warning("Failed to load load model: %s", e)
-        return None
+    return _load_model_cached(LOAD_MODEL_PATH)
 
 
 def _predict_solar(weather: dict, date_str: str) -> float | None:

@@ -10,7 +10,7 @@
     <link rel="icon" href="/static/icon-192.png" type="image/png">
     <link rel="apple-touch-icon" href="/static/apple-touch-icon.png">
     <title>Solar Dashboard</title>
-    <link rel="stylesheet" href="/static/style.css?v=63">
+    <link rel="stylesheet" href="/static/style.css?v=64">
     <script src="https://cdn.jsdelivr.net/npm/chart.js@4"></script>
 </head>
 <body>
@@ -348,6 +348,24 @@
             <div class="chart-wrap" style="height:220px"><canvas id="chart_self_consumption_opt"></canvas></div>
         </section>
 
+        <!-- Temperature vs Production scatter -->
+        <section class="today-box" id="tempVsProductionSection" style="display:none">
+            <h2>Temperatur vs. Produktion</h2>
+            <div class="chart-wrap" style="height:240px"><canvas id="chart_temp_vs_production"></canvas></div>
+        </section>
+
+        <!-- SOC Range daily -->
+        <section class="today-box" id="socRangeSection" style="display:none">
+            <h2>SOC-Bereich (Min/Max)</h2>
+            <div class="chart-wrap" style="height:220px"><canvas id="chart_soc_range"></canvas></div>
+        </section>
+
+        <!-- Peak Output trend -->
+        <section class="today-box" id="peakOutputSection" style="display:none">
+            <h2>Peak-Leistung Trend</h2>
+            <div class="chart-wrap" style="height:220px"><canvas id="chart_peak_output"></canvas></div>
+        </section>
+
         <!-- SOH Trend -->
         <section class="today-box" id="sohChartSection">
             <h2 data-i18n="batteryHealth">Batterie-Gesundheit (SOH %)</h2>
@@ -637,6 +655,6 @@
 
     </div>
 
-    <script src="/static/app.js?v=63"></script>
+    <script src="/static/app.js?v=64"></script>
 </body>
 </html>

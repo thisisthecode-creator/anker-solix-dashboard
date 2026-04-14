@@ -633,7 +633,7 @@ AUTH_SECRET = os.getenv("DASHBOARD_AUTH_SECRET", "") or (DASHBOARD_PASSWORD or "
 SESSION_COOKIE = "anker_session"
 SESSION_TTL_S = 60 * 60 * 24 * 30  # 30 days
 
-OPEN_PATHS = {"/api/health", "/metrics", "/auth/login", "/auth/logout", "/favicon.ico"}
+OPEN_PATHS = {"/api/health", "/auth/login", "/auth/logout", "/favicon.ico"}
 
 
 def _sign_session() -> str:
@@ -749,83 +749,6 @@ async def api_monthly(months: int = Query(12, ge=1, le=60)):
 async def api_yearly():
     return await get_yearly()
 
-
-def _read_archive_rows(cutoff_str: str, before_str: str) -> list[dict]:
-    """Read archive rows between cutoff_str and before_str (ISO timestamps)."""
-    rows: list[dict] = []
-    cutoff_date = cutoff_str[:10]
-    before_date = before_str[:10]
-    ARCHIVE_DIR.mkdir(parents=True, exist_ok=True)
-
-    # Read gzipped daily archives
-    for gz_path in sorted(ARCHIVE_DIR.glob("*.csv.gz")):
-        file_date = gz_path.stem.replace(".csv", "")  # "2026-04-08.csv.gz" -> "2026-04-08"
-        if file_date < cutoff_date or file_date > before_date:
-            continue
-        try:
-            with gzip.open(gz_path, "rt") as f:
-                next(f, None)  # skip header
-                for line in f:
-                    parts = line.strip().split(",")
-                    if len(parts) < 14:
-                        continue
-                    ts = parts[0]
-                    if ts < cutoff_str or ts >= before_str:
-                        continue
-                    rows.append({
-                        "timestamp": ts,
-                        "solar_watts": float(parts[1] or 0),
-                        "battery_soc": int(float(parts[2] or 0)),
-                        "battery_soh": int(float(parts[3] or 0)),
-                        "ac_output_watts": float(parts[4] or 0),
-                        "dc_output_watts": float(parts[5] or 0),
-                        "dc_12v_watts": float(parts[6] or 0),
-                        "usbc_1_watts": float(parts[7] or 0),
-                        "usbc_2_watts": float(parts[8] or 0),
-                        "usbc_3_watts": float(parts[9] or 0),
-                        "usba_1_watts": float(parts[10] or 0),
-                        "total_output_watts": float(parts[11] or 0),
-                        "ac_input_watts": float(parts[12] or 0),
-                        "temperature": float(parts[13] or 0),
-                    })
-        except Exception as e:
-            logger.warning("Failed to read archive %s: %s", gz_path, e)
-
-    # Read open daily CSVs
-    for csv_path in sorted(ARCHIVE_DIR.glob("*.csv")):
-        file_date = csv_path.stem
-        if file_date < cutoff_date or file_date > before_date:
-            continue
-        try:
-            with open(csv_path, "r") as f:
-                next(f, None)
-                for line in f:
-                    parts = line.strip().split(",")
-                    if len(parts) < 14:
-                        continue
-                    ts = parts[0]
-                    if ts < cutoff_str or ts >= before_str:
-                        continue
-                    rows.append({
-                        "timestamp": ts,
-                        "solar_watts": float(parts[1] or 0),
-                        "battery_soc": int(float(parts[2] or 0)),
-                        "battery_soh": int(float(parts[3] or 0)),
-                        "ac_output_watts": float(parts[4] or 0),
-                        "dc_output_watts": float(parts[5] or 0),
-                        "dc_12v_watts": float(parts[6] or 0),
-                        "usbc_1_watts": float(parts[7] or 0),
-                        "usbc_2_watts": float(parts[8] or 0),
-                        "usbc_3_watts": float(parts[9] or 0),
-                        "usba_1_watts": float(parts[10] or 0),
-                        "total_output_watts": float(parts[11] or 0),
-                        "ac_input_watts": float(parts[12] or 0),
-                        "temperature": float(parts[13] or 0),
-                    })
-        except Exception as e:
-            logger.warning("Failed to read archive %s: %s", csv_path, e)
-
-    return rows
 
 
 # === Archive cache ==========================================================
@@ -1116,10 +1039,24 @@ async def api_break_even():
     return await get_cumulative_savings(ELECTRICITY_PRICE_EUR, SYSTEM_COST_EUR)
 
 
+_endpoint_cache: dict[str, tuple[float, object]] = {}
+_ENDPOINT_CACHE_TTL = 300  # 5 minutes
+
+
+async def _cached_endpoint(key: str, ttl: int, fn):
+    now = time.time()
+    cached = _endpoint_cache.get(key)
+    if cached and now - cached[0] < ttl:
+        return cached[1]
+    result = await fn()
+    _endpoint_cache[key] = (now, result)
+    return result
+
+
 @app.get("/api/hourly-heatmap")
 async def api_hourly_heatmap(days: int = Query(30, ge=1, le=365)):
     """Hour-of-day × day grid of average solar power for the heatmap chart."""
-    return await get_hourly_heatmap(days)
+    return await _cached_endpoint(f"heatmap:{days}", _ENDPOINT_CACHE_TTL, lambda: get_hourly_heatmap(days))
 
 
 @app.get("/api/monthly-distribution")
@@ -1150,7 +1087,7 @@ async def api_forecast_accuracy(days: int = Query(60, ge=7, le=365)):
 async def api_anomaly():
     """Z-score anomaly snapshot for current hour vs weekday baseline."""
     from app.anomaly import current_anomaly
-    return await current_anomaly()
+    return await _cached_endpoint("anomaly", _ENDPOINT_CACHE_TTL, current_anomaly)
 
 
 @app.get("/api/ml-forecast")

@@ -708,7 +708,7 @@ async def get_energy_summary() -> dict:
     db = await get_pool()
     periods = {}
     for label, where in [
-        ("week", "date >= date('now', 'weekday 1', '-7 days')"),
+        ("week", "date >= date('now', '+1 day', 'weekday 1', '-7 days')"),
         ("month", "date >= date('now', 'start of month')"),
         ("year", "date >= date('now', 'start of year')"),
         ("total", "1=1"),
