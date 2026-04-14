@@ -56,7 +56,7 @@ const I18N = {
         specDimensions: 'Maße', specWeight: 'Gewicht', specExpandable: 'Erweiterbar', specNo: 'Nein',
         solarScore: 'Solar-Score', todayVsYesterday: 'Heute vs. Gestern (Solar W)',
         heatmapTitle: 'Solar-Kalender', less: 'Weniger', more: 'Mehr',
-        forecastAccuracyLabel: 'Prognose-Genauigkeit',
+        forecastAccuracyLabel: 'Genauigkeit',
         batteryCycles: 'Batterie-Zyklen', totalCycles: 'Zyklen Gesamt',
         cycleHealth: 'Verbleibend', cycles: 'Zyklen',
         cycleLifetimeUsed: 'Lebensdauer verbraucht',
@@ -200,7 +200,7 @@ const I18N = {
         chargeEquiv: 'Charge Equivalents',
         solarScore: 'Solar Score', todayVsYesterday: 'Today vs. Yesterday (Solar W)',
         heatmapTitle: 'Solar Calendar', less: 'Less', more: 'More',
-        forecastAccuracyLabel: 'Forecast Accuracy',
+        forecastAccuracyLabel: 'Accuracy',
         batteryCycles: 'Battery Cycles', totalCycles: 'Total Cycles',
         cycleHealth: 'Remaining', cycles: 'Cycles',
         cycleLifetimeUsed: 'Lifetime used',
@@ -1400,11 +1400,56 @@ async function loadMonthlyForecast() {
         const titleEl = $('monthlyFcTitle');
         if (titleEl) titleEl.textContent = (LANG === 'de' ? 'Solar-Prognose ' : 'Solar Forecast ') + thisYear;
 
-        const sumEl = $('monthlyFcSummary');
-        if (sumEl) {
-            sumEl.innerHTML = '<span>' + lastYear + ': ' + Math.round(totalLastYear * 10) / 10 + ' kWh</span>'
-                + '<span>' + thisYear + ': ' + Math.round(totalReal * 10) / 10 + ' kWh</span>'
-                + '<span>~' + Math.round(totalExpected * 10) / 10 + ' kWh ' + (LANG === 'de' ? 'erwartet' : 'expected') + '</span>';
+        // KPI cards
+        const kpiEl = $('monthlyFcKpis');
+        if (kpiEl) {
+            const pctVsLastYear = totalLastYear > 0
+                ? Math.round((totalReal / (totalLastYear * (currentMonth + 1) / 12)) * 100) - 100
+                : 0;
+            const trendClass = pctVsLastYear > 0 ? 'up' : pctVsLastYear < 0 ? 'down' : 'flat';
+            const trendArrow = pctVsLastYear > 0 ? '\u25B2' : pctVsLastYear < 0 ? '\u25BC' : '\u2013';
+            const bisherLabel = LANG === 'de' ? ' bisher' : ' so far';
+            const progLabel = LANG === 'de' ? 'Jahresprognose' : 'Year Forecast';
+            const progSub = LANG === 'de' ? 'Real + Prognose' : 'Actual + Forecast';
+            const monateSub = (currentMonth + 1) + (LANG === 'de' ? ' Monate' : ' months');
+
+            kpiEl.innerHTML =
+                '<div class="mfc-kpi">'
+                    + '<div class="mfc-kpi-label">' + thisYear + bisherLabel + '</div>'
+                    + '<div class="mfc-kpi-value amber">' + Math.round(totalReal) + ' kWh</div>'
+                    + '<div class="mfc-kpi-sub">' + monateSub + '</div>'
+                + '</div>'
+                + '<div class="mfc-kpi">'
+                    + '<div class="mfc-kpi-label">' + progLabel + '</div>'
+                    + '<div class="mfc-kpi-value green">~' + Math.round(totalExpected) + ' kWh</div>'
+                    + '<div class="mfc-kpi-sub">' + progSub + '</div>'
+                + '</div>'
+                + '<div class="mfc-kpi">'
+                    + '<div class="mfc-kpi-label">vs. ' + lastYear + '</div>'
+                    + '<div class="mfc-kpi-value dim">' + Math.round(totalLastYear) + ' kWh</div>'
+                    + '<div class="mfc-kpi-sub"><span class="mfc-kpi-trend ' + trendClass + '">'
+                        + trendArrow + ' ' + Math.abs(pctVsLastYear) + '%</span></div>'
+                + '</div>';
+        }
+
+        // Build single combined bar dataset for this year
+        const thisYearCombined = [];
+        const barColors = [];
+        const barBorders = [];
+        for (let m = 0; m < 12; m++) {
+            if (m < currentMonth) {
+                thisYearCombined.push(thisYearReal[m]);
+                barColors.push('#f59e0b');
+                barBorders.push('#f59e0b');
+            } else if (m === currentMonth) {
+                thisYearCombined.push(thisYearReal[m]);
+                barColors.push('rgba(245, 158, 11, 0.7)');
+                barBorders.push('#f59e0b');
+            } else {
+                thisYearCombined.push(thisYearForecast[m]);
+                barColors.push('rgba(245, 158, 11, 0.15)');
+                barBorders.push('rgba(245, 158, 11, 0.5)');
+            }
         }
 
         if (_monthlyFcChart) _monthlyFcChart.destroy();
@@ -1416,27 +1461,26 @@ async function loadMonthlyForecast() {
                     {
                         label: String(lastYear),
                         data: lastYearData,
-                        backgroundColor: 'rgba(148,163,184,0.3)',
-                        borderColor: 'rgba(148,163,184,0.6)',
-                        borderWidth: 1,
-                        borderRadius: 3
+                        type: 'line',
+                        borderColor: 'rgba(148,163,184,0.5)',
+                        backgroundColor: 'rgba(148,163,184,0.06)',
+                        borderWidth: 1.5,
+                        borderDash: [4, 4],
+                        pointRadius: 3,
+                        pointBackgroundColor: 'rgba(148,163,184,0.5)',
+                        pointBorderColor: 'rgba(148,163,184,0.5)',
+                        fill: true,
+                        tension: 0.3,
+                        order: 0
                     },
                     {
-                        label: thisYear + ' ' + (LANG === 'de' ? 'Real' : 'Actual'),
-                        data: thisYearReal,
-                        backgroundColor: '#f59e0b',
-                        borderColor: '#f59e0b',
+                        label: String(thisYear),
+                        data: thisYearCombined,
+                        backgroundColor: barColors,
+                        borderColor: barBorders,
                         borderWidth: 1,
-                        borderRadius: 3
-                    },
-                    {
-                        label: thisYear + ' ' + (LANG === 'de' ? 'Prognose' : 'Forecast'),
-                        data: thisYearForecast,
-                        backgroundColor: 'rgba(245,158,11,0.3)',
-                        borderColor: '#f59e0b',
-                        borderWidth: 1,
-                        borderDash: [3, 3],
-                        borderRadius: 3
+                        borderRadius: 4,
+                        order: 1
                     }
                 ]
             },
@@ -1444,17 +1488,59 @@ async function loadMonthlyForecast() {
                 responsive: true, maintainAspectRatio: false, animation: false,
                 interaction: { intersect: false, mode: 'index' },
                 plugins: {
-                    legend: { display: true, position: 'top', labels: { boxWidth: 10, font: { size: 9 } } },
+                    legend: {
+                        display: true, position: 'top',
+                        labels: {
+                            boxWidth: 10, font: { size: 9 },
+                            generateLabels: function() {
+                                return [
+                                    { text: String(lastYear), strokeStyle: 'rgba(148,163,184,0.5)',
+                                      fillStyle: 'rgba(148,163,184,0.15)',
+                                      lineWidth: 1.5, lineDash: [4, 4] },
+                                    { text: thisYear + ' Real', fillStyle: '#f59e0b',
+                                      strokeStyle: '#f59e0b', lineWidth: 1 },
+                                    { text: thisYear + ' Prognose',
+                                      fillStyle: 'rgba(245,158,11,0.15)',
+                                      strokeStyle: 'rgba(245,158,11,0.5)', lineWidth: 1 }
+                                ];
+                            }
+                        }
+                    },
                     tooltip: { callbacks: { label: ctx => {
                         if (ctx.parsed.y === 0) return null;
-                        return ctx.dataset.label + ': ' + fmt2.format(ctx.parsed.y) + ' kWh';
+                        let suffix = '';
+                        if (ctx.datasetIndex === 1) {
+                            const m = ctx.dataIndex;
+                            suffix = m < currentMonth ? ' (real)' : m === currentMonth
+                                ? (LANG === 'de' ? ' (bisher)' : ' (so far)') : ' (prognose)';
+                        }
+                        return (ctx.datasetIndex === 0 ? String(lastYear) : String(thisYear))
+                            + ': ' + fmt2.format(ctx.parsed.y) + ' kWh' + suffix;
                     } } }
                 },
                 scales: {
                     y: { beginAtZero: true, grid: { color: chartGridColor() }, ticks: { maxTicksLimit: 5, callback: v => v + ' kWh' } },
                     x: { grid: { display: false }, ticks: { font: { size: 9 } } }
                 }
-            }
+            },
+            plugins: [{
+                id: 'currentMonthMarker',
+                afterDatasetsDraw(chart) {
+                    const meta = chart.getDatasetMeta(1);
+                    if (!meta.data[currentMonth]) return;
+                    const bar = meta.data[currentMonth];
+                    const ctx2 = chart.ctx;
+                    ctx2.save();
+                    ctx2.strokeStyle = '#f59e0b';
+                    ctx2.lineWidth = 1;
+                    ctx2.setLineDash([3, 3]);
+                    ctx2.beginPath();
+                    ctx2.moveTo(bar.x, chart.chartArea.top);
+                    ctx2.lineTo(bar.x, chart.chartArea.bottom);
+                    ctx2.stroke();
+                    ctx2.restore();
+                }
+            }]
         });
         section.style.display = '';
     } catch (e) { console.warn('Monthly forecast error:', e); }
@@ -3067,12 +3153,12 @@ document.addEventListener('keydown', (e) => {
 (function initCollapsibleSections() {
     // Everything up to and including forecastVsRealBox (Prognose vs. Real) stays open.
     // Everything after is collapsed by default.
-    const CUTOFF_ID = 'forecastVsRealBox';
+    const CUTOFF_ID = 'monthlyForecastSection';
 
     // Select all section-like containers
     const sections = document.querySelectorAll('.today-box[id]');
     // Reset saved state when cutoff changes (version bump clears stale prefs)
-    const COLLAPSE_VERSION = 2;
+    const COLLAPSE_VERSION = 3;
     const savedState = (() => {
         try {
             const raw = JSON.parse(localStorage.getItem('collapsedSections') || '{}');
