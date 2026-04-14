@@ -10,7 +10,7 @@
     <link rel="icon" href="/static/icon-192.png" type="image/png">
     <link rel="apple-touch-icon" href="/static/apple-touch-icon.png">
     <title>Solar Dashboard</title>
-    <link rel="stylesheet" href="/static/style.css?v=42">
+    <link rel="stylesheet" href="/static/style.css?v=43">
     <script src="https://cdn.jsdelivr.net/npm/chart.js@4"></script>
 </head>
 <body>
@@ -302,15 +302,14 @@
         </div>
 
         <!-- Daily Solar Bar Chart -->
-        <section class="chart-box">
-            <h3 data-i18n="dailyProd">Tagesproduktion (kWh)</h3>
+        <section class="today-box" id="dailyChartSection">
+            <h2 data-i18n="dailyProd">Tagesproduktion (kWh)</h2>
             <div class="chart-wrap"><canvas id="chart_daily_bars"></canvas></div>
         </section>
 
-
         <!-- SOH Trend -->
-        <section class="chart-box">
-            <h3 data-i18n="batteryHealth">Batterie-Gesundheit (SOH %)</h3>
+        <section class="today-box" id="sohChartSection">
+            <h2 data-i18n="batteryHealth">Batterie-Gesundheit (SOH %)</h2>
             <div class="chart-wrap"><canvas id="chart_soh"></canvas></div>
         </section>
 
@@ -430,8 +429,8 @@
         </section>
 
         <!-- Combined Overview Chart with metric toggles -->
-        <section class="chart-box">
-            <h3 data-i18n="mqttOverview">MQTT Übersicht</h3>
+        <section class="today-box" id="mqttOverviewSection">
+            <h2 data-i18n="mqttOverview">MQTT Übersicht</h2>
             <div class="tab-bar combined-tabs" id="combinedTabs">
                 <button class="tab active" data-combined="day" data-i18n="day">Tag</button>
                 <button class="tab" data-combined="week" data-i18n="week">Woche</button>
@@ -508,7 +507,7 @@
 
         <!-- MQTT Log -->
         <section class="today-box" id="mqttLogSection">
-            <h2 style="display:flex;align-items:center;gap:8px;flex-wrap:wrap"><span data-i18n="mqttLog">MQTT Live-Log</span> <span class="mqtt-heartbeat" id="mqttHeartbeat"><span class="hb-dot"></span> <span id="mqttHbTime">--:--:--</span></span></h2>
+            <h2 data-i18n="mqttLog">MQTT Live-Log <span class="mqtt-heartbeat" id="mqttHeartbeat"><span class="hb-dot"></span> <span id="mqttHbTime">--:--:--</span></span></h2>
             <div class="log-table-wrap">
                 <table class="log-table" id="mqttLog">
                     <thead>
@@ -617,6 +616,6 @@
 
     </div>
 
-    <script src="/static/app.js?v=42"></script>
+    <script src="/static/app.js?v=43"></script>
 </body>
 </html>
