@@ -1184,7 +1184,170 @@ async function fetchGTI(tilt) {
     return data.hourly;
 }
 
+function renderForecast(fc) {
+    const d = fc.daily;
+    const dailyGTI = fc.dailyGTI;
+    const dailyDirect = fc.dailyDirect;
+    const dailyDiffuse = fc.dailyDiffuse;
+
+    const days = t('dayNames');
+    const weatherIcons = {
+        0: '☀️', 1: '🌤', 2: '⛅', 3: '☁️', 45: '🌫', 48: '🌫',
+        51: '🌦', 53: '🌦', 55: '🌧', 61: '🌧', 63: '🌧', 65: '🌧',
+        71: '🌨', 73: '🌨', 75: '❄️', 80: '🌦', 81: '🌧', 82: '⛈', 95: '⛈', 96: '⛈',
+    };
+    const todayStr = warsawToday();
+    const grid = $('forecastGrid');
+    grid.innerHTML = '';
+
+    let maxKwh = 0;
+    let weekTotal = 0;
+    let weekSunH = 0;
+    for (let i = 0; i < d.time.length; i++) {
+        const gti = dailyGTI[d.time[i]] || 0;
+        const kwh = gti / 1000 * PANEL_KWP * PANEL_EFFICIENCY;
+        weekTotal += kwh;
+        weekSunH += (d.sunshine_duration[i] || 0) / 3600;
+        if (kwh > maxKwh) maxKwh = kwh;
+    }
+
+    for (let i = 0; i < d.time.length; i++) {
+        const dt = new Date(d.time[i]);
+        const dayName = days[dt.getDay()];
+        const sunH = Math.round((d.sunshine_duration[i] || 0) / 3600 * 10) / 10;
+        const uv = Math.round((d.uv_index_max[i] || 0) * 10) / 10;
+        const icon = weatherIcons[d.weather_code[i]] || '🌡';
+        const isToday = d.time[i] === todayStr;
+
+        const gti = dailyGTI[d.time[i]] || 0;
+        const estKwh = Math.round(gti / 1000 * PANEL_KWP * PANEL_EFFICIENCY * 100) / 100;
+
+        const uvClass = uv >= 8 ? 'uv-extreme' : uv >= 6 ? 'uv-high' : uv >= 3 ? 'uv-mid' : 'uv-low';
+
+        const cloudCover = Math.round(d.cloud_cover_mean ? d.cloud_cover_mean[i] || 0 : 0);
+        const windSpeed = Math.round(d.wind_speed_10m_max ? d.wind_speed_10m_max[i] || 0 : 0);
+        const windGusts = Math.round(d.wind_gusts_10m_max ? d.wind_gusts_10m_max[i] || 0 : 0);
+        const windDanger = windGusts >= 60 ? ' fc-wind-danger' : windGusts >= 40 ? ' fc-wind-warn' : '';
+        const dateStr = dt.getDate() + '.' + (dt.getMonth() + 1) + '.';
+
+        if (i <= 1 && windGusts >= 60) checkStormNotification(windGusts);
+
+        const tMax = d.temperature_2m_max ? Math.round(d.temperature_2m_max[i] || 0) : null;
+        const tMin = d.temperature_2m_min ? Math.round(d.temperature_2m_min[i] || 0) : null;
+        const tempHtml = (tMax != null && tMin != null)
+            ? `<div class="fc-temp"><span class="fc-temp-max" title="${LANG === 'de' ? 'Tag' : 'Day'}">☀${tMax}°</span><span class="fc-temp-min" title="${LANG === 'de' ? 'Nacht' : 'Night'}">☾${tMin}°</span></div>`
+            : '';
+
+        const div = document.createElement('div');
+        div.className = 'fc-day' + (isToday ? ' fc-today' : '');
+        div.innerHTML = `<div class="fc-name">${isToday ? t('today') : dayName}</div>`
+            + `<div class="fc-date">${dateStr}</div>`
+            + `<div class="fc-icon">${icon}</div>`
+            + `<div class="fc-kwh">${estKwh}</div>`
+            + tempHtml
+            + `<div class="fc-sun">🔆 ${sunH}h</div>`
+            + `<div class="fc-clouds">☁ ${cloudCover}%</div>`
+            + `<div class="fc-wind${windDanger}" title="${t('wind')} ${windSpeed} km/h (${LANG === 'de' ? 'Böen' : 'gusts'} ${windGusts} km/h)">💨 ${windSpeed}</div>`
+            + `<div class="fc-uv ${uvClass}">🔆 ${uv}</div>`;
+        grid.appendChild(div);
+    }
+
+    let summary = $('forecastSummary');
+    if (!summary) {
+        summary = document.createElement('div');
+        summary.id = 'forecastSummary';
+        summary.className = 'fc-summary';
+        grid.parentNode.insertBefore(summary, grid.nextSibling);
+    }
+    const avgKwh = Math.round(weekTotal / d.time.length * 100) / 100;
+    const IPHONE_WH = 17.3;
+    const MACBOOK_WH = 52.6;
+    const weekChargesPhone = Math.floor(weekTotal * 1000 / IPHONE_WH);
+    const dayChargesPhone = Math.floor(avgKwh * 1000 / IPHONE_WH);
+    const weekChargesMac = Math.floor(weekTotal * 1000 / MACBOOK_WH * 10) / 10;
+    const dayChargesMac = Math.floor(avgKwh * 1000 / MACBOOK_WH * 10) / 10;
+    summary.innerHTML = `<div class="fc-sum-row">`
+        + `<div class="fc-sum-item"><span class="fc-sum-value">${fmtKwh.format(weekTotal)}</span><span class="fc-sum-label">${t('kwhWeek')}</span></div>`
+        + `<div class="fc-sum-item"><span class="fc-sum-value">${fmtKwh.format(avgKwh)}</span><span class="fc-sum-label">${t('avgKwhDay')}</span></div>`
+        + `<div class="fc-sum-item"><span class="fc-sum-value">${Math.round(weekSunH)}</span><span class="fc-sum-label">${t('sunHours')}</span></div>`
+        + `</div>`
+        + `</div>`;
+
+    const ceEl = $('chargeEquivContent');
+    if (ceEl) {
+        ceEl.innerHTML = `<div class="fc-devices">`
+            + `<div class="fc-device"><div class="fc-dev-icon">📱</div><div class="fc-dev-name">iPhone 15 Pro Max</div><div class="fc-dev-line"><span class="fc-dev-num">${weekChargesPhone}×</span> ${t('perWeek')}</div><div class="fc-dev-line"><span class="fc-dev-num">${dayChargesPhone}×</span> ${t('perDay')}</div></div>`
+            + `<div class="fc-device"><div class="fc-dev-icon">💻</div><div class="fc-dev-name">MacBook Air M4 13"</div><div class="fc-dev-line"><span class="fc-dev-num">${weekChargesMac}×</span> ${t('perWeek')}</div><div class="fc-dev-line"><span class="fc-dev-num">${dayChargesMac}×</span> ${t('perDay')}</div></div>`
+            + `</div>`;
+    }
+
+    window._forecastKwh = {};
+    for (let i = 0; i < d.time.length; i++) {
+        const gti = dailyGTI[d.time[i]] || 0;
+        window._forecastKwh[d.time[i]] = Math.round(gti / 1000 * PANEL_KWP * PANEL_EFFICIENCY * 100) / 100;
+    }
+
+    window._forecastSunshine = {};
+    for (let i = 0; i < d.time.length; i++) {
+        window._forecastSunshine[d.time[i]] = Math.round((d.sunshine_duration[i] || 0) / 3600 * 10) / 10;
+    }
+
+    if (fc.hourlyTimes) {
+        window._forecastHourly = {};
+        for (let i = 0; i < fc.hourlyTimes.length; i++) {
+            window._forecastHourly[fc.hourlyTimes[i]] = fc.hourlyKwh[i] || 0;
+        }
+    }
+}
+
+function processForecastData(dailyRes, stripResults) {
+    const d = dailyRes.daily;
+    const hBase = dailyRes.hourly;
+    if (!d || !d.time || !hBase || !hBase.time) return null;
+
+    const dailyGTI = {};
+    const dailyDirect = {};
+    const dailyDiffuse = {};
+
+    for (let i = 0; i < hBase.time.length; i++) {
+        const day = hBase.time[i].slice(0, 10);
+        if (!dailyGTI[day]) { dailyGTI[day] = 0; dailyDirect[day] = 0; dailyDiffuse[day] = 0; }
+        let weightedGTI = 0;
+        for (let s = 0; s < CURVE_STRIPS.length; s++) {
+            weightedGTI += (stripResults[s].global_tilted_irradiance[i] || 0) * CURVE_STRIPS[s].weight;
+        }
+        dailyGTI[day] += weightedGTI;
+        dailyDirect[day] += (hBase.direct_radiation[i] || 0);
+        dailyDiffuse[day] += (hBase.diffuse_radiation[i] || 0);
+    }
+
+    const hourlyTimes = hBase.time;
+    const hourlyKwh = [];
+    for (let i = 0; i < hBase.time.length; i++) {
+        let weightedGTI = 0;
+        for (let s = 0; s < CURVE_STRIPS.length; s++) {
+            weightedGTI += (stripResults[s].global_tilted_irradiance[i] || 0) * CURVE_STRIPS[s].weight;
+        }
+        hourlyKwh.push(Math.round(weightedGTI / 1000 * PANEL_KWP * PANEL_EFFICIENCY * 1000) / 1000);
+    }
+
+    return { daily: d, dailyGTI, dailyDirect, dailyDiffuse, hourlyTimes, hourlyKwh };
+}
+
 async function loadForecast() {
+    // 1. Load cached forecast instantly
+    try {
+        const cacheRes = await fetch('/api/forecast-cache');
+        if (cacheRes.ok) {
+            const cached = await cacheRes.json();
+            if (cached.daily && cached.daily.time && cached.daily.time.length) {
+                renderForecast(cached);
+                await buildHourlyForecastToday();
+            }
+        }
+    } catch (e) { /* cache miss is fine */ }
+
+    // 2. Fetch fresh data from Open-Meteo
     try {
         const [dailyRes, ...stripResults] = await Promise.all([
             fetch('https://api.open-meteo.com/v1/forecast?latitude=52.1928&longitude=21.0103'
@@ -1194,160 +1357,27 @@ async function loadForecast() {
             ...CURVE_STRIPS.map(s => fetchGTI(s.tilt))
         ]);
 
-        const d = dailyRes.daily;
-        const hBase = dailyRes.hourly;
-        if (!d || !d.time || !hBase || !hBase.time) return;
+        const fc = processForecastData(dailyRes, stripResults);
+        if (!fc) return;
 
-        const dailyGTI = {};
-        const dailyDirect = {};
-        const dailyDiffuse = {};
-
-        for (let i = 0; i < hBase.time.length; i++) {
-            const day = hBase.time[i].slice(0, 10);
-            if (!dailyGTI[day]) { dailyGTI[day] = 0; dailyDirect[day] = 0; dailyDiffuse[day] = 0; }
-            let weightedGTI = 0;
-            for (let s = 0; s < CURVE_STRIPS.length; s++) {
-                const gti = stripResults[s].global_tilted_irradiance[i] || 0;
-                weightedGTI += gti * CURVE_STRIPS[s].weight;
-            }
-            dailyGTI[day] += weightedGTI;
-            dailyDirect[day] += (hBase.direct_radiation[i] || 0);
-            dailyDiffuse[day] += (hBase.diffuse_radiation[i] || 0);
-        }
-
-        const days = t('dayNames');
-        const weatherIcons = {
-            0: '☀️', 1: '🌤', 2: '⛅', 3: '☁️', 45: '🌫', 48: '🌫',
-            51: '🌦', 53: '🌦', 55: '🌧', 61: '🌧', 63: '🌧', 65: '🌧',
-            71: '🌨', 73: '🌨', 75: '❄️', 80: '🌦', 81: '🌧', 82: '⛈', 95: '⛈', 96: '⛈',
-        };
-        const todayStr = warsawToday();
-        const grid = $('forecastGrid');
-        grid.innerHTML = '';
-
-        let maxKwh = 0;
-        let weekTotal = 0;
-        let weekSunH = 0;
-        for (let i = 0; i < d.time.length; i++) {
-            const gti = dailyGTI[d.time[i]] || 0;
-            const kwh = gti / 1000 * PANEL_KWP * PANEL_EFFICIENCY;
-            weekTotal += kwh;
-            weekSunH += (d.sunshine_duration[i] || 0) / 3600;
-            if (kwh > maxKwh) maxKwh = kwh;
-        }
-
-        for (let i = 0; i < d.time.length; i++) {
-            const dt = new Date(d.time[i]);
-            const dayName = days[dt.getDay()];
-            const sunH = Math.round((d.sunshine_duration[i] || 0) / 3600 * 10) / 10;
-            const uv = Math.round((d.uv_index_max[i] || 0) * 10) / 10;
-            const icon = weatherIcons[d.weather_code[i]] || '🌡';
-            const isToday = d.time[i] === todayStr;
-
-            const gti = dailyGTI[d.time[i]] || 0;
-            const estKwh = Math.round(gti / 1000 * PANEL_KWP * PANEL_EFFICIENCY * 100) / 100;
-            const barPct = maxKwh > 0 ? Math.round((estKwh / maxKwh) * 100) : 0;
-
-            const direct = dailyDirect[d.time[i]] || 0;
-            const diffuse = dailyDiffuse[d.time[i]] || 0;
-            const totalRad = direct + diffuse;
-            const directPct = totalRad > 0 ? Math.round(direct / totalRad * 100) : 0;
-
-            const uvClass = uv >= 8 ? 'uv-extreme' : uv >= 6 ? 'uv-high' : uv >= 3 ? 'uv-mid' : 'uv-low';
-
-            // Cloud cover + wind data
-            const cloudCover = Math.round(d.cloud_cover_mean ? d.cloud_cover_mean[i] || 0 : 0);
-            const windSpeed = Math.round(d.wind_speed_10m_max ? d.wind_speed_10m_max[i] || 0 : 0);
-            const windGusts = Math.round(d.wind_gusts_10m_max ? d.wind_gusts_10m_max[i] || 0 : 0);
-            const windDanger = windGusts >= 60 ? ' fc-wind-danger' : windGusts >= 40 ? ' fc-wind-warn' : '';
-            // Date string (e.g. "14.4.")
-            const dateStr = dt.getDate() + '.' + (dt.getMonth() + 1) + '.';
-
-            // Check storm notification for today/tomorrow
-            if (i <= 1 && windGusts >= 60) checkStormNotification(windGusts);
-
-            // Temperature min/max from Open-Meteo
-            const tMax = d.temperature_2m_max ? Math.round(d.temperature_2m_max[i] || 0) : null;
-            const tMin = d.temperature_2m_min ? Math.round(d.temperature_2m_min[i] || 0) : null;
-            const tempHtml = (tMax != null && tMin != null)
-                ? `<div class="fc-temp"><span class="fc-temp-max" title="${LANG === 'de' ? 'Tag' : 'Day'}">☀${tMax}°</span><span class="fc-temp-min" title="${LANG === 'de' ? 'Nacht' : 'Night'}">☾${tMin}°</span></div>`
-                : '';
-
-            const div = document.createElement('div');
-            div.className = 'fc-day' + (isToday ? ' fc-today' : '');
-            div.innerHTML = `<div class="fc-name">${isToday ? t('today') : dayName}</div>`
-                + `<div class="fc-date">${dateStr}</div>`
-                + `<div class="fc-icon">${icon}</div>`
-                + `<div class="fc-kwh">${estKwh}</div>`
-                + tempHtml
-                + `<div class="fc-sun">🔆 ${sunH}h</div>`
-                + `<div class="fc-clouds">☁ ${cloudCover}%</div>`
-                + `<div class="fc-wind${windDanger}" title="${t('wind')} ${windSpeed} km/h (${LANG === 'de' ? 'Böen' : 'gusts'} ${windGusts} km/h)">💨 ${windSpeed}</div>`
-                + `<div class="fc-uv ${uvClass}">🔆 ${uv}</div>`;
-            grid.appendChild(div);
-        }
-
-        let summary = $('forecastSummary');
-        if (!summary) {
-            summary = document.createElement('div');
-            summary.id = 'forecastSummary';
-            summary.className = 'fc-summary';
-            grid.parentNode.insertBefore(summary, grid.nextSibling);
-        }
-        const avgKwh = Math.round(weekTotal / d.time.length * 100) / 100;
-        const IPHONE_WH = 17.3;
-        const MACBOOK_WH = 52.6;
-        const weekChargesPhone = Math.floor(weekTotal * 1000 / IPHONE_WH);
-        const dayChargesPhone = Math.floor(avgKwh * 1000 / IPHONE_WH);
-        const weekChargesMac = Math.floor(weekTotal * 1000 / MACBOOK_WH * 10) / 10;
-        const dayChargesMac = Math.floor(avgKwh * 1000 / MACBOOK_WH * 10) / 10;
-        summary.innerHTML = `<div class="fc-sum-row">`
-            + `<div class="fc-sum-item"><span class="fc-sum-value">${fmtKwh.format(weekTotal)}</span><span class="fc-sum-label">${t('kwhWeek')}</span></div>`
-            + `<div class="fc-sum-item"><span class="fc-sum-value">${fmtKwh.format(avgKwh)}</span><span class="fc-sum-label">${t('avgKwhDay')}</span></div>`
-            + `<div class="fc-sum-item"><span class="fc-sum-value">${Math.round(weekSunH)}</span><span class="fc-sum-label">${t('sunHours')}</span></div>`
-            + `</div>`
-            + `</div>`;
-
-        // Update separate charge equivalents section
-        const ceEl = $('chargeEquivContent');
-        if (ceEl) {
-            ceEl.innerHTML = `<div class="fc-devices">`
-                + `<div class="fc-device"><div class="fc-dev-icon">📱</div><div class="fc-dev-name">iPhone 15 Pro Max</div><div class="fc-dev-line"><span class="fc-dev-num">${weekChargesPhone}×</span> ${t('perWeek')}</div><div class="fc-dev-line"><span class="fc-dev-num">${dayChargesPhone}×</span> ${t('perDay')}</div></div>`
-                + `<div class="fc-device"><div class="fc-dev-icon">💻</div><div class="fc-dev-name">MacBook Air M4 13"</div><div class="fc-dev-line"><span class="fc-dev-num">${weekChargesMac}×</span> ${t('perWeek')}</div><div class="fc-dev-line"><span class="fc-dev-num">${dayChargesMac}×</span> ${t('perDay')}</div></div>`
-                + `</div>`;
-        }
-
-        window._forecastKwh = {};
-        for (let i = 0; i < d.time.length; i++) {
-            const gti = dailyGTI[d.time[i]] || 0;
-            window._forecastKwh[d.time[i]] = Math.round(gti / 1000 * PANEL_KWP * PANEL_EFFICIENCY * 100) / 100;
-        }
-
-        // Store sunshine hours per day for hourly charts
-        window._forecastSunshine = {};
-        for (let i = 0; i < d.time.length; i++) {
-            window._forecastSunshine[d.time[i]] = Math.round((d.sunshine_duration[i] || 0) / 3600 * 10) / 10;
-        }
-
-        // Store hourly kWh forecast for hourly chart
-        window._forecastHourly = {};
-        for (let i = 0; i < hBase.time.length; i++) {
-            let weightedGTI = 0;
-            for (let s = 0; s < CURVE_STRIPS.length; s++) {
-                const gti = stripResults[s].global_tilted_irradiance[i] || 0;
-                weightedGTI += gti * CURVE_STRIPS[s].weight;
-            }
-            const kwh = weightedGTI / 1000 * PANEL_KWP * PANEL_EFFICIENCY;
-            window._forecastHourly[hBase.time[i]] = Math.round(kwh * 1000) / 1000;
-        }
+        renderForecast(fc);
         await buildHourlyForecastToday();
-
         updateExpectedSolar();
+
+        // 3. Save to server cache
+        fetch('/api/forecast-cache', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(fc),
+        }).catch(() => {});
 
     } catch (e) {
         console.warn('Forecast error:', e);
-        const grid = $('forecastGrid');
-        if (grid) grid.innerHTML = '<div style="text-align:center;color:var(--text-dim);padding:20px;font-size:0.8rem">Prognose konnte nicht geladen werden.</div>';
+        // Only show error if no cached data was rendered
+        if (!window._forecastKwh || !Object.keys(window._forecastKwh).length) {
+            const grid = $('forecastGrid');
+            if (grid) grid.innerHTML = '<div style="text-align:center;color:var(--text-dim);padding:20px;font-size:0.8rem">Prognose konnte nicht geladen werden.</div>';
+        }
     }
 }
 

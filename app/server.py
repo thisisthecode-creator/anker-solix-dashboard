@@ -1040,6 +1040,29 @@ async def api_battery_cycles():
     return battery_cycles.stats()
 
 
+_FORECAST_CACHE = ARCHIVE_DIR.parent / "forecast_cache.json"
+
+
+@app.get("/api/forecast-cache")
+async def api_forecast_cache_get():
+    """Return the last saved 7-day forecast (survives restarts)."""
+    if _FORECAST_CACHE.exists():
+        try:
+            return json.loads(_FORECAST_CACHE.read_text())
+        except Exception:
+            pass
+    return {}
+
+
+@app.post("/api/forecast-cache")
+async def api_forecast_cache_post(request: Request):
+    """Save the current 7-day forecast so it's available instantly on reload."""
+    body = await request.json()
+    body["saved_at"] = datetime.now(ZoneInfo(TIMEZONE)).isoformat(timespec="seconds")
+    _FORECAST_CACHE.write_text(json.dumps(body, ensure_ascii=False))
+    return {"ok": True}
+
+
 @app.get("/api/break-even")
 async def api_break_even():
     """Cumulative savings vs system cost + linear projection to break-even."""
