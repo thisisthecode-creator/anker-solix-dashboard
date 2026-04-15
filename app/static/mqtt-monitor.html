@@ -134,32 +134,30 @@
         /* Mobile */
         @media (max-width: 640px) {
             body { padding: 8px 6px; padding-top: max(8px, env(safe-area-inset-top, 8px)); }
-            .back-bar { margin-bottom: 4px; }
-            .back-btn { font-size: 0.7rem; padding: 6px 12px; border-radius: 8px; }
-            .hdr { gap: 4px; margin-bottom: 6px; }
-            .hdr h1 { font-size: 0.75rem; }
-            .badge { font-size: 0.48rem; padding: 2px 6px; }
-            .theme-btn { padding: 3px 8px; font-size: 0.6rem; border-radius: 6px; }
+            .back-bar { margin-bottom: 4px; gap: 6px; }
+            .back-btn { font-size: 0.65rem; padding: 5px 10px; border-radius: 8px; flex: 0; white-space: nowrap; width: auto; }
+            .theme-btn { padding: 5px 10px; font-size: 0.65rem; border-radius: 8px; }
+            .hdr { gap: 4px; margin-bottom: 6px; flex-wrap: nowrap; }
+            .hdr h1 { font-size: 0.7rem; white-space: nowrap; }
+            .badge { font-size: 0.45rem; padding: 2px 5px; }
 
             .grid { grid-template-columns: repeat(3, 1fr); gap: 4px; }
 
             .f {
-                padding: 6px 7px; min-height: auto; border-radius: 8px;
+                padding: 5px 6px; min-height: auto; border-radius: 8px;
                 flex-direction: column; align-items: stretch;
                 gap: 0;
             }
             .f-desc {
-                font-size: 0.5rem; margin-bottom: 1px; line-height: 1.2;
+                font-size: 0.48rem; margin-bottom: 1px; line-height: 1.2;
                 white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
             }
-            .f-val { font-size: 0.85rem; font-weight: 800; line-height: 1.1; }
-            .f-prev {
-                font-size: 0.42rem; margin-top: 1px; min-height: auto;
-            }
+            .f-val { font-size: 0.8rem; font-weight: 800; line-height: 1.1; }
+            .f-prev { font-size: 0.4rem; margin-top: 1px; min-height: auto; }
             .f-key { display: none; }
 
-            .c-id { font-size: 0.5rem; word-break: break-all; }
-            .foot { font-size: 0.45rem; margin-top: 8px; }
+            .c-id { font-size: 0.45rem; word-break: break-all; }
+            .foot { font-size: 0.42rem; margin-top: 6px; }
         }
     </style>
 </head>
