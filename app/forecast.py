@@ -68,13 +68,13 @@ async def fetch_openmeteo_daily_kwh(date_str: str) -> dict | None:
 
     sunshine_h = sunshine_s / 3600
     # Simple physics-ish estimate: shortwave_radiation_sum is MJ/m² for the day.
-    # For a 2×220 W panel at SW-245°, the empirical correlation is:
+    # For 2x200 W flexible panels at SW-240°, empirical correlation:
     #   kWh ≈ 0.045 × shortwave_MJ + 0.035 × sunshine_h × peak_kW
     # Then cloud attenuation (already in shortwave) and orientation loss (~12%).
     peak_kw = PANEL_PEAK_KW
     base = 0.045 * shortwave + 0.035 * sunshine_h * peak_kw * 1000  # Wh then scale
     base = base / 1000  # convert to kWh
-    orientation_loss = 0.88  # SW 245° gets ~88% of south-facing
+    orientation_loss = 0.88  # SW 240° gets ~88% of south-facing
     predicted_kwh = max(0.0, base * orientation_loss)
 
     return {

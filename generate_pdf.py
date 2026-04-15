@@ -166,7 +166,7 @@ def build_pdf():
     info_data = [
         ["System", "Anker Solix C1000 Gen 2 (A1763)"],
         ["Kapazitat", "1024 Wh LiFePO4"],
-        ["Solar", "2 x 220W Panels (SW 245°, konkav 45°-75°)"],
+        ["Solar", "2 x 200W flexible Panels (SW 240°, 60°-90° Kurve)"],
         ["Standort", "Warschau, Polen"],
         ["Dashboard", "Echtzeit Web-App (PWA)"],
         ["Datenquelle", "MQTT (alle 3 Sekunden)"],
@@ -244,8 +244,8 @@ def build_pdf():
     elements.append(Paragraph("2. Solar-Prognose (7 Tage)", h1_style))
     elements.append(Paragraph(
         "Die 7-Tage-Solar-Prognose nutzt Open-Meteo-Wetterdaten und berechnet den erwarteten "
-        "Ertrag basierend auf dem Standort (Warschau), der Panelausrichtung (245° SW) und "
-        "dem Neigungsprofil (konkav 45°-75°). Jeder Tag zeigt Wettericon, erwartete kWh, "
+        "Ertrag basierend auf dem Standort (Warschau), der Panelausrichtung (240° SW) und "
+        "dem Neigungsprofil (60°-90° Kurve, 5 Segmente). Jeder Tag zeigt Wettericon, erwartete kWh, "
         "Sonnenstunden, Windgeschwindigkeit, UV-Index und Wolkenbedeckung.",
         body_style
     ))
