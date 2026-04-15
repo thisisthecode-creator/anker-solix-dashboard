@@ -1911,10 +1911,15 @@ async function loadSelfConsumptionOpt() {
         const data = await res.json();
         if (!data.length) return;
 
+        // Filter out future dates
+        const todayDate = warsawToday();
+        const filtered = data.filter(d => d.date <= todayDate);
+        if (!filtered.length) return;
+
         // Aggregate totals
         let totalSolar = 0, totalDirectUse = 0, totalBatteryIn = 0, totalBatteryOut = 0;
         let totalCharge = 0, totalOutput = 0;
-        for (const d of data) {
+        for (const d of filtered) {
             totalSolar += d.solar_kwh || 0;
             totalDirectUse += d.direct_use_kwh || 0;
             totalBatteryIn += d.battery_in_kwh || 0;
@@ -1956,7 +1961,7 @@ async function loadSelfConsumptionOpt() {
 
         // Stacked bar: where solar energy goes (per month)
         const monthlyBreakdown = {};
-        for (const d of data) {
+        for (const d of filtered) {
             const mm = d.date.slice(0, 7); // YYYY-MM
             if (!monthlyBreakdown[mm]) monthlyBreakdown[mm] = { direct: 0, battery: 0, grid: 0, surplus: 0 };
             const mb = monthlyBreakdown[mm];
@@ -2919,8 +2924,12 @@ async function loadHeatmap() {
                 const level = ratio >= 0.75 ? 'h-5' : ratio >= 0.5 ? 'h-4' : ratio >= 0.25 ? 'h-3' : ratio >= 0.1 ? 'h-2' : 'h-1';
                 cell.classList.add(level);
             }
-            cell.setAttribute('data-date', cursor.getDate() + '.' + (cursor.getMonth() + 1) + '.');
+            const cellDate = cursor.getDate() + '.' + (cursor.getMonth() + 1) + '.';
+            const tipText = cellDate + ' - ' + fmtKwh.format(kwh) + ' kWh';
+            cell.setAttribute('data-date', cellDate);
             cell.setAttribute('data-kwh', fmtKwh.format(kwh));
+            cell.setAttribute('data-tip', tipText);
+            cell.title = tipText;
             grid.appendChild(cell);
             cursor.setDate(cursor.getDate() + 1);
         }
@@ -3414,6 +3423,33 @@ async function loadUsagePatterns() {
 
 loadUsagePatterns();
 setInterval(loadUsagePatterns, 600000);  // refresh every 10 min
+
+// === SVG tap-tooltip for mobile (title elements don't show on touch) ===
+(function initSvgTapTooltip() {
+    let tip = null;
+    function show(text, x, y) {
+        if (!tip) {
+            tip = document.createElement('div');
+            tip.style.cssText = 'position:fixed;z-index:9999;background:var(--card,#1a1a2e);border:1px solid var(--card-border,#333);border-radius:6px;padding:4px 8px;font-size:0.65rem;color:var(--text,#eee);pointer-events:none;white-space:nowrap;box-shadow:0 2px 8px rgba(0,0,0,0.3)';
+            document.body.appendChild(tip);
+        }
+        tip.textContent = text;
+        tip.style.display = 'block';
+        tip.style.left = Math.min(x, window.innerWidth - tip.offsetWidth - 8) + 'px';
+        tip.style.top = (y - 36) + 'px';
+    }
+    function hide() { if (tip) tip.style.display = 'none'; }
+    document.addEventListener('click', e => {
+        const tipped = e.target.closest('[data-tip]');
+        const svgRect = e.target.closest('rect');
+        const el = tipped || svgRect;
+        if (!el) { hide(); return; }
+        const titleEl = el.querySelector('title');
+        const text = el.getAttribute('data-tip') || (titleEl ? titleEl.textContent : '') || el.getAttribute('title') || '';
+        if (text) show(text, e.clientX, e.clientY); else hide();
+    });
+    document.addEventListener('scroll', hide, true);
+})();
 
 // === Week Comparison ===
 async function updateWeekComparison(energyData) {
