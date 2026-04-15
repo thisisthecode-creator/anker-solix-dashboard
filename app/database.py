@@ -931,7 +931,11 @@ async def get_sankey_flows(days: int = 1) -> dict:
     battery_in, battery_out, grid_in, total_output).
     """
     db = await get_pool()
-    cutoff = (_now_local() - timedelta(days=days)).strftime("%Y-%m-%d")
+    today = _now_local().strftime("%Y-%m-%d")
+    if days <= 1:
+        cutoff = today
+    else:
+        cutoff = (_now_local() - timedelta(days=days - 1)).strftime("%Y-%m-%d")
     cur = await db.execute(
         """SELECT
               COALESCE(SUM(solar_kwh), 0),
@@ -1042,53 +1046,6 @@ async def insert_forecast(date: str, source: str, predicted_kwh: float,
         (date, source, created_at, predicted_kwh, predicted_load_kwh, features_json),
     )
     await db.commit()
-
-
-async def get_forecast_accuracy(days: int = 60) -> dict:
-    """Return per-source forecast accuracy metrics over the last N days.
-
-    Joins forecast_log with daily_solar on date. Returns one summary per
-    source (e.g. "openmeteo", "ml_solar") with MAE, MAPE, bias, n.
-    """
-    db = await get_pool()
-    cutoff = (_now_local() - timedelta(days=days)).strftime("%Y-%m-%d")
-    cur = await db.execute(
-        """SELECT fl.source, fl.date, fl.predicted_kwh, ds.solar_kwh
-           FROM forecast_log fl
-           LEFT JOIN daily_solar ds ON ds.date = fl.date
-           WHERE fl.date >= ? AND ds.solar_kwh IS NOT NULL
-           ORDER BY fl.date ASC""",
-        (cutoff,),
-    )
-    rows = await cur.fetchall()
-    by_source: dict[str, list[tuple[str, float, float]]] = {}
-    for r in rows:
-        by_source.setdefault(r[0], []).append((r[1], r[2] or 0, r[3] or 0))
-
-    out: dict[str, dict] = {}
-    for source, items in by_source.items():
-        if not items:
-            continue
-        n = len(items)
-        errs = [abs(p - a) for _, p, a in items]
-        mae = sum(errs) / n
-        bias = sum(p - a for _, p, a in items) / n
-        # MAPE skipping zero actuals
-        mape_items = [abs(p - a) / a * 100 for _, p, a in items if a > 0.05]
-        mape = sum(mape_items) / len(mape_items) if mape_items else 0
-        rmse = (sum((p - a) ** 2 for _, p, a in items) / n) ** 0.5
-        out[source] = {
-            "n": n,
-            "mae_kwh": round(mae, 3),
-            "rmse_kwh": round(rmse, 3),
-            "bias_kwh": round(bias, 3),
-            "mape_pct": round(mape, 1),
-            "series": [
-                {"date": d, "predicted": round(p, 3), "actual": round(a, 3)}
-                for d, p, a in items
-            ],
-        }
-    return out
 
 
 # === Charging session analysis ================================================

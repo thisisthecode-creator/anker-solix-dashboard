@@ -26,7 +26,7 @@ from app.database import (
     get_readings, get_latest_reading, get_stats, get_energy_summary,
     get_soh_trend, get_daily_stats, cleanup_old_readings,
     cleanup_old_forecasts,
-    get_cumulative_savings, insert_forecast, get_forecast_accuracy,
+    get_cumulative_savings, insert_forecast,
     get_hourly_heatmap, get_monthly_distribution,
     get_cumulative_production, get_sankey_flows,
     get_charging_sessions,
@@ -1076,12 +1076,6 @@ async def api_cumulative_production():
 async def api_sankey(days: int = Query(1, ge=1, le=365)):
     """Energy flows (solar→direct, solar→battery, battery→load, grid→…)."""
     return await get_sankey_flows(days)
-
-
-@app.get("/api/forecast-accuracy")
-async def api_forecast_accuracy(days: int = Query(60, ge=7, le=365)):
-    """Per-source forecast accuracy over the last N days (MAE/MAPE/RMSE)."""
-    return await _cached_endpoint(f"fc-acc:{days}", _ENDPOINT_CACHE_TTL, lambda: get_forecast_accuracy(days))
 
 
 @app.get("/api/charging-sessions")
