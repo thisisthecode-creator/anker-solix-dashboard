@@ -2501,17 +2501,22 @@ async function loadCombinedChart(hours) {
     try {
         const res = await fetch('/api/readings?hours=' + hours);
         const rows = await res.json();
+
+        // Show data count info
+        const infoEl = $('combinedInfo');
+        if (infoEl) {
+            if (rows.length > 0) {
+                const first = new Date(rows[0].timestamp);
+                const last = new Date(rows[rows.length - 1].timestamp);
+                const fmtD = d => d.getDate() + '.' + (d.getMonth() + 1) + '. ' + d.getHours() + ':' + String(d.getMinutes()).padStart(2, '0');
+                infoEl.textContent = rows.length + ' Datenpunkte · ' + fmtD(first) + ' - ' + fmtD(last);
+            } else {
+                infoEl.textContent = 'Keine Daten';
+            }
+        }
+
         if (!rows.length) {
             if (combinedChart) { combinedChart.destroy(); combinedChart = null; }
-            const canvas = $('chart_combined');
-            if (canvas) {
-                const ctx = canvas.getContext('2d');
-                ctx.clearRect(0, 0, canvas.width, canvas.height);
-                ctx.fillStyle = getComputedStyle(document.body).getPropertyValue('--text-dim') || '#888';
-                ctx.font = '12px sans-serif';
-                ctx.textAlign = 'center';
-                ctx.fillText('Keine Daten fur diesen Zeitraum', canvas.width / 2, canvas.height / 2);
-            }
             return;
         }
 
@@ -3449,55 +3454,51 @@ setInterval(loadUsagePatterns, 600000);  // refresh every 10 min
         if (!tip) {
             tip = document.createElement('div');
             tip.id = 'tapTip';
-            tip.style.cssText = 'position:fixed;z-index:9999;background:var(--card,#1a1a2e);border:1px solid var(--card-border,#333);border-radius:6px;padding:5px 10px;font-size:0.7rem;color:var(--text,#eee);pointer-events:none;white-space:pre-line;box-shadow:0 2px 8px rgba(0,0,0,0.3);max-width:280px';
             document.body.appendChild(tip);
         }
+        // Use explicit colors based on current theme
+        const isDark = !document.body.classList.contains('light');
+        tip.style.cssText = 'position:fixed;z-index:9999;border-radius:6px;padding:6px 12px;font-size:0.75rem;'
+            + 'pointer-events:none;white-space:pre-line;max-width:300px;font-weight:500;line-height:1.4;'
+            + (isDark
+                ? 'background:#1e1e2e;color:#f0f0f0;border:1px solid #444;box-shadow:0 2px 12px rgba(0,0,0,0.5)'
+                : 'background:#fff;color:#1a1a2e;border:1px solid #ccc;box-shadow:0 2px 12px rgba(0,0,0,0.15)');
         tip.textContent = text;
         tip.style.display = 'block';
-        // Position after render so offsetWidth is correct
         requestAnimationFrame(() => {
             const left = Math.max(4, Math.min(x - tip.offsetWidth / 2, window.innerWidth - tip.offsetWidth - 4));
             tip.style.left = left + 'px';
-            tip.style.top = Math.max(4, y - tip.offsetHeight - 8) + 'px';
+            tip.style.top = Math.max(4, y - tip.offsetHeight - 10) + 'px';
         });
     }
     function hide() { if (tip) tip.style.display = 'none'; }
 
     function findTipText(target) {
-        // Walk up from target to find tooltip text
         let el = target;
-        for (let i = 0; i < 5 && el; i++) {
-            // HTML data-tip attribute
+        for (let i = 0; i < 6 && el; i++) {
             if (el.getAttribute && el.getAttribute('data-tip')) return el.getAttribute('data-tip');
-            // HTML title attribute (heatmap cells)
             if (el.title && el.classList && el.classList.contains('heatmap-cell')) return el.title;
-            // SVG <title> child (rect, circle, etc.)
-            if (el.tagName === 'rect' || el.tagName === 'circle' || el.tagName === 'path') {
+            if (el.tagName === 'rect' || el.tagName === 'circle' || el.tagName === 'path' || el.tagName === 'line') {
                 const t = el.querySelector('title');
-                if (t) return t.textContent;
+                if (t && t.textContent) return t.textContent;
             }
             el = el.parentElement || el.parentNode;
         }
         return '';
     }
 
-    // Works for both click (mobile) and mouseover (desktop)
-    function handleEvent(e) {
-        const text = findTipText(e.target);
-        if (text) {
-            show(text, e.clientX || e.touches?.[0]?.clientX || 0, e.clientY || e.touches?.[0]?.clientY || 0);
-        } else {
-            hide();
-        }
-    }
-
-    document.addEventListener('click', handleEvent);
-    document.addEventListener('mouseover', e => {
+    document.addEventListener('click', e => {
         const text = findTipText(e.target);
         if (text) show(text, e.clientX, e.clientY); else hide();
     });
+    document.addEventListener('mouseover', e => {
+        const text = findTipText(e.target);
+        if (text) show(text, e.clientX, e.clientY);
+    });
     document.addEventListener('mouseout', e => {
-        if (e.target.tagName === 'rect' || (e.target.classList && e.target.classList.contains('heatmap-cell'))) hide();
+        const tag = e.target.tagName;
+        if (tag === 'rect' || tag === 'circle' || tag === 'path' || tag === 'line'
+            || (e.target.classList && e.target.classList.contains('heatmap-cell'))) hide();
     });
     document.addEventListener('scroll', hide, true);
 })();
