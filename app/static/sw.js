@@ -1,4 +1,4 @@
-const CACHE = 'solar-v109';
+const CACHE = 'solar-v110';
 const API_CACHE = 'solar-api-v1';
 const API_CACHE_MAX_AGE = 5 * 60 * 1000; // 5 minutes
 
