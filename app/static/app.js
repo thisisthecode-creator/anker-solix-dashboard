@@ -323,6 +323,34 @@ const EUR_PER_KWH = 0.25; // Poland household electricity price
 const SYSTEM_COST_EUR = 941; // 4011 PLN ÷ 4.2623 (NBP rate 2026-04-08)
 const CAFE_PRICE_EUR = 3.70; // Price of a café in Warsaw
 
+// === Warsaw timezone helpers ===
+// All date logic must use Warsaw time, not browser-local or UTC
+const WARSAW_TZ = 'Europe/Warsaw';
+function warsawNow() {
+    // Return a Date-like object with Warsaw hours/day/month/year
+    // by formatting to parts and reconstructing
+    const parts = {};
+    new Intl.DateTimeFormat('en-CA', {
+        timeZone: WARSAW_TZ, year: 'numeric', month: '2-digit', day: '2-digit',
+        hour: '2-digit', minute: '2-digit', second: '2-digit', hour12: false
+    }).formatToParts(new Date()).forEach(p => { parts[p.type] = p.value; });
+    return {
+        year: +parts.year, month: +parts.month - 1, day: +parts.day,
+        hours: +parts.hour, minutes: +parts.minute, seconds: +parts.second,
+        getFullYear() { return this.year; },
+        getMonth() { return this.month; },
+        getDate() { return this.day; },
+        getDay() { return new Date(this.year, this.month, this.day).getDay(); },
+        getHours() { return this.hours; },
+        getMinutes() { return this.minutes; },
+        getSeconds() { return this.seconds; }
+    };
+}
+function warsawToday() {
+    const w = warsawNow();
+    return w.year + '-' + String(w.month + 1).padStart(2, '0') + '-' + String(w.day).padStart(2, '0');
+}
+
 function fmtWh(kwh) {
     const wh = kwh * 1000;
     if (wh >= 1000) return fmtKwh.format(kwh) + ' kWh';
@@ -348,7 +376,7 @@ function getAutoDark() {
     const now = new Date();
     if (!window._sunrise || !window._sunset) {
         // Fallback: 6:00-20:00 = light
-        const h = now.getHours();
+        const h = warsawNow().getHours();
         return h < 6 || h >= 20;
     }
     return now < window._sunrise || now > window._sunset;
@@ -518,7 +546,7 @@ function checkDailyReport(d) {
     if (!notifEnabled || !('Notification' in window) || Notification.permission !== 'granted') return;
     if (!window._sunset) return;
     const now = new Date();
-    const today = now.toISOString().slice(0, 10);
+    const today = warsawToday();
     // Already sent today?
     if (notifDailyReportSent === today) return;
     // 15 min after sunset
@@ -843,7 +871,7 @@ function updateUI(d) {
     }
 
     if (currentPeriod === 'day') {
-        const now = new Date();
+        const now = warsawNow();
         const label = now.getHours() + ':' + String(now.getMinutes()).padStart(2, '0');
         for (const m of metrics) {
             const chart = charts[m.key];
@@ -942,7 +970,7 @@ window.logNextPage = function() {
 function addTicker(d) {
     const ticker = $('ticker');
     tickerCount++;
-    const now = new Date();
+    const now = warsawNow();
     const time = now.getHours() + ':' + String(now.getMinutes()).padStart(2, '0') + ':' + String(now.getSeconds()).padStart(2, '0');
     const dateStr = String(now.getDate()).padStart(2, '0') + '.' + String(now.getMonth() + 1).padStart(2, '0') + '.';
     const dateTime = dateStr + ' ' + time;
@@ -1200,7 +1228,7 @@ async function loadForecast() {
             51: '🌦', 53: '🌦', 55: '🌧', 61: '🌧', 63: '🌧', 65: '🌧',
             71: '🌨', 73: '🌨', 75: '❄️', 80: '🌦', 81: '🌧', 82: '⛈', 95: '⛈', 96: '⛈',
         };
-        const todayStr = new Date().toISOString().slice(0, 10);
+        const todayStr = warsawToday();
         const grid = $('forecastGrid');
         grid.innerHTML = '';
 
@@ -1337,7 +1365,7 @@ function updateExpectedSolar() {}
 let _monthlyFcChart = null;
 async function loadMonthlyForecast() {
     try {
-        const now = new Date();
+        const now = warsawNow();
         const thisYear = now.getFullYear();
         const lastYear = thisYear - 1;
         const currentMonth = now.getMonth(); // 0-based
@@ -1586,8 +1614,8 @@ let _hourlyTodayChart = null;
 
 async function buildHourlyForecastToday() {
     if (!window._forecastHourly) return;
-    const todayStr = new Date().toISOString().slice(0, 10);
-    const currentHour = new Date().getHours();
+    const todayStr = warsawToday();
+    const currentHour = warsawNow().getHours();
 
     // Collect today's hourly forecast (all hours with predicted production)
     const forecastByHour = {};
@@ -1666,8 +1694,9 @@ async function buildHourlyForecastToday() {
         if (!section) return;
 
         // Update title
-        const dayName = t('dayNames')[new Date().getDay()];
-        const dateStr = new Date().getDate() + '.' + (new Date().getMonth() + 1) + '.';
+        const _wn = warsawNow();
+        const dayName = t('dayNames')[_wn.getDay()];
+        const dateStr = _wn.getDate() + '.' + (_wn.getMonth() + 1) + '.';
         const h2 = section.querySelector('h2');
         h2.textContent = (LANG === 'de' ? 'Stündliche Prognose' : 'Hourly Forecast')
             + ' - ' + dayName + ' ' + dateStr;
@@ -2801,8 +2830,8 @@ async function loadForecastVsReal() {
             return days[dt.getDay()] + ' ' + dt.getDate() + '.';
         });
 
-        const todayStr = new Date().toISOString().slice(0, 10);
-        const currentHour = new Date().getHours();
+        const todayStr = warsawToday();
+        const currentHour = warsawNow().getHours();
 
         // For today: only sum forecast for hours that had actual production
         const forecastData = dates.map(d => {
@@ -3208,7 +3237,7 @@ checkBackupReminder();
 // === Solar Score Widget ===
 function updateSolarScore() {
     const todayKwh = accumulator_dailyKwh || 0;
-    const forecastKwh = window._forecastKwh ? window._forecastKwh[new Date().toISOString().slice(0, 10)] || 0 : 0;
+    const forecastKwh = window._forecastKwh ? window._forecastKwh[warsawToday()] || 0 : 0;
     const scorePct = forecastKwh > 0 ? Math.min(100, Math.round(todayKwh / forecastKwh * 100)) : 0;
 
     const arc = $('scoreArc');
@@ -3287,7 +3316,7 @@ updateUI = function(d) {
 const shareBtn = $('shareBtn');
 if (shareBtn) shareBtn.addEventListener('click', async () => {
     const kwh = accumulator_dailyKwh || 0;
-    const forecastKwh = window._forecastKwh ? window._forecastKwh[new Date().toISOString().slice(0, 10)] || 0 : 0;
+    const forecastKwh = window._forecastKwh ? window._forecastKwh[warsawToday()] || 0 : 0;
     const score = forecastKwh > 0 ? Math.min(100, Math.round(kwh / forecastKwh * 100)) : 0;
     const text = t('shareText').replace('{kwh}', fmtKwh.format(kwh)).replace('{score}', score);
 
@@ -3337,7 +3366,8 @@ async function loadHeatmap() {
         const grid = document.createElement('div');
         grid.className = 'heatmap-grid';
 
-        const today = new Date();
+        const _wn = warsawNow();
+        const today = new Date(_wn.year, _wn.month, _wn.day);
         const startDate = new Date(today);
         startDate.setDate(startDate.getDate() - 364);
         // Align to start of week (Monday)
@@ -3345,7 +3375,7 @@ async function loadHeatmap() {
 
         const cursor = new Date(startDate);
         while (cursor <= today) {
-            const dateStr = cursor.toISOString().slice(0, 10);
+            const dateStr = cursor.getFullYear() + '-' + String(cursor.getMonth() + 1).padStart(2, '0') + '-' + String(cursor.getDate()).padStart(2, '0');
             const kwh = dailyMap[dateStr] || 0;
             const cell = document.createElement('div');
             cell.className = 'heatmap-cell';
@@ -3893,7 +3923,8 @@ async function updateWeekComparison(energyData) {
         const data = await res.json();
         if (data.length < 2) return;
 
-        const today = new Date();
+        const _wn = warsawNow();
+        const today = new Date(_wn.year, _wn.month, _wn.day);
         const thisWeekStart = new Date(today);
         thisWeekStart.setDate(today.getDate() - today.getDay() + 1); // Monday
         thisWeekStart.setHours(0, 0, 0, 0);
@@ -3941,12 +3972,12 @@ setInterval(checkAutoTheme, 60000); // Check every minute
 // === Weekly Report Push (Monday) ===
 function checkWeeklyReport() {
     if (!notifEnabled || !('Notification' in window) || Notification.permission !== 'granted') return;
-    const now = new Date();
+    const now = warsawNow();
     if (now.getDay() !== 1) return; // Only Monday
     if (now.getHours() !== 8) return; // Only at 8:00
 
     const lastReport = localStorage.getItem('lastWeeklyReport');
-    const todayStr = now.toISOString().slice(0, 10);
+    const todayStr = warsawToday();
     if (lastReport === todayStr) return; // Already sent today
 
     // Fetch last week's data
