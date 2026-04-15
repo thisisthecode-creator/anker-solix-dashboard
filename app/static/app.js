@@ -8,7 +8,6 @@ const I18N = {
         connecting: 'Verbinde...', connected: 'Verbunden', disconnected: 'Getrennt',
         notifications: 'Benachrichtigungen',
         forecastTitle: 'Solar-Prognose', forecastSource: 'Warschau · 240° SW · konkav 45°–75° · Open-Meteo',
-        forecastVsReal: 'Prognose vs. Real',
         solarInput: 'Solareingabe', battery: 'Batterie', temperature: 'Temperatur', totalOutput: 'Ausgang Gesamt',
         energyFlow: 'Energiefluss',
         energySavings: 'Energie & Ersparnis',
@@ -56,7 +55,6 @@ const I18N = {
         specDimensions: 'Maße', specWeight: 'Gewicht', specExpandable: 'Erweiterbar', specNo: 'Nein',
         solarScore: 'Solar-Score', todayVsYesterday: 'Heute vs. Gestern (Solar W)',
         heatmapTitle: 'Solar-Kalender', less: 'Weniger', more: 'Mehr',
-        forecastAccuracyLabel: 'Genauigkeit',
         batteryCycles: 'Batterie-Zyklen', totalCycles: 'Zyklen Gesamt',
         cycleHealth: 'Verbleibend', cycles: 'Zyklen',
         cycleLifetimeUsed: 'Lebensdauer verbraucht',
@@ -145,9 +143,6 @@ const I18N = {
 
         forecastCompareTitle: 'Prognose-Vergleich (morgen)',
         forecastOpenMeteo: 'Open-Meteo', forecastLocal: 'Eigenes Modell',
-        forecastAccuracy: 'Genauigkeit (letzte 30 Tage)',
-        forecastAccMae: 'MAE', forecastAccMape: 'MAPE', forecastAccBias: 'Bias', forecastAccN: 'n',
-        forecastAccNoData: 'Noch keine Accuracy-Daten — Modelle werden nachts trainiert.',
 
         dayNames: ['So', 'Mo', 'Di', 'Mi', 'Do', 'Fr', 'Sa'],
         monthNames: ['Jan', 'Feb', 'Mar', 'Apr', 'Mai', 'Jun', 'Jul', 'Aug', 'Sep', 'Okt', 'Nov', 'Dez'],
@@ -157,7 +152,6 @@ const I18N = {
         connecting: 'Connecting...', connected: 'Connected', disconnected: 'Disconnected',
         notifications: 'Notifications',
         forecastTitle: 'Solar Forecast', forecastSource: 'Warsaw · 240° SW · concave 45°–75° · Open-Meteo',
-        forecastVsReal: 'Forecast vs. Reality',
         solarInput: 'Solar Input', battery: 'Battery', temperature: 'Temperature', totalOutput: 'Total Output',
         energyFlow: 'Energy Flow',
         energySavings: 'Energy & Savings',
@@ -200,7 +194,6 @@ const I18N = {
         chargeEquiv: 'Charge Equivalents',
         solarScore: 'Solar Score', todayVsYesterday: 'Today vs. Yesterday (Solar W)',
         heatmapTitle: 'Solar Calendar', less: 'Less', more: 'More',
-        forecastAccuracyLabel: 'Accuracy',
         batteryCycles: 'Battery Cycles', totalCycles: 'Total Cycles',
         cycleHealth: 'Remaining', cycles: 'Cycles',
         cycleLifetimeUsed: 'Lifetime used',
@@ -288,9 +281,6 @@ const I18N = {
 
         forecastCompareTitle: 'Forecast Comparison (tomorrow)',
         forecastOpenMeteo: 'Open-Meteo', forecastLocal: 'Local model',
-        forecastAccuracy: 'Accuracy (last 30 days)',
-        forecastAccMae: 'MAE', forecastAccMape: 'MAPE', forecastAccBias: 'Bias', forecastAccN: 'n',
-        forecastAccNoData: 'No accuracy data yet — models train overnight.',
 
         dayNames: ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'],
         monthNames: ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'],
@@ -1353,7 +1343,6 @@ async function loadForecast() {
 
         $('forecastBox').style.display = '';
 
-        if (typeof loadForecastVsReal === 'function') loadForecastVsReal();
     } catch (e) {
         console.warn('Forecast error:', e);
     }
@@ -1361,253 +1350,6 @@ async function loadForecast() {
 
 function updateExpectedSolar() {}
 
-// === Monthly Solar Forecast: Last Year vs This Year vs Prognose ===
-let _monthlyFcChart = null;
-async function loadMonthlyForecast() {
-    try {
-        const now = warsawNow();
-        const thisYear = now.getFullYear();
-        const lastYear = thisYear - 1;
-        const currentMonth = now.getMonth(); // 0-based
-
-        // 1) Fetch last year's GTI from Open-Meteo archive
-        const stripResults = await Promise.all(CURVE_STRIPS.map(s =>
-            fetch('https://archive-api.open-meteo.com/v1/archive?latitude=52.1928&longitude=21.0103'
-                + '&hourly=global_tilted_irradiance'
-                + '&tilt=' + s.tilt + '&azimuth=' + AZIMUTH
-                + '&timezone=Europe%2FWarsaw'
-                + '&start_date=' + lastYear + '-01-01'
-                + '&end_date=' + lastYear + '-12-31'
-            ).then(r => r.json()).then(d => d.hourly)
-        ));
-        if (!stripResults[0] || !stripResults[0].time) return;
-
-        const lastYearKwh = {};
-        const times = stripResults[0].time;
-        for (let i = 0; i < times.length; i++) {
-            const mm = times[i].slice(5, 7);
-            let weightedGTI = 0;
-            for (let s = 0; s < CURVE_STRIPS.length; s++) {
-                weightedGTI += (stripResults[s].global_tilted_irradiance[i] || 0) * CURVE_STRIPS[s].weight;
-            }
-            lastYearKwh[mm] = (lastYearKwh[mm] || 0) + weightedGTI / 1000 * PANEL_KWP * PANEL_EFFICIENCY;
-        }
-
-        // 2) Fetch this year's actual production from shared cache
-        const dailyData = await getDailyData();
-        const thisYearActual = {};
-        let firstDataMonth = 11; // 0-based, find earliest month with solar data
-        for (const d of dailyData) {
-            if (!d.date.startsWith(String(thisYear))) continue;
-            if ((d.solar_kwh || 0) <= 0) continue;
-            const mm = d.date.slice(5, 7);
-            const mIdx = parseInt(mm, 10) - 1;
-            thisYearActual[mm] = (thisYearActual[mm] || 0) + d.solar_kwh;
-            if (mIdx < firstDataMonth) firstDataMonth = mIdx;
-        }
-
-        // 3) Build 3 datasets: last year, this year real, this year forecast
-        //    Only count from firstDataMonth onward (fair comparison)
-        const monthNames = LANG === 'de'
-            ? ['Jan', 'Feb', 'Mär', 'Apr', 'Mai', 'Jun', 'Jul', 'Aug', 'Sep', 'Okt', 'Nov', 'Dez']
-            : ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
-
-        const labels = monthNames.slice();
-        const lastYearData = [];
-        const thisYearReal = [];
-        const thisYearForecast = [];
-
-        for (let m = 0; m < 12; m++) {
-            const mm = String(m + 1).padStart(2, '0');
-            const ly = Math.round((lastYearKwh[mm] || 0) * 100) / 100;
-            lastYearData.push(ly);
-            if (m < firstDataMonth) {
-                // Before system existed - no data, no forecast
-                thisYearReal.push(0);
-                thisYearForecast.push(0);
-            } else if (m < currentMonth) {
-                thisYearReal.push(Math.round((thisYearActual[mm] || 0) * 100) / 100);
-                thisYearForecast.push(0);
-            } else if (m === currentMonth) {
-                thisYearReal.push(Math.round((thisYearActual[mm] || 0) * 100) / 100);
-                thisYearForecast.push(0);
-            } else {
-                thisYearReal.push(0);
-                thisYearForecast.push(ly);
-            }
-        }
-
-        const totalReal = thisYearReal.reduce((s, v) => s + v, 0);
-        const totalForecast = thisYearForecast.reduce((s, v) => s + v, 0);
-        const totalExpected = totalReal + totalForecast;
-        // Only compare last year's months from firstDataMonth onward
-        const totalLastYearComparable = lastYearData.slice(firstDataMonth).reduce((s, v) => s + v, 0);
-        const totalLastYear = lastYearData.reduce((s, v) => s + v, 0);
-        const activeMonths = currentMonth - firstDataMonth + 1;
-
-        const section = $('monthlyForecastSection');
-        if (!section) return;
-
-        const titleEl = $('monthlyFcTitle');
-        if (titleEl) {
-            const txt = (LANG === 'de' ? 'Solar-Prognose ' : 'Solar Forecast ') + thisYear;
-            // Update only the text node, preserve chevron span added by collapsible init
-            if (titleEl.firstChild && titleEl.firstChild.nodeType === 3) {
-                titleEl.firstChild.textContent = txt;
-            } else {
-                titleEl.insertBefore(document.createTextNode(txt), titleEl.firstChild);
-            }
-        }
-
-        // KPI cards - compare only from first data month for fairness
-        const kpiEl = $('monthlyFcKpis');
-        if (kpiEl) {
-            // Compare real vs last year's same month range (firstDataMonth..currentMonth)
-            const lastYearSameRange = lastYearData.slice(firstDataMonth, currentMonth + 1).reduce((s, v) => s + v, 0);
-            const pctVsLastYear = lastYearSameRange > 0
-                ? Math.round((totalReal / lastYearSameRange) * 100) - 100
-                : 0;
-            const trendClass = pctVsLastYear > 0 ? 'up' : pctVsLastYear < 0 ? 'down' : 'flat';
-            const trendArrow = pctVsLastYear > 0 ? '\u25B2' : pctVsLastYear < 0 ? '\u25BC' : '\u2013';
-            const bisherLabel = LANG === 'de' ? ' bisher' : ' so far';
-            const progLabel = LANG === 'de' ? 'Jahresprognose' : 'Year Forecast';
-            const progSub = LANG === 'de' ? 'Real + Prognose' : 'Actual + Forecast';
-            const startMonthName = monthNames[firstDataMonth];
-            const monateSub = activeMonths + (LANG === 'de' ? ' Mon. (ab ' : ' mo. (since ') + startMonthName + ')';
-
-            kpiEl.innerHTML =
-                '<div class="mfc-kpi">'
-                    + '<div class="mfc-kpi-label">' + thisYear + bisherLabel + '</div>'
-                    + '<div class="mfc-kpi-value amber">' + fmtKwh.format(totalReal) + ' kWh</div>'
-                    + '<div class="mfc-kpi-sub">' + monateSub + '</div>'
-                + '</div>'
-                + '<div class="mfc-kpi">'
-                    + '<div class="mfc-kpi-label">' + progLabel + '</div>'
-                    + '<div class="mfc-kpi-value green">~' + fmtKwh.format(totalExpected) + ' kWh</div>'
-                    + '<div class="mfc-kpi-sub">' + progSub + '</div>'
-                + '</div>';
-        }
-
-        // Build single combined bar dataset for this year
-        const thisYearCombined = [];
-        const barColors = [];
-        const barBorders = [];
-        for (let m = 0; m < 12; m++) {
-            if (m < firstDataMonth) {
-                // Before system existed - show nothing
-                thisYearCombined.push(0);
-                barColors.push('transparent');
-                barBorders.push('transparent');
-            } else if (m < currentMonth) {
-                thisYearCombined.push(thisYearReal[m]);
-                barColors.push('#f59e0b');
-                barBorders.push('#f59e0b');
-            } else if (m === currentMonth) {
-                thisYearCombined.push(thisYearReal[m]);
-                barColors.push('rgba(245, 158, 11, 0.7)');
-                barBorders.push('#f59e0b');
-            } else {
-                thisYearCombined.push(thisYearForecast[m]);
-                barColors.push('rgba(245, 158, 11, 0.15)');
-                barBorders.push('rgba(245, 158, 11, 0.5)');
-            }
-        }
-
-
-        if (_monthlyFcChart) _monthlyFcChart.destroy();
-        _monthlyFcChart = new Chart($('chart_monthly_forecast'), {
-            type: 'bar',
-            data: {
-                labels: labels,
-                datasets: [
-                    {
-                        label: String(lastYear),
-                        data: lastYearData,
-                        type: 'line',
-                        borderColor: 'rgba(148,163,184,0.5)',
-                        backgroundColor: 'rgba(148,163,184,0.06)',
-                        borderWidth: 1.5,
-                        borderDash: [4, 4],
-                        pointRadius: 3,
-                        pointBackgroundColor: 'rgba(148,163,184,0.5)',
-                        pointBorderColor: 'rgba(148,163,184,0.5)',
-                        fill: true,
-                        tension: 0.3,
-                        order: 0
-                    },
-                    {
-                        label: String(thisYear),
-                        data: thisYearCombined,
-                        backgroundColor: barColors,
-                        borderColor: barBorders,
-                        borderWidth: 1,
-                        borderRadius: 4,
-                        order: 1
-                    }
-                ]
-            },
-            options: {
-                responsive: true, maintainAspectRatio: false, animation: false,
-                interaction: { intersect: false, mode: 'index' },
-                plugins: {
-                    legend: {
-                        display: true, position: 'top',
-                        labels: {
-                            boxWidth: 10, font: { size: 9 },
-                            generateLabels: function() {
-                                return [
-                                    { text: String(lastYear), strokeStyle: 'rgba(148,163,184,0.5)',
-                                      fillStyle: 'rgba(148,163,184,0.15)',
-                                      lineWidth: 1.5, lineDash: [4, 4] },
-                                    { text: thisYear + ' Real', fillStyle: '#f59e0b',
-                                      strokeStyle: '#f59e0b', lineWidth: 1 },
-                                    { text: thisYear + ' Prognose',
-                                      fillStyle: 'rgba(245,158,11,0.15)',
-                                      strokeStyle: 'rgba(245,158,11,0.5)', lineWidth: 1 }
-                                ];
-                            }
-                        }
-                    },
-                    tooltip: { callbacks: { label: ctx => {
-                        if (ctx.parsed.y === 0) return null;
-                        let suffix = '';
-                        if (ctx.datasetIndex === 1) {
-                            const m = ctx.dataIndex;
-                            suffix = m < currentMonth ? ' (real)' : m === currentMonth
-                                ? (LANG === 'de' ? ' (bisher)' : ' (so far)') : ' (prognose)';
-                        }
-                        return (ctx.datasetIndex === 0 ? String(lastYear) : String(thisYear))
-                            + ': ' + fmtKwh.format(ctx.parsed.y) + ' kWh' + suffix;
-                    } } }
-                },
-                scales: {
-                    y: { beginAtZero: true, grid: { color: chartGridColor() }, ticks: { maxTicksLimit: 5, callback: v => v + ' kWh' } },
-                    x: { grid: { display: false }, ticks: { font: { size: 9 } } }
-                }
-            },
-            plugins: [{
-                id: 'currentMonthMarker',
-                afterDatasetsDraw(chart) {
-                    const meta = chart.getDatasetMeta(1);
-                    if (!meta.data[currentMonth]) return;
-                    const bar = meta.data[currentMonth];
-                    const ctx2 = chart.ctx;
-                    ctx2.save();
-                    ctx2.strokeStyle = '#f59e0b';
-                    ctx2.lineWidth = 1;
-                    ctx2.setLineDash([3, 3]);
-                    ctx2.beginPath();
-                    ctx2.moveTo(bar.x, chart.chartArea.top);
-                    ctx2.lineTo(bar.x, chart.chartArea.bottom);
-                    ctx2.stroke();
-                    ctx2.restore();
-                }
-            }]
-        });
-        section.style.display = '';
-    } catch (e) { console.warn('Monthly forecast error:', e); }
-}
-loadMonthlyForecast();
 
 // === Hourly Forecast vs Actual (today) ===
 let _hourlyTodayChart = null;
@@ -2798,250 +2540,6 @@ document.querySelectorAll('.combined-tabs .tab').forEach(btn => {
     });
 });
 
-// === Forecast vs. Reality Chart ===
-let forecastVsRealChart = null;
-
-// Persistent forecast history in localStorage for long-term accuracy
-function loadForecastHistory() {
-    try { return JSON.parse(localStorage.getItem('forecastHistory') || '{}'); } catch { return {}; }
-}
-function saveForecastHistory(hist) {
-    localStorage.setItem('forecastHistory', JSON.stringify(hist));
-}
-
-async function loadForecastVsReal() {
-    try {
-        if (!window._forecastKwh) return;
-        const res = await fetch('/api/daily?days=7');
-        const dailyData = await res.json();
-        if (!dailyData.length) return;
-
-        const forecastDates = Object.keys(window._forecastKwh).sort();
-        const allDates = [...new Set([...forecastDates, ...dailyData.map(d => d.date)])].sort();
-        const dates = allDates.filter(d => forecastDates.includes(d));
-        if (!dates.length) return;
-
-        const dailyMap = {};
-        for (const d of dailyData) dailyMap[d.date] = d.solar_kwh || 0;
-
-        const days = t('dayNames');
-        const labels = dates.map(d => {
-            const dt = new Date(d);
-            return days[dt.getDay()] + ' ' + dt.getDate() + '.';
-        });
-
-        const todayStr = warsawToday();
-        const currentHour = warsawNow().getHours();
-
-        // For today: only sum forecast for hours that had actual production
-        const forecastData = dates.map(d => {
-            if (d === todayStr && window._forecastHourly && window._todayActualByHour) {
-                let partialKwh = 0;
-                for (let h = 0; h <= currentHour; h++) {
-                    if ((window._todayActualByHour[h] || 0) > 0.001) {
-                        const key = d + 'T' + String(h).padStart(2, '0') + ':00';
-                        partialKwh += window._forecastHourly[key] || 0;
-                    }
-                }
-                return Math.round(partialKwh * 100) / 100;
-            }
-            return window._forecastKwh[d] || 0;
-        });
-        const actualData = dates.map(d => dailyMap[d] || 0);
-
-        // For display: show full-day forecast as reference
-        const fullDayForecast = dates.map(d => window._forecastKwh[d] || 0);
-
-        // Persist completed days (not today, not future) to localStorage
-        const hist = loadForecastHistory();
-        dates.forEach((d, i) => {
-            if (d >= todayStr) return; // skip today and future
-            const f = window._forecastKwh[d];
-            const a = dailyMap[d];
-            if (f != null && f > 0 && a != null && a > 0) {
-                hist[d] = { f: Math.round(f * 100) / 100, a: Math.round(a * 100) / 100 };
-            }
-        });
-        saveForecastHistory(hist);
-
-        // Calculate per-day accuracy (same formula as overall: divide by max)
-        const accuracyData = dates.map((d, i) => {
-            const f = forecastData[i], a = actualData[i];
-            const m = Math.max(f, a);
-            if (f > 0 && a > 0 && m > 0) return Math.max(0, Math.round((1 - Math.abs(f - a) / m) * 100));
-            return null;
-        });
-
-        if (forecastVsRealChart) forecastVsRealChart.destroy();
-        forecastVsRealChart = new Chart($('chart_forecast_vs_real'), {
-            type: 'bar',
-            data: {
-                labels: labels,
-                datasets: [
-                    { label: t('forecast'), data: forecastData, backgroundColor: 'rgba(245, 158, 11, 0.35)', borderColor: '#f59e0b', borderWidth: 1, borderRadius: 4 },
-                    { label: t('actual'), data: actualData, backgroundColor: '#f59e0b', borderColor: '#f59e0b', borderWidth: 1, borderRadius: 4 }
-                ]
-            },
-            options: {
-                responsive: true, maintainAspectRatio: false, animation: false,
-                interaction: { intersect: false, mode: 'index' },
-                plugins: {
-                    legend: { display: true, position: 'top', labels: { boxWidth: 12, font: { size: 10 } } },
-                    tooltip: { callbacks: { label: ctx => {
-                        const idx = ctx.dataIndex;
-                        let tip = ctx.dataset.label + ': ' + fmtKwh.format(ctx.parsed.y) + ' kWh';
-                        if (ctx.datasetIndex === 0 && dates[idx] === todayStr && fullDayForecast[idx] !== forecastData[idx]) {
-                            tip += ' (bis ' + currentHour + ':00, ' + (LANG === 'de' ? 'Tagesges.' : 'full day') + ': ' + fmtKwh.format(fullDayForecast[idx]) + ' kWh)';
-                        }
-                        if (ctx.datasetIndex === 1 && accuracyData[idx] != null) tip += ' (' + accuracyData[idx] + '%)';
-                        return tip;
-                    } } }
-                },
-                scales: {
-                    y: { beginAtZero: true, grid: { color: chartGridColor() }, ticks: { maxTicksLimit: 5, callback: v => v + ' kWh' } },
-                    x: { grid: { display: false } }
-                }
-            },
-            plugins: [{
-                id: 'accuracyLabels',
-                afterDatasetsDraw(chart) {
-                    const ctx2 = chart.ctx;
-                    const meta = chart.getDatasetMeta(1);
-                    ctx2.font = 'bold 9px system-ui';
-                    ctx2.textAlign = 'center';
-                    meta.data.forEach((bar, i) => {
-                        const acc = accuracyData[i];
-                        if (acc == null) return;
-                        ctx2.fillStyle = acc >= 80 ? '#22c55e' : acc >= 60 ? '#eab308' : '#ef4444';
-                        ctx2.fillText(acc + '%', bar.x, bar.y - 4);
-                    });
-                }
-            }]
-        });
-
-        $('forecastVsRealBox').style.display = '';
-
-        // Calculate overall accuracy from full history + today
-        updateForecastAccuracy(forecastData, actualData, todayStr, dates);
-    } catch (e) { console.warn('Forecast vs Real error:', e); }
-}
-
-setTimeout(loadForecastVsReal, 5000);
-
-// === Forecast Accuracy History (localStorage + server-side merge) ===
-let _fcAccHistChart = null;
-async function loadForecastAccuracyHistory() {
-    try {
-        // Merge: localStorage (primary, always available) + server forecast_log
-        const merged = {}; // date -> { f, a }
-
-        // 1) localStorage history (saved by loadForecastVsReal on each visit)
-        const hist = loadForecastHistory();
-        for (const [d, v] of Object.entries(hist)) {
-            if (v.f > 0 && v.a > 0.05) merged[d] = { f: v.f, a: v.a };
-        }
-
-        // 2) Server-side forecast_log (fills gaps the browser missed)
-        try {
-            const res = await fetch('/api/forecast-accuracy?days=90');
-            const data = await res.json();
-            const src = data.openmeteo || data[Object.keys(data)[0]];
-            if (src && src.series) {
-                for (const s of src.series) {
-                    if (s.actual > 0.05 && s.predicted > 0 && !merged[s.date]) {
-                        merged[s.date] = { f: s.predicted, a: s.actual };
-                    }
-                }
-            }
-        } catch {}
-
-        const sortedDates = Object.keys(merged).sort();
-        if (!sortedDates.length) return;
-
-        const labels = sortedDates.map(d => {
-            const dt = new Date(d);
-            return dt.getDate() + '.' + (dt.getMonth() + 1) + '.';
-        });
-
-        const forecastVals = sortedDates.map(d => merged[d].f);
-        const actualVals = sortedDates.map(d => merged[d].a);
-        const accuracyPct = sortedDates.map(d => {
-            const mx = Math.max(merged[d].f, merged[d].a);
-            return mx > 0 ? Math.max(0, Math.round((1 - Math.abs(merged[d].f - merged[d].a) / mx) * 100)) : null;
-        });
-
-        // Title with stats
-        const titleEl = $('fcAccHistTitle');
-        if (titleEl) {
-            const valid = accuracyPct.filter(v => v != null);
-            const avg = valid.length ? Math.round(valid.reduce((a, b) => a + b, 0) / valid.length) : 0;
-            titleEl.textContent = (LANG === 'de' ? 'Genauigkeit (letzte ' : 'Accuracy (last ')
-                + sortedDates.length + (LANG === 'de' ? ' Tage, ' : ' days, ')
-                + '\u00D8 ' + avg + '%)';
-        }
-
-        if (_fcAccHistChart) _fcAccHistChart.destroy();
-        _fcAccHistChart = new Chart($('chart_fc_accuracy_history'), {
-            type: 'bar',
-            data: {
-                labels: labels,
-                datasets: [
-                    {
-                        label: t('forecast'),
-                        data: forecastVals,
-                        backgroundColor: 'rgba(245, 158, 11, 0.25)',
-                        borderColor: '#f59e0b',
-                        borderWidth: 1,
-                        borderRadius: 3,
-                        order: 2
-                    },
-                    {
-                        label: t('actual'),
-                        data: actualVals,
-                        backgroundColor: '#f59e0b',
-                        borderColor: '#f59e0b',
-                        borderWidth: 1,
-                        borderRadius: 3,
-                        order: 1
-                    }
-                ]
-            },
-            options: {
-                responsive: true, maintainAspectRatio: false, animation: false,
-                interaction: { intersect: false, mode: 'index' },
-                plugins: {
-                    legend: { display: true, position: 'top', labels: { boxWidth: 10, font: { size: 9 } } },
-                    tooltip: { callbacks: { label: ctx => {
-                        const i = ctx.dataIndex;
-                        let tip = ctx.dataset.label + ': ' + fmtKwh.format(ctx.parsed.y) + ' kWh';
-                        if (ctx.datasetIndex === 1 && accuracyPct[i] != null) tip += ' (' + accuracyPct[i] + '%)';
-                        return tip;
-                    } } }
-                },
-                scales: {
-                    y: { beginAtZero: true, grid: { color: chartGridColor() }, ticks: { maxTicksLimit: 5, callback: v => v + ' kWh' } },
-                    x: { grid: { display: false }, ticks: { maxTicksLimit: 15, font: { size: 9 } } }
-                }
-            },
-            plugins: [{
-                id: 'histAccLabels',
-                afterDatasetsDraw(chart) {
-                    const ctx2 = chart.ctx;
-                    const meta = chart.getDatasetMeta(1);
-                    ctx2.font = 'bold 8px system-ui';
-                    ctx2.textAlign = 'center';
-                    meta.data.forEach((bar, i) => {
-                        const acc = accuracyPct[i];
-                        if (acc == null) return;
-                        ctx2.fillStyle = acc >= 80 ? '#22c55e' : acc >= 60 ? '#eab308' : '#ef4444';
-                        ctx2.fillText(acc + '%', bar.x, bar.y - 3);
-                    });
-                }
-            }]
-        });
-    } catch (e) { console.warn('Forecast accuracy history error:', e); }
-}
-setTimeout(loadForecastAccuracyHistory, 6000);
 
 // === Amortisation + Break-Even (merged section with cumulative savings chart) ===
 let _amortChart = null;
@@ -3398,42 +2896,6 @@ async function loadHeatmap() {
 loadHeatmap();
 
 // === Forecast Accuracy (totals comparison) ===
-function updateForecastAccuracy(forecastData, actualData, todayStr, dates) {
-    // Start with all saved historical pairs
-    const hist = loadForecastHistory();
-    let sumForecast = 0;
-    let sumActual = 0;
-    let dayCount = 0;
-    for (const d of Object.keys(hist)) {
-        sumForecast += hist[d].f;
-        sumActual += hist[d].a;
-        dayCount++;
-    }
-    // Add today's partial data (not in history yet)
-    if (forecastData && dates) {
-        for (let i = 0; i < dates.length; i++) {
-            if (hist[dates[i]]) continue; // already counted
-            const f = forecastData[i];
-            const a = actualData[i];
-            if (f > 0 && a > 0) {
-                sumForecast += f;
-                sumActual += a;
-                dayCount++;
-            }
-        }
-    }
-    const maxTotal = Math.max(sumForecast, sumActual);
-    if (maxTotal === 0) return;
-    const accuracy = Math.max(0, Math.round((1 - Math.abs(sumForecast - sumActual) / maxTotal) * 100));
-    const badge = $('forecastAccuracy');
-    if (badge) {
-        const label = t('forecastAccuracyLabel') + ': ' + accuracy + '%';
-        const detail = ' (' + dayCount + (LANG === 'de' ? ' Tage' : ' days') + ')';
-        badge.textContent = label + detail;
-        badge.style.color = accuracy >= 80 ? 'var(--green)' : accuracy >= 60 ? 'var(--yellow)' : 'var(--red)';
-    }
-}
-
 // === Battery Cycle Tracker ===
 // Reads pre-computed cycle stats from the server (RAM-tracked every 3s,
 // persisted in data/battery_cycles.json). Replaces the old client-side

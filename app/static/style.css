@@ -889,7 +889,7 @@ header h1 {
 .forecast-grid {
     display: grid;
     grid-template-columns: repeat(7, 1fr);
-    gap: 3px;
+    gap: 0;
     text-align: center;
     overflow: hidden;
 }
@@ -901,9 +901,11 @@ header h1 {
 
 .fc-day {
     padding: 6px 2px;
-    border-radius: 8px;
+    border-radius: 0;
     background: var(--bg);
+    border-right: 1px solid var(--card-border);
 }
+.fc-day:last-child { border-right: none; }
 
 .fc-day.fc-today {
     border: 1px solid var(--solar);
@@ -2422,20 +2424,6 @@ body.light-mode .log-table td {
 
 .port-status.charging { background: var(--blue); color: #fff; }
 .port-status.discharging { background: var(--green); color: #000; }
-
-/* Forecast Accuracy Badge */
-.forecast-accuracy-badge {
-    display: inline-block;
-    font-size: 0.6rem;
-    font-weight: 700;
-    background: var(--bg);
-    border-radius: 6px;
-    padding: 2px 6px;
-    margin-left: 8px;
-    vertical-align: middle;
-    text-transform: none;
-    letter-spacing: 0;
-}
 
 /* KPI Row - inline with dividers */
 .mfc-kpi-row {
