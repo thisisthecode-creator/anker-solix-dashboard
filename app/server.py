@@ -943,6 +943,10 @@ async def api_mqtt_raw():
             continue
         clean[k] = v
 
+    # Fallback: use last recorded raw MQTT data when device is offline
+    if not clean and _mqtt_raw_log:
+        clean = dict(_mqtt_raw_log[-1].get("raw", {}))
+
     # Mock data for local development when MQTT is not connected
     if not clean and os.environ.get("MOCK_MQTT"):
         import random, time
@@ -989,8 +993,10 @@ async def api_mqtt_raw():
             "unknown_3": "v2.0.1",
         }
 
+    is_live = bool(client.device_sn) or bool(os.environ.get("MOCK_MQTT"))
     return {
-        "connected": bool(client.device_sn) or bool(os.environ.get("MOCK_MQTT")),
+        "connected": is_live,
+        "stale": not is_live and bool(clean),
         "device_sn": client.device_sn or "MOCK00000000001",
         "device_name": client.device_name or "Mock Solix C1000",
         "field_count": len(clean),
