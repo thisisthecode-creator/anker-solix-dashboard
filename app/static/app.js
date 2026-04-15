@@ -2988,10 +2988,6 @@ async function loadBreakEven() {
         $('beProgressFill').style.width = pct + '%';
         $('beProgressLabel').textContent = fmt2.format(pct) + '%';
 
-        // Update total savings sub-label under the ring
-        const totalSub = $('savingsTotalSub');
-        if (totalSub) totalSub.textContent = '\u03A3 ' + fmtEur.format(d.total_savings_eur || 0) + ' \u20AC';
-
         const hint = $('beHint');
         if (hint) {
             if (d.total_savings_eur >= d.system_cost_eur) {
