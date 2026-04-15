@@ -1536,7 +1536,6 @@ async function buildHourlyForecastToday() {
                 }
             }
         });
-        section.style.display = '';
     } catch (e) { console.warn('Hourly forecast today error:', e); }
 }
 
