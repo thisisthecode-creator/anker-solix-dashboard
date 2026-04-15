@@ -24,7 +24,7 @@ const I18N = {
         costPanels: '2× ECO-WORTHY 200W Panels', costMounts: '2× Halterung Balkongeländer',
         costCableXt60: 'Solarkabel XT60i', costFeedthrough: 'Fensterdurchführung',
         costExtension: 'Verlängerungskabel 2m', costTotal: 'Gesamt',
-        dataBackup: 'Daten-Backup', downloadDb: 'DB-Export herunterladen', mqttLog: 'MQTT Live-Log',
+        dataBackup: 'Daten-Backup', downloadDb: 'DB-Export herunterladen', mqttLog: 'MQTT Log',
         time: 'Zeit', back: '‹ Zurück', next: 'Weiter ›',
         page: 'Seite', entries: 'Einträge',
         // Dynamic JS strings
@@ -1022,7 +1022,7 @@ function _logFingerprint(r) {
 
 async function loadHistoricLog() {
     try {
-        const res = await fetch('/api/readings?hours=8760');
+        const res = await fetch('/api/readings?hours=87600');
         const rows = await res.json();
         LOG_ROWS.length = 0;
         let lastFp = '';
@@ -1051,6 +1051,10 @@ async function loadHistoricLog() {
         _lastLogFingerprint = lastFp;
         _historicLoaded = true;
         renderLogPage();
+        if (LOG_ROWS.length === 0) {
+            const logBody = $('mqttLogBody');
+            if (logBody) logBody.innerHTML = '<tr><td colspan="7" style="text-align:center;color:var(--text-dim);padding:20px">Keine aufgezeichneten Daten vorhanden.</td></tr>';
+        }
     } catch (e) {
         console.warn('Historic log error:', e);
     }
