@@ -793,6 +793,11 @@ function updateUI(d) {
     if (sunEl) sunEl.className = 'solar-sun' + (d.solar_watts > 0 ? ' active' : '');
     const solarPctEl = $('solarPct');
     if (solarPctEl && d.solar_watts > 0) solarPctEl.textContent = Math.round(solarPct) + '% von 400W';
+    const solarPeakEl = $('solarPeak');
+    if (solarPeakEl) {
+        const peak = d.daily_peak_watts || 0;
+        solarPeakEl.textContent = peak > 0 ? ('Peak ' + Math.round(peak) + ' W') : '';
+    }
 
     const bar = $('batteryBar');
     bar.style.height = d.battery_soc + '%';
