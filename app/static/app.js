@@ -7,7 +7,7 @@ const I18N = {
         refreshing: 'Aktualisieren...', offline: 'Offline - Daten aus Cache',
         connecting: 'Verbinde...', connected: 'Verbunden', disconnected: 'Getrennt',
         notifications: 'Benachrichtigungen',
-        forecastTitle: 'Solar-Prognose', forecastSource: 'Warschau · 240° SW · konkav 45°–75° · Open-Meteo',
+        forecastTitle: 'Solar-Prognose', forecastSource: 'Warschau · 240° SW · 60°–90° Kurve · Open-Meteo',
         solarInput: 'Solareingabe', battery: 'Batterie', temperature: 'Temperatur', totalOutput: 'Ausgang Gesamt',
         energyFlow: 'Energiefluss',
         energySavings: 'Energie & Ersparnis',
@@ -151,7 +151,7 @@ const I18N = {
         refreshing: 'Refreshing...', offline: 'Offline - Cached data',
         connecting: 'Connecting...', connected: 'Connected', disconnected: 'Disconnected',
         notifications: 'Notifications',
-        forecastTitle: 'Solar Forecast', forecastSource: 'Warsaw · 240° SW · concave 45°–75° · Open-Meteo',
+        forecastTitle: 'Solar Forecast', forecastSource: 'Warsaw · 240° SW · 60°–90° curve · Open-Meteo',
         solarInput: 'Solar Input', battery: 'Battery', temperature: 'Temperature', totalOutput: 'Total Output',
         energyFlow: 'Energy Flow',
         energySavings: 'Energy & Savings',
@@ -1344,10 +1344,10 @@ async function loadForecast() {
 
         updateExpectedSolar();
 
-        $('forecastBox').style.display = '';
-
     } catch (e) {
         console.warn('Forecast error:', e);
+        const grid = $('forecastGrid');
+        if (grid) grid.innerHTML = '<div style="text-align:center;color:var(--text-dim);padding:20px;font-size:0.8rem">Prognose konnte nicht geladen werden.</div>';
     }
 }
 
