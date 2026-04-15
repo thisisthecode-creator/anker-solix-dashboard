@@ -836,10 +836,10 @@ function updateUI(d) {
         solarKwhArc.setAttribute('stroke-dashoffset', (RING_CIRC - RING_CIRC * pct / 100).toFixed(1));
     }
 
-    // Ring 4: Today's Savings € (0–0.75 € range = 3 kWh × 0.25 €/kWh)
+    // Ring 4: Today's Savings € (0-0.75 € range = 3 kWh x 0.25 €/kWh)
     const savedEur = d.daily_savings_eur || 0;
     const savRingEl = $('savingsRingVal');
-    if (savRingEl) savRingEl.textContent = Math.round(savedEur) + '€';
+    if (savRingEl) savRingEl.textContent = fmtEur.format(savedEur) + ' €';
     const savArc = $('savingsArc');
     if (savArc) {
         const pct = Math.min(100, savedEur / 0.75 * 100);
@@ -2988,6 +2988,10 @@ async function loadBreakEven() {
         $('beProgressFill').style.width = pct + '%';
         $('beProgressLabel').textContent = fmt2.format(pct) + '%';
 
+        // Update total savings sub-label under the ring
+        const totalSub = $('savingsTotalSub');
+        if (totalSub) totalSub.textContent = '\u03A3 ' + fmtEur.format(d.total_savings_eur || 0) + ' \u20AC';
+
         const hint = $('beHint');
         if (hint) {
             if (d.total_savings_eur >= d.system_cost_eur) {
@@ -2997,7 +3001,7 @@ async function loadBreakEven() {
                 const line2 = t('breakEvenProjection') + ': ' + d.break_even_date;
                 hint.innerHTML = line1 + ' · ' + line2;
             } else {
-                hint.textContent = '—';
+                hint.textContent = '\u2014';
             }
         }
     } catch (e) { console.warn('Break-even error:', e); }
