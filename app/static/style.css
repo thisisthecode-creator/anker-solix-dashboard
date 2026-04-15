@@ -2086,6 +2086,16 @@ body.light-mode .log-table td {
     white-space: nowrap;
     font-weight: 600;
 }
+.dash-ring-sub {
+    position: absolute;
+    bottom: -20px;
+    left: 50%;
+    transform: translateX(-50%);
+    font-size: 0.45rem;
+    color: var(--text-dim);
+    white-space: nowrap;
+    opacity: 0.8;
+}
 /* Keep old score-ring IDs working for any JS that references scorePct */
 .score-ring-wrap { display: none; }
 .score-pct { display: none; }
