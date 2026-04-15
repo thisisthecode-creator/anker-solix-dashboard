@@ -2899,32 +2899,47 @@ async function loadForecastVsReal() {
 
 setTimeout(loadForecastVsReal, 5000);
 
-// === Forecast Accuracy History (server-side forecast_log vs daily_solar) ===
+// === Forecast Accuracy History (localStorage + server-side merge) ===
 let _fcAccHistChart = null;
 async function loadForecastAccuracyHistory() {
     try {
-        const res = await fetch('/api/forecast-accuracy?days=90');
-        const data = await res.json();
-        // Use openmeteo source (primary), fall back to first available
-        const src = data.openmeteo || data[Object.keys(data)[0]];
-        if (!src || !src.series || !src.series.length) return;
+        // Merge: localStorage (primary, always available) + server forecast_log
+        const merged = {}; // date -> { f, a }
 
-        const series = src.series.filter(s => s.actual > 0.05);
-        if (!series.length) return;
+        // 1) localStorage history (saved by loadForecastVsReal on each visit)
+        const hist = loadForecastHistory();
+        for (const [d, v] of Object.entries(hist)) {
+            if (v.f > 0 && v.a > 0.05) merged[d] = { f: v.f, a: v.a };
+        }
 
-        const days = t('dayNames');
-        const labels = series.map(s => {
-            const dt = new Date(s.date);
+        // 2) Server-side forecast_log (fills gaps the browser missed)
+        try {
+            const res = await fetch('/api/forecast-accuracy?days=90');
+            const data = await res.json();
+            const src = data.openmeteo || data[Object.keys(data)[0]];
+            if (src && src.series) {
+                for (const s of src.series) {
+                    if (s.actual > 0.05 && s.predicted > 0 && !merged[s.date]) {
+                        merged[s.date] = { f: s.predicted, a: s.actual };
+                    }
+                }
+            }
+        } catch {}
+
+        const sortedDates = Object.keys(merged).sort();
+        if (!sortedDates.length) return;
+
+        const labels = sortedDates.map(d => {
+            const dt = new Date(d);
             return dt.getDate() + '.' + (dt.getMonth() + 1) + '.';
         });
 
-        const accuracyPct = series.map(s => {
-            const mx = Math.max(s.predicted, s.actual);
-            return mx > 0 ? Math.max(0, Math.round((1 - Math.abs(s.predicted - s.actual) / mx) * 100)) : null;
+        const forecastVals = sortedDates.map(d => merged[d].f);
+        const actualVals = sortedDates.map(d => merged[d].a);
+        const accuracyPct = sortedDates.map(d => {
+            const mx = Math.max(merged[d].f, merged[d].a);
+            return mx > 0 ? Math.max(0, Math.round((1 - Math.abs(merged[d].f - merged[d].a) / mx) * 100)) : null;
         });
-
-        const forecastVals = series.map(s => s.predicted);
-        const actualVals = series.map(s => s.actual);
 
         // Title with stats
         const titleEl = $('fcAccHistTitle');
@@ -2932,7 +2947,7 @@ async function loadForecastAccuracyHistory() {
             const valid = accuracyPct.filter(v => v != null);
             const avg = valid.length ? Math.round(valid.reduce((a, b) => a + b, 0) / valid.length) : 0;
             titleEl.textContent = (LANG === 'de' ? 'Genauigkeit (letzte ' : 'Accuracy (last ')
-                + series.length + (LANG === 'de' ? ' Tage, ' : ' days, ')
+                + sortedDates.length + (LANG === 'de' ? ' Tage, ' : ' days, ')
                 + '\u00D8 ' + avg + '%)';
         }
 
