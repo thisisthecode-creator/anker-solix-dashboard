@@ -10,7 +10,7 @@
     <link rel="icon" href="/static/icon-192.png" type="image/png">
     <link rel="apple-touch-icon" href="/static/apple-touch-icon.png">
     <title>Solar Dashboard</title>
-    <link rel="stylesheet" href="/static/style.css?v=66">
+    <link rel="stylesheet" href="/static/style.css?v=67">
     <script src="https://cdn.jsdelivr.net/npm/chart.js@4"></script>
 </head>
 <body>
@@ -143,6 +143,8 @@
                 <span class="forecast-accuracy-badge" id="forecastAccuracy" title="MAPE">--</span>
             </h2>
             <div class="chart-wrap"><canvas id="chart_forecast_vs_real"></canvas></div>
+            <h3 style="font-size:0.85rem;margin:16px 0 6px;color:var(--text-dim)" id="fcAccHistTitle">Genauigkeit (Historie)</h3>
+            <div class="chart-wrap" style="height:180px"><canvas id="chart_fc_accuracy_history"></canvas></div>
         </section>
 
         <!-- Monthly Solar Forecast: Last Year vs This Year -->
@@ -356,7 +358,7 @@
 
         <!-- SOC Range daily -->
         <section class="today-box" id="socRangeSection" style="display:none">
-            <h2>SOC-Bereich (Min/Max)</h2>
+            <h2>Batterie-Bereich (SOC Min/Max)</h2>
             <div class="chart-wrap" style="height:220px"><canvas id="chart_soc_range"></canvas></div>
         </section>
 
@@ -666,6 +668,6 @@
 
     </div>
 
-    <script src="/static/app.js?v=66"></script>
+    <script src="/static/app.js?v=67"></script>
 </body>
 </html>

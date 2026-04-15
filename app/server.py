@@ -1081,7 +1081,7 @@ async def api_sankey(days: int = Query(1, ge=1, le=365)):
 @app.get("/api/forecast-accuracy")
 async def api_forecast_accuracy(days: int = Query(60, ge=7, le=365)):
     """Per-source forecast accuracy over the last N days (MAE/MAPE/RMSE)."""
-    return await get_forecast_accuracy(days)
+    return await _cached_endpoint(f"fc-acc:{days}", _ENDPOINT_CACHE_TTL, lambda: get_forecast_accuracy(days))
 
 
 @app.get("/api/charging-sessions")

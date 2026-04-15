@@ -2431,19 +2431,25 @@ body.light-mode .log-table td {
     letter-spacing: 0;
 }
 
-/* Monthly Forecast KPI Row */
+/* KPI Row - inline with dividers */
 .mfc-kpi-row {
-    display: grid;
-    grid-template-columns: 1fr 1fr 1fr;
-    gap: 8px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 0;
     margin-bottom: 14px;
-}
-.mfc-kpi {
-    text-align: center;
-    padding: 10px 6px;
     background: var(--bg);
     border-radius: 10px;
     border: 1px solid var(--card-border);
+    padding: 10px 0;
+}
+.mfc-kpi {
+    text-align: center;
+    padding: 4px 16px;
+    flex: 1;
+}
+.mfc-kpi + .mfc-kpi {
+    border-left: 1px solid var(--card-border);
 }
 .mfc-kpi-label {
     font-size: 0.6rem;

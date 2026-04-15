@@ -317,6 +317,7 @@ function applyI18n() {
 const locale = LANG === 'de' ? 'de-DE' : 'en-US';
 const fmt = new Intl.NumberFormat(locale, { maximumFractionDigits: 1 });
 const fmt2 = new Intl.NumberFormat(locale, { maximumFractionDigits: 2 });
+const fmtKwh = new Intl.NumberFormat(locale, { minimumFractionDigits: 2, maximumFractionDigits: 2 });
 const fmtEur = new Intl.NumberFormat(locale, { minimumFractionDigits: 2, maximumFractionDigits: 2 });
 const EUR_PER_KWH = 0.25; // Poland household electricity price
 const SYSTEM_COST_EUR = 941; // 4011 PLN ÷ 4.2623 (NBP rate 2026-04-08)
@@ -324,7 +325,7 @@ const CAFE_PRICE_EUR = 3.70; // Price of a café in Warsaw
 
 function fmtWh(kwh) {
     const wh = kwh * 1000;
-    if (wh >= 1000) return fmt2.format(kwh) + ' kWh';
+    if (wh >= 1000) return fmtKwh.format(kwh) + ' kWh';
     return fmt.format(wh) + ' Wh';
 }
 
@@ -530,7 +531,7 @@ function checkDailyReport(d) {
     const hours = d.solar_hours || 0;
     const eur = fmtEur.format(kwh * EUR_PER_KWH);
     const body = t('dailyReportBody')
-        .replace('{kwh}', fmt2.format(kwh))
+        .replace('{kwh}', fmtKwh.format(kwh))
         .replace('{peak}', fmt.format(peak))
         .replace('{hours}', fmt.format(hours))
         .replace('{eur}', eur);
@@ -810,7 +811,7 @@ function updateUI(d) {
     // Ring 3: Today's Solar kWh (0–3 kWh range, generous for 2×220W)
     const solarKwh = d.daily_kwh || 0;
     const solarKwhEl = $('solarKwhRingVal');
-    if (solarKwhEl) solarKwhEl.textContent = fmt2.format(solarKwh);
+    if (solarKwhEl) solarKwhEl.textContent = fmtKwh.format(solarKwh);
     const solarKwhArc = $('solarKwhArc');
     if (solarKwhArc) {
         const pct = Math.min(100, solarKwh / 3 * 100);
@@ -1280,8 +1281,8 @@ async function loadForecast() {
         const weekChargesMac = Math.floor(weekTotal * 1000 / MACBOOK_WH * 10) / 10;
         const dayChargesMac = Math.floor(avgKwh * 1000 / MACBOOK_WH * 10) / 10;
         summary.innerHTML = `<div class="fc-sum-row">`
-            + `<div class="fc-sum-item"><span class="fc-sum-value">${Math.round(weekTotal * 100) / 100}</span><span class="fc-sum-label">${t('kwhWeek')}</span></div>`
-            + `<div class="fc-sum-item"><span class="fc-sum-value">${avgKwh}</span><span class="fc-sum-label">${t('avgKwhDay')}</span></div>`
+            + `<div class="fc-sum-item"><span class="fc-sum-value">${fmtKwh.format(weekTotal)}</span><span class="fc-sum-label">${t('kwhWeek')}</span></div>`
+            + `<div class="fc-sum-item"><span class="fc-sum-value">${fmtKwh.format(avgKwh)}</span><span class="fc-sum-label">${t('avgKwhDay')}</span></div>`
             + `<div class="fc-sum-item"><span class="fc-sum-value">${Math.round(weekSunH)}</span><span class="fc-sum-label">${t('sunHours')}</span></div>`
             + `</div>`
             + `</div>`;
@@ -1420,7 +1421,15 @@ async function loadMonthlyForecast() {
         if (!section) return;
 
         const titleEl = $('monthlyFcTitle');
-        if (titleEl) titleEl.textContent = (LANG === 'de' ? 'Solar-Prognose ' : 'Solar Forecast ') + thisYear;
+        if (titleEl) {
+            const txt = (LANG === 'de' ? 'Solar-Prognose ' : 'Solar Forecast ') + thisYear;
+            // Update only the text node, preserve chevron span added by collapsible init
+            if (titleEl.firstChild && titleEl.firstChild.nodeType === 3) {
+                titleEl.firstChild.textContent = txt;
+            } else {
+                titleEl.insertBefore(document.createTextNode(txt), titleEl.firstChild);
+            }
+        }
 
         // KPI cards - compare only from first data month for fairness
         const kpiEl = $('monthlyFcKpis');
@@ -1441,19 +1450,13 @@ async function loadMonthlyForecast() {
             kpiEl.innerHTML =
                 '<div class="mfc-kpi">'
                     + '<div class="mfc-kpi-label">' + thisYear + bisherLabel + '</div>'
-                    + '<div class="mfc-kpi-value amber">' + Math.round(totalReal) + ' kWh</div>'
+                    + '<div class="mfc-kpi-value amber">' + fmtKwh.format(totalReal) + ' kWh</div>'
                     + '<div class="mfc-kpi-sub">' + monateSub + '</div>'
                 + '</div>'
                 + '<div class="mfc-kpi">'
                     + '<div class="mfc-kpi-label">' + progLabel + '</div>'
-                    + '<div class="mfc-kpi-value green">~' + Math.round(totalExpected) + ' kWh</div>'
+                    + '<div class="mfc-kpi-value green">~' + fmtKwh.format(totalExpected) + ' kWh</div>'
                     + '<div class="mfc-kpi-sub">' + progSub + '</div>'
-                + '</div>'
-                + '<div class="mfc-kpi">'
-                    + '<div class="mfc-kpi-label">vs. ' + lastYear + ' (' + startMonthName + '-' + monthNames[11] + ')</div>'
-                    + '<div class="mfc-kpi-value dim">' + Math.round(totalLastYearComparable) + ' kWh</div>'
-                    + '<div class="mfc-kpi-sub"><span class="mfc-kpi-trend ' + trendClass + '">'
-                        + trendArrow + ' ' + Math.abs(pctVsLastYear) + '%</span></div>'
                 + '</div>';
         }
 
@@ -1546,7 +1549,7 @@ async function loadMonthlyForecast() {
                                 ? (LANG === 'de' ? ' (bisher)' : ' (so far)') : ' (prognose)';
                         }
                         return (ctx.datasetIndex === 0 ? String(lastYear) : String(thisYear))
-                            + ': ' + fmt2.format(ctx.parsed.y) + ' kWh' + suffix;
+                            + ': ' + fmtKwh.format(ctx.parsed.y) + ' kWh' + suffix;
                     } } }
                 },
                 scales: {
@@ -1677,8 +1680,8 @@ async function buildHourlyForecastToday() {
                 : '--';
             const todaySunH = window._forecastSunshine && window._forecastSunshine[todayStr] != null
                 ? window._forecastSunshine[todayStr] : null;
-            sumEl.innerHTML = '<span>' + (LANG === 'de' ? 'Prognose' : 'Forecast') + ': ' + fmt2.format(totalFc) + ' kWh</span>'
-                + '<span>' + (LANG === 'de' ? 'Real' : 'Actual') + ': ' + fmt2.format(totalAct) + ' kWh</span>'
+            sumEl.innerHTML = '<span>' + (LANG === 'de' ? 'Prognose' : 'Forecast') + ': ' + fmtKwh.format(totalFc) + ' kWh</span>'
+                + '<span>' + (LANG === 'de' ? 'Real' : 'Actual') + ': ' + fmtKwh.format(totalAct) + ' kWh</span>'
                 + '<span>' + (LANG === 'de' ? 'Aktiv' : 'Active') + ': ' + activeRange + '</span>'
                 + (todaySunH != null ? '<span>🔆 ' + todaySunH + 'h</span>' : '');
         }
@@ -2016,7 +2019,7 @@ async function loadWeatherCorrelation() {
                 return '<div class="wc-chip">'
                     + '<span class="wc-chip-icon">' + catConfig[c].icon + '</span>'
                     + '<span>' + catConfig[c].label + '</span>'
-                    + '<span class="wc-chip-value">' + fmt2.format(avg) + ' kWh</span>'
+                    + '<span class="wc-chip-value">' + fmtKwh.format(avg) + ' kWh</span>'
                     + (c !== 'sunny' ? '<span class="wc-chip-pct">(' + pct + '% ' + (LANG === 'de' ? 'v. Sonne' : 'of sunny') + ')</span>' : '')
                     + '</div>';
             }).join('');
@@ -2055,8 +2058,8 @@ async function loadWeatherCorrelation() {
                     legend: { display: false },
                     tooltip: { callbacks: { label: ctx => {
                         const i = ctx.dataIndex;
-                        return '\u00D8 ' + fmt2.format(avgValues[i]) + ' kWh'
-                            + ' (Min ' + fmt2.format(minValues[i]) + ', Max ' + fmt2.format(maxValues[i]) + ')'
+                        return '\u00D8 ' + fmtKwh.format(avgValues[i]) + ' kWh'
+                            + ' (Min ' + fmtKwh.format(minValues[i]) + ', Max ' + fmtKwh.format(maxValues[i]) + ')'
                             + ' - ' + counts[i] + (LANG === 'de' ? ' Tage' : ' days');
                     } } }
                 },
@@ -2076,7 +2079,7 @@ async function loadWeatherCorrelation() {
                         const pct = sunnyAvg > 0 ? Math.round(avgValues[i] / sunnyAvg * 100) : 0;
                         ctx2.fillStyle = '#fff';
                         ctx2.textAlign = 'left';
-                        ctx2.fillText(fmt2.format(avgValues[i]) + ' kWh', bar.x + 6, bar.y);
+                        ctx2.fillText(fmtKwh.format(avgValues[i]) + ' kWh', bar.x + 6, bar.y);
                         ctx2.font = '9px system-ui';
                         ctx2.fillStyle = '#888';
                         ctx2.fillText('(' + counts[i] + 'd)', bar.x + 6, bar.y + 12);
@@ -2129,17 +2132,17 @@ async function loadSelfConsumptionOpt() {
                 '<div class="mfc-kpi">'
                     + '<div class="mfc-kpi-label">' + (LANG === 'de' ? 'Eigenverbrauch' : 'Self-consumption') + '</div>'
                     + '<div class="mfc-kpi-value amber">' + selfConsRate + '%</div>'
-                    + '<div class="mfc-kpi-sub">' + fmt.format(totalDirectUse + totalBatteryIn) + ' / ' + fmt.format(totalSolar) + ' kWh</div>'
+                    + '<div class="mfc-kpi-sub">' + fmtKwh.format(totalDirectUse + totalBatteryIn) + ' / ' + fmtKwh.format(totalSolar) + ' kWh</div>'
                 + '</div>'
                 + '<div class="mfc-kpi">'
                     + '<div class="mfc-kpi-label">' + (LANG === 'de' ? 'Netz-Anteil' : 'Grid share') + '</div>'
                     + '<div class="mfc-kpi-value dim">' + (totalOutput > 0 ? Math.round(totalCharge / totalOutput * 100) : 0) + '%</div>'
-                    + '<div class="mfc-kpi-sub">' + fmt.format(totalCharge) + ' kWh ' + (LANG === 'de' ? 'vom Netz' : 'from grid') + '</div>'
+                    + '<div class="mfc-kpi-sub">' + fmtKwh.format(totalCharge) + ' kWh ' + (LANG === 'de' ? 'vom Netz' : 'from grid') + '</div>'
                 + '</div>'
                 + '<div class="mfc-kpi">'
                     + '<div class="mfc-kpi-label">' + (LANG === 'de' ? 'Batterie-Effizienz' : 'Battery RTE') + '</div>'
                     + '<div class="mfc-kpi-value' + (rte >= 85 ? ' green' : ' amber') + '">' + rte + '%</div>'
-                    + '<div class="mfc-kpi-sub">' + fmt.format(totalBatteryIn) + ' rein / ' + fmt.format(totalBatteryOut) + ' raus</div>'
+                    + '<div class="mfc-kpi-sub">' + fmtKwh.format(totalBatteryIn) + ' rein / ' + fmtKwh.format(totalBatteryOut) + ' raus</div>'
                 + '</div>';
         }
 
@@ -2206,7 +2209,7 @@ async function loadSelfConsumptionOpt() {
                 },
                 plugins: {
                     legend: { display: true, position: 'top', labels: { boxWidth: 10, font: { size: 9 } } },
-                    tooltip: { callbacks: { label: ctx => ctx.dataset.label + ': ' + fmt.format(ctx.parsed.y) + ' kWh' } }
+                    tooltip: { callbacks: { label: ctx => ctx.dataset.label + ': ' + fmtKwh.format(ctx.parsed.y) + ' kWh' } }
                 }
             }
         });
@@ -2291,7 +2294,7 @@ async function loadSocRange() {
                         order: 1
                     },
                     {
-                        label: LANG === 'de' ? 'SOC-Bereich' : 'SOC Range',
+                        label: LANG === 'de' ? 'Batterie-Bereich' : 'Battery Range',
                         data: data.map(d => d.max_soc - d.min_soc),
                         backgroundColor: 'rgba(34,197,94,0.5)',
                         borderColor: '#22c55e',
@@ -2857,9 +2860,9 @@ async function loadForecastVsReal() {
                     legend: { display: true, position: 'top', labels: { boxWidth: 12, font: { size: 10 } } },
                     tooltip: { callbacks: { label: ctx => {
                         const idx = ctx.dataIndex;
-                        let tip = ctx.dataset.label + ': ' + fmt2.format(ctx.parsed.y) + ' kWh';
+                        let tip = ctx.dataset.label + ': ' + fmtKwh.format(ctx.parsed.y) + ' kWh';
                         if (ctx.datasetIndex === 0 && dates[idx] === todayStr && fullDayForecast[idx] !== forecastData[idx]) {
-                            tip += ' (bis ' + currentHour + ':00, ' + (LANG === 'de' ? 'Tagesges.' : 'full day') + ': ' + fmt2.format(fullDayForecast[idx]) + ' kWh)';
+                            tip += ' (bis ' + currentHour + ':00, ' + (LANG === 'de' ? 'Tagesges.' : 'full day') + ': ' + fmtKwh.format(fullDayForecast[idx]) + ' kWh)';
                         }
                         if (ctx.datasetIndex === 1 && accuracyData[idx] != null) tip += ' (' + accuracyData[idx] + '%)';
                         return tip;
@@ -2896,6 +2899,106 @@ async function loadForecastVsReal() {
 
 setTimeout(loadForecastVsReal, 5000);
 
+// === Forecast Accuracy History (server-side forecast_log vs daily_solar) ===
+let _fcAccHistChart = null;
+async function loadForecastAccuracyHistory() {
+    try {
+        const res = await fetch('/api/forecast-accuracy?days=90');
+        const data = await res.json();
+        // Use openmeteo source (primary), fall back to first available
+        const src = data.openmeteo || data[Object.keys(data)[0]];
+        if (!src || !src.series || !src.series.length) return;
+
+        const series = src.series.filter(s => s.actual > 0.05);
+        if (!series.length) return;
+
+        const days = t('dayNames');
+        const labels = series.map(s => {
+            const dt = new Date(s.date);
+            return dt.getDate() + '.' + (dt.getMonth() + 1) + '.';
+        });
+
+        const accuracyPct = series.map(s => {
+            const mx = Math.max(s.predicted, s.actual);
+            return mx > 0 ? Math.max(0, Math.round((1 - Math.abs(s.predicted - s.actual) / mx) * 100)) : null;
+        });
+
+        const forecastVals = series.map(s => s.predicted);
+        const actualVals = series.map(s => s.actual);
+
+        // Title with stats
+        const titleEl = $('fcAccHistTitle');
+        if (titleEl) {
+            const valid = accuracyPct.filter(v => v != null);
+            const avg = valid.length ? Math.round(valid.reduce((a, b) => a + b, 0) / valid.length) : 0;
+            titleEl.textContent = (LANG === 'de' ? 'Genauigkeit (letzte ' : 'Accuracy (last ')
+                + series.length + (LANG === 'de' ? ' Tage, ' : ' days, ')
+                + '\u00D8 ' + avg + '%)';
+        }
+
+        if (_fcAccHistChart) _fcAccHistChart.destroy();
+        _fcAccHistChart = new Chart($('chart_fc_accuracy_history'), {
+            type: 'bar',
+            data: {
+                labels: labels,
+                datasets: [
+                    {
+                        label: t('forecast'),
+                        data: forecastVals,
+                        backgroundColor: 'rgba(245, 158, 11, 0.25)',
+                        borderColor: '#f59e0b',
+                        borderWidth: 1,
+                        borderRadius: 3,
+                        order: 2
+                    },
+                    {
+                        label: t('actual'),
+                        data: actualVals,
+                        backgroundColor: '#f59e0b',
+                        borderColor: '#f59e0b',
+                        borderWidth: 1,
+                        borderRadius: 3,
+                        order: 1
+                    }
+                ]
+            },
+            options: {
+                responsive: true, maintainAspectRatio: false, animation: false,
+                interaction: { intersect: false, mode: 'index' },
+                plugins: {
+                    legend: { display: true, position: 'top', labels: { boxWidth: 10, font: { size: 9 } } },
+                    tooltip: { callbacks: { label: ctx => {
+                        const i = ctx.dataIndex;
+                        let tip = ctx.dataset.label + ': ' + fmtKwh.format(ctx.parsed.y) + ' kWh';
+                        if (ctx.datasetIndex === 1 && accuracyPct[i] != null) tip += ' (' + accuracyPct[i] + '%)';
+                        return tip;
+                    } } }
+                },
+                scales: {
+                    y: { beginAtZero: true, grid: { color: chartGridColor() }, ticks: { maxTicksLimit: 5, callback: v => v + ' kWh' } },
+                    x: { grid: { display: false }, ticks: { maxTicksLimit: 15, font: { size: 9 } } }
+                }
+            },
+            plugins: [{
+                id: 'histAccLabels',
+                afterDatasetsDraw(chart) {
+                    const ctx2 = chart.ctx;
+                    const meta = chart.getDatasetMeta(1);
+                    ctx2.font = 'bold 8px system-ui';
+                    ctx2.textAlign = 'center';
+                    meta.data.forEach((bar, i) => {
+                        const acc = accuracyPct[i];
+                        if (acc == null) return;
+                        ctx2.fillStyle = acc >= 80 ? '#22c55e' : acc >= 60 ? '#eab308' : '#ef4444';
+                        ctx2.fillText(acc + '%', bar.x, bar.y - 3);
+                    });
+                }
+            }]
+        });
+    } catch (e) { console.warn('Forecast accuracy history error:', e); }
+}
+setTimeout(loadForecastAccuracyHistory, 6000);
+
 // === Amortisation + Break-Even (merged section with cumulative savings chart) ===
 let _amortChart = null;
 
@@ -2920,7 +3023,7 @@ function updateAmortisation(energyData) {
 
         // Total kWh produced card
         const totalKwhEl = $('totalKwhValue');
-        if (totalKwhEl) totalKwhEl.textContent = fmt.format(total.solar_kwh || 0);
+        if (totalKwhEl) totalKwhEl.textContent = fmtKwh.format(total.solar_kwh || 0);
     } catch (e) { console.warn('Amort error:', e); }
 }
 
@@ -2958,7 +3061,7 @@ async function loadAmortChart() {
                 const short = months[beDate.getMonth()] + ' ' + beDate.getFullYear();
                 if (dateEl) dateEl.textContent = short;
                 if (payoffEl) payoffEl.textContent =
-                    t('breakEvenAvgDay').replace('{kwh}', fmt2.format(avgDaily));
+                    t('breakEvenAvgDay').replace('{kwh}', fmtKwh.format(avgDaily));
             }
         } else {
             if (dateEl) dateEl.textContent = '—';
@@ -3171,7 +3274,7 @@ if (shareBtn) shareBtn.addEventListener('click', async () => {
     const kwh = accumulator_dailyKwh || 0;
     const forecastKwh = window._forecastKwh ? window._forecastKwh[new Date().toISOString().slice(0, 10)] || 0 : 0;
     const score = forecastKwh > 0 ? Math.min(100, Math.round(kwh / forecastKwh * 100)) : 0;
-    const text = t('shareText').replace('{kwh}', fmt2.format(kwh)).replace('{score}', score);
+    const text = t('shareText').replace('{kwh}', fmtKwh.format(kwh)).replace('{score}', score);
 
     if (navigator.share) {
         try {
@@ -3237,7 +3340,7 @@ async function loadHeatmap() {
                 cell.classList.add(level);
             }
             cell.setAttribute('data-date', cursor.getDate() + '.' + (cursor.getMonth() + 1) + '.');
-            cell.setAttribute('data-kwh', fmt2.format(kwh));
+            cell.setAttribute('data-kwh', fmtKwh.format(kwh));
             grid.appendChild(cell);
             cursor.setDate(cursor.getDate() + 1);
         }
@@ -3318,7 +3421,7 @@ async function loadBatteryCycles() {
         if (avgDailyKwh > 0.0001) {
             const yearsLeft = remaining * BATTERY_CAPACITY_KWH / avgDailyKwh / 365;
             hint.textContent = t('cycleEstimate')
-                .replace('{kwh}', fmt2.format(avgDailyKwh))
+                .replace('{kwh}', fmtKwh.format(avgDailyKwh))
                 .replace('{years}', fmt.format(yearsLeft));
         } else {
             hint.textContent = t('cycleEstimateNoData');
@@ -3340,9 +3443,9 @@ function updateEnergyFlowFromLatest(d) {
         const clipped = Math.max(0, Math.min(100, pct || 0));
         el.style.width = clipped + '%';
     };
-    $u('efDirectUse', fmt2.format(d.daily_direct_use_kwh || 0));
-    $u('efBatteryIn', fmt2.format(d.daily_battery_in_kwh || 0));
-    $u('efBatteryOut', fmt2.format(d.daily_battery_out_kwh || 0));
+    $u('efDirectUse', fmtKwh.format(d.daily_direct_use_kwh || 0));
+    $u('efBatteryIn', fmtKwh.format(d.daily_battery_in_kwh || 0));
+    $u('efBatteryOut', fmtKwh.format(d.daily_battery_out_kwh || 0));
 
     const dup = d.direct_use_pct || 0;
     const aut = d.autarkie_pct || 0;
@@ -3380,7 +3483,7 @@ async function loadBreakEven() {
             if (d.total_savings_eur >= d.system_cost_eur) {
                 hint.textContent = t('breakEvenPaidOff');
             } else if (d.break_even_date && d.avg_daily_kwh_last30 > 0) {
-                const line1 = t('breakEvenAvgDay').replace('{kwh}', fmt2.format(d.avg_daily_kwh_last30));
+                const line1 = t('breakEvenAvgDay').replace('{kwh}', fmtKwh.format(d.avg_daily_kwh_last30));
                 const line2 = t('breakEvenProjection') + ': ' + d.break_even_date;
                 hint.innerHTML = line1 + ' · ' + line2;
             } else {
@@ -3514,7 +3617,7 @@ async function loadCumulative() {
         const d = await res.json();
         const series = d.series || [];
         const total = $('cumTotalValue');
-        if (total) total.textContent = fmt2.format(d.total_kwh || 0);
+        if (total) total.textContent = fmtKwh.format(d.total_kwh || 0);
 
         if (series.length === 0) {
             const ms = $('cumMilestones');
@@ -3561,7 +3664,7 @@ async function loadCumulative() {
                 ms.innerHTML = '';
             } else {
                 ms.innerHTML = items.map(m =>
-                    `<div class="cum-milestone"><strong>${fmt2.format(m.threshold_kwh)} kWh</strong>${m.date}</div>`
+                    `<div class="cum-milestone"><strong>${fmtKwh.format(m.threshold_kwh)} kWh</strong>${m.date}</div>`
                 ).join('');
             }
         }
@@ -3652,7 +3755,7 @@ async function loadDistribution() {
             const kwh = maxKwh * i / 4;
             const yy = y(kwh);
             parts.push(`<line class="dist-grid-line" x1="${PAD_LEFT}" y1="${yy.toFixed(1)}" x2="${W - PAD_RIGHT}" y2="${yy.toFixed(1)}"/>`);
-            parts.push(`<text class="dist-axis-label" x="${PAD_LEFT - 4}" y="${(yy + 3).toFixed(1)}" text-anchor="end">${fmt2.format(kwh)}</text>`);
+            parts.push(`<text class="dist-axis-label" x="${PAD_LEFT - 4}" y="${(yy + 3).toFixed(1)}" text-anchor="end">${fmtKwh.format(kwh)}</text>`);
         }
 
         // Box for each month
@@ -3665,7 +3768,7 @@ async function loadDistribution() {
             parts.push(`<line class="dist-whisker" x1="${x1 + boxW * 0.3}" y1="${y(m.min).toFixed(1)}" x2="${x2 - boxW * 0.3}" y2="${y(m.min).toFixed(1)}"/>`);
             parts.push(`<line class="dist-whisker" x1="${x1 + boxW * 0.3}" y1="${y(m.max).toFixed(1)}" x2="${x2 - boxW * 0.3}" y2="${y(m.max).toFixed(1)}"/>`);
             // Box
-            parts.push(`<rect class="dist-box" x="${x1.toFixed(1)}" y="${y(m.q3).toFixed(1)}" width="${boxW.toFixed(1)}" height="${(y(m.q1) - y(m.q3)).toFixed(1)}"><title>${m.month} · n=${m.n} · median ${fmt2.format(m.median)} kWh · Q1 ${fmt2.format(m.q1)} – Q3 ${fmt2.format(m.q3)} · min ${fmt2.format(m.min)} · max ${fmt2.format(m.max)}</title></rect>`);
+            parts.push(`<rect class="dist-box" x="${x1.toFixed(1)}" y="${y(m.q3).toFixed(1)}" width="${boxW.toFixed(1)}" height="${(y(m.q1) - y(m.q3)).toFixed(1)}"><title>${m.month} · n=${m.n} · median ${fmtKwh.format(m.median)} kWh · Q1 ${fmtKwh.format(m.q1)} – Q3 ${fmtKwh.format(m.q3)} · min ${fmtKwh.format(m.min)} · max ${fmtKwh.format(m.max)}</title></rect>`);
             // Median line
             parts.push(`<line class="dist-median" x1="${x1.toFixed(1)}" y1="${y(m.median).toFixed(1)}" x2="${x2.toFixed(1)}" y2="${y(m.median).toFixed(1)}"/>`);
             // X axis month label
@@ -3792,8 +3895,8 @@ async function updateWeekComparison(energyData) {
         const maxKwh = Math.max(thisWeekKwh, lastWeekKwh, 0.01);
         $('wcBarLast').style.height = (lastWeekKwh / maxKwh * 100) + '%';
         $('wcBarThis').style.height = (thisWeekKwh / maxKwh * 100) + '%';
-        $('wcLastValue').textContent = fmt2.format(lastWeekKwh) + ' kWh';
-        $('wcThisValue').textContent = fmt2.format(thisWeekKwh) + ' kWh';
+        $('wcLastValue').textContent = fmtKwh.format(lastWeekKwh) + ' kWh';
+        $('wcThisValue').textContent = fmtKwh.format(thisWeekKwh) + ' kWh';
 
         const deltaEl = $('wcDelta');
         if (lastWeekKwh > 0) {
@@ -3839,7 +3942,7 @@ function checkWeeklyReport() {
 
         new Notification(t('weeklyReport'), {
             body: t('weeklyReportBody')
-                .replace('{kwh}', fmt2.format(totalKwh))
+                .replace('{kwh}', fmtKwh.format(totalKwh))
                 .replace('{eur}', fmtEur.format(savedEur)),
             icon: '/static/icon-192.png'
         });
@@ -3888,7 +3991,7 @@ async function loadFlowVariants(days) {
                     + `<span class="flow-anim-icon">${icon}</span>`
                     + `<span class="flow-anim-name">${name}</span>`
                     + (arrow ? `<span class="flow-anim-arrow">${arrow}</span>` : '')
-                    + `<span class="flow-anim-value" style="color:${color}">${fmt2.format(value)} kWh</span>`
+                    + `<span class="flow-anim-value" style="color:${color}">${fmtKwh.format(value)} kWh</span>`
                     + `</div>`;
             };
             animEl.innerHTML =
@@ -3897,7 +4000,7 @@ async function loadFlowVariants(days) {
                 + row('🔋↑', 'In Akku gespeichert', batIn, '#60a5fa', '↓')
                 + row('🔋↓', 'Aus Akku entnommen', batOut, '#c084fc', '↑')
                 + row('🏠', 'Aus Netz bezogen', grid, '#888', '→')
-                + `<div style="text-align:center;margin-top:8px;font-size:0.75rem;color:var(--text-dim)">Gesamt verbraucht: <strong style="color:var(--text)">${fmt2.format(load)} kWh</strong></div>`;
+                + `<div style="text-align:center;margin-top:8px;font-size:0.75rem;color:var(--text-dim)">Gesamt verbraucht: <strong style="color:var(--text)">${fmtKwh.format(load)} kWh</strong></div>`;
         }
     } catch (e) { console.warn('Flow variants error:', e); }
 }
@@ -3947,14 +4050,14 @@ document.addEventListener('keydown', (e) => {
 // Collapsible Sections
 // ============================================================================
 (function initCollapsibleSections() {
-    // Everything up to and including forecastVsRealBox (Prognose vs. Real) stays open.
+    // Everything up to and including Energie-Bilanz stays open.
     // Everything after is collapsed by default.
-    const CUTOFF_ID = 'monthlyForecastSection';
+    const CUTOFF_ID = 'flowAnimatedSection';
 
     // Select all section-like containers
     const sections = document.querySelectorAll('.today-box[id]');
     // Reset saved state when cutoff changes (version bump clears stale prefs)
-    const COLLAPSE_VERSION = 3;
+    const COLLAPSE_VERSION = 4;
     const savedState = (() => {
         try {
             const raw = JSON.parse(localStorage.getItem('collapsedSections') || '{}');
