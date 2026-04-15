@@ -2495,7 +2495,19 @@ async function loadCombinedChart(hours) {
     try {
         const res = await fetch('/api/readings?hours=' + hours);
         const rows = await res.json();
-        if (!rows.length) return;
+        if (!rows.length) {
+            if (combinedChart) { combinedChart.destroy(); combinedChart = null; }
+            const canvas = $('chart_combined');
+            if (canvas) {
+                const ctx = canvas.getContext('2d');
+                ctx.clearRect(0, 0, canvas.width, canvas.height);
+                ctx.fillStyle = getComputedStyle(document.body).getPropertyValue('--text-dim') || '#888';
+                ctx.font = '12px sans-serif';
+                ctx.textAlign = 'center';
+                ctx.fillText('Keine Daten fur diesen Zeitraum', canvas.width / 2, canvas.height / 2);
+            }
+            return;
+        }
 
         const step = Math.max(1, Math.floor(rows.length / 800));
         const data = rows.filter((_, i) => i % step === 0);
