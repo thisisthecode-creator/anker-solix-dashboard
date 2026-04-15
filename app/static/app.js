@@ -836,14 +836,16 @@ function updateUI(d) {
         solarKwhArc.setAttribute('stroke-dashoffset', (RING_CIRC - RING_CIRC * pct / 100).toFixed(1));
     }
 
-    // Ring 4: Today's Savings € (0-0.75 € range = 3 kWh x 0.25 €/kWh)
-    const savedEur = d.daily_savings_eur || 0;
-    const savRingEl = $('savingsRingVal');
-    if (savRingEl) savRingEl.textContent = fmtEur.format(savedEur) + ' €';
-    const savArc = $('savingsArc');
-    if (savArc) {
-        const pct = Math.min(100, savedEur / 0.75 * 100);
-        savArc.setAttribute('stroke-dashoffset', (RING_CIRC - RING_CIRC * pct / 100).toFixed(1));
+    // Ring 4: Today's Sunshine Hours from forecast (0-16h range)
+    const todaySunH = window._forecastSunshine && window._forecastSunshine[warsawToday()];
+    const sunRingEl = $('sunHoursRingVal');
+    if (sunRingEl && todaySunH != null) {
+        sunRingEl.textContent = fmt.format(todaySunH) + 'h';
+        const sunArc = $('sunHoursArc');
+        if (sunArc) {
+            const pct = Math.min(100, todaySunH / 16 * 100);
+            sunArc.setAttribute('stroke-dashoffset', (RING_CIRC - RING_CIRC * pct / 100).toFixed(1));
+        }
     }
     // Live power-flow animation (Solar / Battery / Load / Grid icons + particles)
     try { if (typeof updatePowerFlow === 'function') updatePowerFlow(d); } catch (e) {}
