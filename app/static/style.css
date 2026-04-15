@@ -201,6 +201,12 @@ header h1 {
     font-variant-numeric: tabular-nums;
     text-align: center;
 }
+.card-peak {
+    margin-top: 2px;
+    font-size: 0.65rem;
+    color: var(--solar);
+    font-weight: 600;
+}
 
 .card.solar .card-value { color: var(--solar); }
 .card.temp .card-value { color: var(--blue); }
