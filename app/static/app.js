@@ -1984,7 +1984,7 @@ async function loadSelfConsumptionOpt() {
             const names = LANG === 'de'
                 ? ['Jan', 'Feb', 'M\u00E4r', 'Apr', 'Mai', 'Jun', 'Jul', 'Aug', 'Sep', 'Okt', 'Nov', 'Dez']
                 : ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
-            return names[parseInt(mm) - 1] + ' ' + y.slice(2);
+            return names[parseInt(mm) - 1] + " '" + y.slice(2);
         });
 
         if (_selfConsOptChart) _selfConsOptChart.destroy();
