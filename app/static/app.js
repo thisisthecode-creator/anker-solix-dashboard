@@ -807,13 +807,13 @@ function updateUI(d) {
     // === Triple-ring update in dash overview ===
     const RING_CIRC = 144.51; // 2 * π * 23
 
-    // Ring 1: Solar W (0–440 W range for 2×220W panels)
+    // Ring 1: Solar W (0-400 W range for 2x200W panels)
     const solarW = d.solar_watts || 0;
     const solarWEl = $('solarWattRingVal');
     if (solarWEl) solarWEl.textContent = Math.round(solarW);
     const solarWArc = $('solarWattArc');
     if (solarWArc) {
-        const pct = Math.min(100, solarW / 440 * 100);
+        const pct = Math.min(100, solarW / 400 * 100);
         solarWArc.setAttribute('stroke-dashoffset', (RING_CIRC - RING_CIRC * pct / 100).toFixed(1));
     }
 
@@ -826,7 +826,7 @@ function updateUI(d) {
         autArc.setAttribute('stroke-dashoffset', (RING_CIRC - RING_CIRC * Math.min(100, aut) / 100).toFixed(1));
     }
 
-    // Ring 3: Today's Solar kWh (0–3 kWh range, generous for 2×220W)
+    // Ring 3: Today's Solar kWh (0-3 kWh range, generous for 2x200W)
     const solarKwh = d.daily_kwh || 0;
     const solarKwhEl = $('solarKwhRingVal');
     if (solarKwhEl) solarKwhEl.textContent = fmtKwh.format(solarKwh);
@@ -1158,17 +1158,20 @@ function getDailyData() {
 }
 
 // === Solar Forecast ===
-const PANEL_KWP = 0.44;
+const PANEL_KWP = 0.40;        // 2 × 200 W flexible panels
 const PANEL_EFFICIENCY = 0.85;
 
+// 30° bracket + 30° panel bend → tilt sweeps 60°..90° from horizontal
 const CURVE_STRIPS = [
-    { tilt: 56, weight: 2/5 },
-    { tilt: 70, weight: 2/5 },
+    { tilt: 63, weight: 1/5 },
+    { tilt: 69, weight: 1/5 },
     { tilt: 75, weight: 1/5 },
+    { tilt: 81, weight: 1/5 },
+    { tilt: 87, weight: 1/5 },
 ];
 // Open-Meteo azimuth convention: 0=south, -90=east, +90=west, ±180=north
-// Panel compass heading is 245° (WSW) → Open-Meteo = 245 - 180 = 65
-const AZIMUTH = 65;
+// Panel compass heading is 240° (SW) → Open-Meteo = 240 - 180 = 60
+const AZIMUTH = 60;
 
 async function fetchGTI(tilt) {
     const res = await fetch(
