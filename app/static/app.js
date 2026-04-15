@@ -3437,29 +3437,62 @@ async function loadUsagePatterns() {
 loadUsagePatterns();
 setInterval(loadUsagePatterns, 600000);  // refresh every 10 min
 
-// === SVG tap-tooltip for mobile (title elements don't show on touch) ===
-(function initSvgTapTooltip() {
+// === Tap/hover tooltip for SVG charts + heatmap (mobile + desktop) ===
+(function initTapTooltip() {
     let tip = null;
     function show(text, x, y) {
         if (!tip) {
             tip = document.createElement('div');
-            tip.style.cssText = 'position:fixed;z-index:9999;background:var(--card,#1a1a2e);border:1px solid var(--card-border,#333);border-radius:6px;padding:4px 8px;font-size:0.65rem;color:var(--text,#eee);pointer-events:none;white-space:nowrap;box-shadow:0 2px 8px rgba(0,0,0,0.3)';
+            tip.id = 'tapTip';
+            tip.style.cssText = 'position:fixed;z-index:9999;background:var(--card,#1a1a2e);border:1px solid var(--card-border,#333);border-radius:6px;padding:5px 10px;font-size:0.7rem;color:var(--text,#eee);pointer-events:none;white-space:pre-line;box-shadow:0 2px 8px rgba(0,0,0,0.3);max-width:280px';
             document.body.appendChild(tip);
         }
         tip.textContent = text;
         tip.style.display = 'block';
-        tip.style.left = Math.min(x, window.innerWidth - tip.offsetWidth - 8) + 'px';
-        tip.style.top = (y - 36) + 'px';
+        // Position after render so offsetWidth is correct
+        requestAnimationFrame(() => {
+            const left = Math.max(4, Math.min(x - tip.offsetWidth / 2, window.innerWidth - tip.offsetWidth - 4));
+            tip.style.left = left + 'px';
+            tip.style.top = Math.max(4, y - tip.offsetHeight - 8) + 'px';
+        });
     }
     function hide() { if (tip) tip.style.display = 'none'; }
-    document.addEventListener('click', e => {
-        const tipped = e.target.closest('[data-tip]');
-        const svgRect = e.target.closest('rect');
-        const el = tipped || svgRect;
-        if (!el) { hide(); return; }
-        const titleEl = el.querySelector('title');
-        const text = el.getAttribute('data-tip') || (titleEl ? titleEl.textContent : '') || el.getAttribute('title') || '';
+
+    function findTipText(target) {
+        // Walk up from target to find tooltip text
+        let el = target;
+        for (let i = 0; i < 5 && el; i++) {
+            // HTML data-tip attribute
+            if (el.getAttribute && el.getAttribute('data-tip')) return el.getAttribute('data-tip');
+            // HTML title attribute (heatmap cells)
+            if (el.title && el.classList && el.classList.contains('heatmap-cell')) return el.title;
+            // SVG <title> child (rect, circle, etc.)
+            if (el.tagName === 'rect' || el.tagName === 'circle' || el.tagName === 'path') {
+                const t = el.querySelector('title');
+                if (t) return t.textContent;
+            }
+            el = el.parentElement || el.parentNode;
+        }
+        return '';
+    }
+
+    // Works for both click (mobile) and mouseover (desktop)
+    function handleEvent(e) {
+        const text = findTipText(e.target);
+        if (text) {
+            show(text, e.clientX || e.touches?.[0]?.clientX || 0, e.clientY || e.touches?.[0]?.clientY || 0);
+        } else {
+            hide();
+        }
+    }
+
+    document.addEventListener('click', handleEvent);
+    document.addEventListener('mouseover', e => {
+        const text = findTipText(e.target);
         if (text) show(text, e.clientX, e.clientY); else hide();
+    });
+    document.addEventListener('mouseout', e => {
+        if (e.target.tagName === 'rect' || (e.target.classList && e.target.classList.contains('heatmap-cell'))) hide();
     });
     document.addEventListener('scroll', hide, true);
 })();
