@@ -347,8 +347,9 @@ async function poll() {
         if (r.status === 401) { location.href = '/auth/login'; return; }
         const d = await r.json();
         const p = document.getElementById('pill');
-        p.textContent = d.connected ? 'LIVE' : 'OFFLINE';
-        p.className = 'badge ' + (d.connected ? 'b-live' : 'b-off');
+        if (d.connected) { p.textContent = 'LIVE'; p.className = 'badge b-live'; }
+        else if (d.stale) { p.textContent = 'CACHED'; p.className = 'badge b-time'; }
+        else { p.textContent = 'OFFLINE'; p.className = 'badge b-off'; }
         document.getElementById('pillN').textContent = d.field_count + ' Felder';
         document.getElementById('pillTs').textContent = (d.timestamp || '').slice(11, 19) || '--:--:--';
         if (d.fields && Object.keys(d.fields).length) update(d.fields);
