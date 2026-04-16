@@ -45,3 +45,9 @@ ANOMALY_SIGMA_THRESHOLD = 2.0
 # Auth (optional): when set, /api/* + / require a signed session cookie
 # obtained from POST /auth/login with this password. Empty = public (no auth).
 DASHBOARD_PASSWORD = os.getenv("DASHBOARD_PASSWORD", "")
+
+# Web Push (VAPID): set all three on server to enable real push notifications.
+# Generate keypair once with scripts/gen_vapid.py and put into .env
+VAPID_PUBLIC_KEY = os.getenv("VAPID_PUBLIC_KEY", "")
+VAPID_PRIVATE_KEY = os.getenv("VAPID_PRIVATE_KEY", "")
+VAPID_CLAIMS_SUB = os.getenv("VAPID_CLAIMS_SUB", "mailto:admin@example.com")
