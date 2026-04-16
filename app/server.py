@@ -411,7 +411,11 @@ def _push_allowed(event: str, now: float) -> bool:
 
 
 async def _maybe_push_events(data: dict, now: float):
-    """Server-side push triggers (iOS PWA works in background)."""
+    """Server-side push triggers matching Anker Solix error codes.
+
+    Uses device sensor data as proxies for BMS error codes (E0027/E0028/E0032/
+    E0033 = temperature, E0036 = AC output, E0009/E0010 = USB-C overcurrent).
+    """
     global _last_battery_soc, _last_solar_w
     if not push_lib.is_configured():
         return
@@ -419,25 +423,81 @@ async def _maybe_push_events(data: dict, now: float):
         soc = int(data.get("battery_soc", 0) or 0)
         temp = float(data.get("temperature", 0) or 0)
         solar = float(data.get("solar_watts", 0) or 0)
+        ac_out = float(data.get("ac_output_watts", 0) or 0)
+        usbc1 = float(data.get("usbc_1_watts", 0) or 0)
+        usbc2 = float(data.get("usbc_2_watts", 0) or 0)
+        usbc3 = float(data.get("usbc_3_watts", 0) or 0)
+        dc_12v = float(data.get("dc_12v_watts", 0) or 0)
 
-        # Battery low (cross below 20%)
-        if _last_battery_soc is not None and _last_battery_soc >= 20 and soc < 20 and soc > 0:
+        # --- Battery state ---
+        if _last_battery_soc is not None and _last_battery_soc >= 20 and 0 < soc < 20:
             if _push_allowed("battery_low", now):
                 await push_lib.send_notification(
                     "Akku niedrig", f"Akku bei {soc}% - laden empfohlen.", "battery_low"
                 )
-        # Battery full (cross to 100%)
         if _last_battery_soc is not None and _last_battery_soc < 100 and soc >= 100:
             if _push_allowed("battery_full", now):
                 await push_lib.send_notification(
                     "Akku voll", "Akku ist zu 100% geladen.", "battery_full"
                 )
-        # Temperature high
-        if temp >= 40 and _push_allowed("temp_high", now):
+
+        # --- BMS temperature errors (E0027/E0028/E0032/E0033) ---
+        # E0032: Discharge temp > 63°C - stop using until <60°C
+        if temp >= 63 and _push_allowed("e0032_discharge_hot", now):
             await push_lib.send_notification(
-                "Temperatur-Warnung", f"Powerstation bei {temp:.1f}°C - Uberhitzungsgefahr!", "temp_high"
+                "E0032: Entladung zu heiss",
+                f"BMS bei {temp:.1f}°C - Nutzung stoppen bis unter 60°C!",
+                "e0032",
             )
-        # Solar active (transition from 0W)
+        # E0027: Charge temp > 58°C - stop charging until <55°C
+        elif temp >= 58 and _push_allowed("e0027_charge_hot", now):
+            await push_lib.send_notification(
+                "E0027: Ladung zu heiss",
+                f"BMS bei {temp:.1f}°C - Laden stoppen bis unter 55°C!",
+                "e0027",
+            )
+        # E0028: Charge temp < 2°C - cannot charge
+        if 0 < temp < 2 and _push_allowed("e0028_charge_cold", now):
+            await push_lib.send_notification(
+                "E0028: Ladung zu kalt",
+                f"BMS bei {temp:.1f}°C - Erwarme auf uber 3°C zum Laden.",
+                "e0028",
+            )
+        # E0033: Discharge temp < -19°C
+        if temp <= -19 and _push_allowed("e0033_discharge_cold", now):
+            await push_lib.send_notification(
+                "E0033: Entladung zu kalt",
+                f"BMS bei {temp:.1f}°C - Erwarme auf uber -17°C.",
+                "e0033",
+            )
+
+        # --- AC output overload (E0036: > 2000W) ---
+        if ac_out > 2000 and _push_allowed("e0036_ac_overload", now):
+            await push_lib.send_notification(
+                "E0036: AC Uberlast",
+                f"AC-Ausgang bei {int(ac_out)}W - Limit 2000W uberschritten!",
+                "e0036",
+            )
+
+        # --- USB-C overload (E0009/E0010: > 100W indicates likely issue) ---
+        max_usbc = max(usbc1, usbc2, usbc3)
+        if max_usbc > 105 and _push_allowed("e0009_usbc_overload", now):
+            port = "C1" if usbc1 == max_usbc else ("C2" if usbc2 == max_usbc else "C3")
+            await push_lib.send_notification(
+                "E0009/E0010: USB-C Uberlast",
+                f"USB-{port} bei {int(max_usbc)}W - Gerat abziehen!",
+                "e0009",
+            )
+
+        # --- Car socket / 12V overload (E0014 proxy: high 12V draw) ---
+        if dc_12v > 120 and _push_allowed("e0014_12v_overload", now):
+            await push_lib.send_notification(
+                "E0014: 12V Uberlast",
+                f"KFZ-Dose bei {int(dc_12v)}W - Gerat prufen!",
+                "e0014",
+            )
+
+        # --- Solar activation ---
         if _last_solar_w is not None and _last_solar_w <= 5 and solar > 20:
             if _push_allowed("solar_active", now):
                 await push_lib.send_notification(
