@@ -19,7 +19,10 @@ from pathlib import Path
 from app.config import (
     TIMEZONE, WS_BROADCAST_INTERVAL, ELECTRICITY_PRICE_EUR,
     BATTERY_CAPACITY_WH, SYSTEM_COST_EUR, DASHBOARD_PASSWORD,
+    VAPID_PUBLIC_KEY,
 )
+from app import push as push_lib
+from app.database import add_push_subscription, remove_push_subscription
 from app.database import (
     init_db, close_pool, upsert_daily, update_monthly,
     update_yearly, get_daily, get_monthly, get_yearly,
@@ -58,6 +61,12 @@ CYCLE_SAVE_S = 60        # persist battery_cycles.json at most once a minute
 _last_write_fp: tuple = ()
 _last_daily_upsert: float = 0
 _last_cycle_save: float = 0
+
+# Push notification debounce state (keyed by event type)
+_last_push_sent: dict[str, float] = {}
+_PUSH_COOLDOWN_S = 3600  # at most once per hour per event type
+_last_battery_soc: int | None = None
+_last_solar_w: float | None = None
 
 # Circular buffer of recent raw MQTT messages (RAM only, NOT saved to disk).
 # Used by /api/mqtt-log for the live debug table on the mqtt-monitor page.
@@ -388,6 +397,57 @@ async def on_mqtt_data(raw: dict):
     if (now - _last_cycle_save) >= CYCLE_SAVE_S:
         battery_cycles.save()
         _last_cycle_save = now
+
+    # --- 7. Push notifications (debounced by event type) ---
+    await _maybe_push_events(data, now)
+
+
+def _push_allowed(event: str, now: float) -> bool:
+    last = _last_push_sent.get(event, 0)
+    if now - last < _PUSH_COOLDOWN_S:
+        return False
+    _last_push_sent[event] = now
+    return True
+
+
+async def _maybe_push_events(data: dict, now: float):
+    """Server-side push triggers (iOS PWA works in background)."""
+    global _last_battery_soc, _last_solar_w
+    if not push_lib.is_configured():
+        return
+    try:
+        soc = int(data.get("battery_soc", 0) or 0)
+        temp = float(data.get("temperature", 0) or 0)
+        solar = float(data.get("solar_watts", 0) or 0)
+
+        # Battery low (cross below 20%)
+        if _last_battery_soc is not None and _last_battery_soc >= 20 and soc < 20 and soc > 0:
+            if _push_allowed("battery_low", now):
+                await push_lib.send_notification(
+                    "Akku niedrig", f"Akku bei {soc}% - laden empfohlen.", "battery_low"
+                )
+        # Battery full (cross to 100%)
+        if _last_battery_soc is not None and _last_battery_soc < 100 and soc >= 100:
+            if _push_allowed("battery_full", now):
+                await push_lib.send_notification(
+                    "Akku voll", "Akku ist zu 100% geladen.", "battery_full"
+                )
+        # Temperature high
+        if temp >= 40 and _push_allowed("temp_high", now):
+            await push_lib.send_notification(
+                "Temperatur-Warnung", f"Powerstation bei {temp:.1f}°C - Uberhitzungsgefahr!", "temp_high"
+            )
+        # Solar active (transition from 0W)
+        if _last_solar_w is not None and _last_solar_w <= 5 and solar > 20:
+            if _push_allowed("solar_active", now):
+                await push_lib.send_notification(
+                    "Solar aktiv", f"Solar-Eingang erkannt: {int(solar)} W.", "solar_active"
+                )
+
+        _last_battery_soc = soc
+        _last_solar_w = solar
+    except Exception as e:
+        logger.warning("Push event check failed: %s", e)
 
 
 async def _background_reconnect():
@@ -1038,6 +1098,46 @@ async def api_battery_cycles():
     """Pre-computed battery cycle stats. Replaces the old client-side
     calculation that fetched a full year of /api/readings on every load."""
     return battery_cycles.stats()
+
+
+@app.get("/api/push/key")
+async def api_push_key():
+    """Public VAPID key + enabled flag. Browser needs this to subscribe."""
+    return {"public_key": VAPID_PUBLIC_KEY, "enabled": push_lib.is_configured()}
+
+
+@app.post("/api/push/subscribe")
+async def api_push_subscribe(request: Request):
+    body = await request.json()
+    endpoint = body.get("endpoint", "")
+    keys = body.get("keys", {}) or {}
+    p256dh = keys.get("p256dh", "")
+    auth = keys.get("auth", "")
+    if not (endpoint and p256dh and auth):
+        raise HTTPException(400, "invalid subscription")
+    ua = request.headers.get("user-agent", "")[:200]
+    await add_push_subscription(endpoint, p256dh, auth, ua)
+    return {"ok": True}
+
+
+@app.post("/api/push/unsubscribe")
+async def api_push_unsubscribe(request: Request):
+    body = await request.json()
+    endpoint = body.get("endpoint", "")
+    if endpoint:
+        await remove_push_subscription(endpoint)
+    return {"ok": True}
+
+
+@app.post("/api/push/test")
+async def api_push_test():
+    """Fire a test notification to all subscribed clients."""
+    sent = await push_lib.send_notification(
+        title="Anker Solix Test",
+        body="Push notifications funktionieren!",
+        tag="test",
+    )
+    return {"sent": sent, "enabled": push_lib.is_configured()}
 
 
 _FORECAST_CACHE = ARCHIVE_DIR.parent / "forecast_cache.json"
