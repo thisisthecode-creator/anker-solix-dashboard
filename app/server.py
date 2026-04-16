@@ -471,30 +471,53 @@ async def _maybe_push_events(data: dict, now: float):
                 "e0033",
             )
 
-        # --- AC output overload (E0036: > 2000W) ---
+        # --- AC output overload (E0036: > 2000W rated max) ---
+        # Warn at 90% for early heads-up, critical at/above 2000W
         if ac_out > 2000 and _push_allowed("e0036_ac_overload", now):
             await push_lib.send_notification(
                 "E0036: AC Uberlast",
                 f"AC-Ausgang bei {int(ac_out)}W - Limit 2000W uberschritten!",
                 "e0036",
             )
+        elif ac_out > 1800 and _push_allowed("ac_high", now):
+            await push_lib.send_notification(
+                "AC Last hoch",
+                f"AC-Ausgang bei {int(ac_out)}W - nahert sich 2000W Limit.",
+                "ac_high",
+            )
 
-        # --- USB-C overload (E0009/E0010: > 100W indicates likely issue) ---
-        max_usbc = max(usbc1, usbc2, usbc3)
-        if max_usbc > 105 and _push_allowed("e0009_usbc_overload", now):
-            port = "C1" if usbc1 == max_usbc else ("C2" if usbc2 == max_usbc else "C3")
+        # --- USB-C overload (E0009/E0010) ---
+        # USB-C1: 15W max (C1 alone) / 20W (with USB-A combined)
+        # USB-C2, USB-C3: 140W max each (PD3.1 up to 28V x 5A)
+        if usbc1 > 16 and _push_allowed("e0008_usbc1_overload", now):
+            await push_lib.send_notification(
+                "E0008: USB-C1 Uberlast",
+                f"USB-C1 bei {int(usbc1)}W - Limit 15W uberschritten!",
+                "e0008",
+            )
+        max_c23 = max(usbc2, usbc3)
+        if max_c23 > 140 and _push_allowed("e0009_usbc_overload", now):
+            port = "C2" if usbc2 == max_c23 else "C3"
             await push_lib.send_notification(
                 "E0009/E0010: USB-C Uberlast",
-                f"USB-{port} bei {int(max_usbc)}W - Gerat abziehen!",
+                f"USB-{port} bei {int(max_c23)}W - Limit 140W uberschritten!",
                 "e0009",
             )
 
-        # --- Car socket / 12V overload (E0014 proxy: high 12V draw) ---
+        # --- Car socket / 12V overload (E0014: 12V x 10A = 120W max) ---
         if dc_12v > 120 and _push_allowed("e0014_12v_overload", now):
             await push_lib.send_notification(
                 "E0014: 12V Uberlast",
-                f"KFZ-Dose bei {int(dc_12v)}W - Gerat prufen!",
+                f"KFZ-Dose bei {int(dc_12v)}W - Limit 120W uberschritten!",
                 "e0014",
+            )
+
+        # --- Solar input overload (> 600W max rated) ---
+        if solar > 600 and _push_allowed("solar_overload", now):
+            await push_lib.send_notification(
+                "Solar Uberlast",
+                f"Solar-Eingang bei {int(solar)}W - Limit 600W uberschritten!",
+                "solar_overload",
             )
 
         # --- Solar activation ---
