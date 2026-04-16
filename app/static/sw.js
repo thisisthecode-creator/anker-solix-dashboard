@@ -1,4 +1,4 @@
-const CACHE = 'solar-v121';
+const CACHE = 'solar-v122';
 const API_CACHE = 'solar-api-v1';
 const API_CACHE_MAX_AGE = 5 * 60 * 1000; // 5 minutes
 
@@ -18,33 +18,6 @@ self.addEventListener('activate', e => {
     caches.keys().then(keys =>
       Promise.all(keys.filter(k => k !== CACHE && k !== API_CACHE).map(k => caches.delete(k)))
     ).then(() => self.clients.claim())
-  );
-});
-
-// === Web Push (VAPID) — receives server-sent notifications in background ===
-self.addEventListener('push', e => {
-  let data = { title: 'Anker Solix', body: 'Update', tag: 'default', url: '/' };
-  try { if (e.data) data = { ...data, ...e.data.json() }; } catch (_) {
-    try { data.body = e.data.text(); } catch (_) {}
-  }
-  e.waitUntil(self.registration.showNotification(data.title, {
-    body: data.body,
-    icon: '/static/icon-192.png',
-    badge: '/static/icon-192.png',
-    tag: data.tag,
-    data: { url: data.url },
-    renotify: true,
-  }));
-});
-
-self.addEventListener('notificationclick', e => {
-  e.notification.close();
-  const url = (e.notification.data && e.notification.data.url) || '/';
-  e.waitUntil(
-    self.clients.matchAll({ type: 'window', includeUncontrolled: true }).then(list => {
-      for (const c of list) { if ('focus' in c) return c.focus(); }
-      if (self.clients.openWindow) return self.clients.openWindow(url);
-    })
   );
 });
 
