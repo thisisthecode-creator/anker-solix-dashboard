@@ -165,15 +165,6 @@ async def init_db():
             PRIMARY KEY (date, source)
         );
         CREATE INDEX IF NOT EXISTS idx_forecast_log_date ON forecast_log(date);
-
-        CREATE TABLE IF NOT EXISTS push_subscriptions (
-            endpoint TEXT PRIMARY KEY,
-            p256dh TEXT NOT NULL,
-            auth TEXT NOT NULL,
-            user_agent TEXT DEFAULT '',
-            created_at TEXT NOT NULL,
-            last_sent_at TEXT DEFAULT ''
-        );
     """)
 
     # --- Migrate: add extra columns to daily_solar if missing ---
@@ -1173,39 +1164,3 @@ async def get_charging_sessions(days: int = 90) -> dict:
         stats = {}
 
     return {"sessions": sessions[-200:], "stats": stats}
-
-
-# === Push subscriptions ======================================================
-
-async def add_push_subscription(endpoint: str, p256dh: str, auth: str, user_agent: str = "") -> None:
-    db = await get_pool()
-    now = datetime.now().isoformat(timespec="seconds")
-    await db.execute(
-        """INSERT INTO push_subscriptions (endpoint, p256dh, auth, user_agent, created_at)
-           VALUES (?, ?, ?, ?, ?)
-           ON CONFLICT(endpoint) DO UPDATE SET p256dh=excluded.p256dh,
-             auth=excluded.auth, user_agent=excluded.user_agent""",
-        (endpoint, p256dh, auth, user_agent, now),
-    )
-    await db.commit()
-
-
-async def remove_push_subscription(endpoint: str) -> None:
-    db = await get_pool()
-    await db.execute("DELETE FROM push_subscriptions WHERE endpoint = ?", (endpoint,))
-    await db.commit()
-
-
-async def get_push_subscriptions() -> list[dict]:
-    db = await get_pool()
-    cur = await db.execute("SELECT endpoint, p256dh, auth FROM push_subscriptions")
-    return [{"endpoint": r[0], "p256dh": r[1], "auth": r[2]} for r in await cur.fetchall()]
-
-
-async def mark_push_sent(endpoint: str) -> None:
-    db = await get_pool()
-    await db.execute(
-        "UPDATE push_subscriptions SET last_sent_at = ? WHERE endpoint = ?",
-        (datetime.now().isoformat(timespec="seconds"), endpoint),
-    )
-    await db.commit()

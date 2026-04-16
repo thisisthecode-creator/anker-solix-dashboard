@@ -463,79 +463,15 @@ if (notifBtn) {
         }
         localStorage.setItem('notif', notifEnabled);
         updateNotifBtn();
-        // Register/unregister server-side Web Push
-        if (notifEnabled) {
-            subscribeWebPush().catch(e => console.warn('Web Push subscribe failed:', e));
-        } else {
-            unsubscribeWebPush().catch(() => {});
-        }
     });
-    // Double-tap bell = test notification (via server, so it works when closed)
-    notifBtn.addEventListener('dblclick', async () => {
+    // Double-tap bell = test notification
+    notifBtn.addEventListener('dblclick', () => {
         if (!('Notification' in window) || Notification.permission !== 'granted') {
             alert(t('notifNotSupported'));
             return;
         }
-        try {
-            const r = await fetch('/api/push/test', { method: 'POST' });
-            const d = await r.json();
-            if (d.sent > 0) {
-                // Server push sent - user will get it even when app is closed
-                return;
-            }
-        } catch (_) {}
-        // Fallback: local notification if push not configured/subscribed
         new Notification('Test', { body: 'Push-Benachrichtigungen funktionieren!', icon: '/static/icon-192.png' });
     });
-}
-
-// === Web Push (VAPID) registration ===
-function urlBase64ToUint8Array(base64) {
-    const padding = '='.repeat((4 - base64.length % 4) % 4);
-    const b64 = (base64 + padding).replace(/-/g, '+').replace(/_/g, '/');
-    const raw = atob(b64);
-    const arr = new Uint8Array(raw.length);
-    for (let i = 0; i < raw.length; i++) arr[i] = raw.charCodeAt(i);
-    return arr;
-}
-
-async function subscribeWebPush() {
-    if (!('serviceWorker' in navigator) || !('PushManager' in window)) return;
-    const keyRes = await fetch('/api/push/key');
-    const { public_key, enabled } = await keyRes.json();
-    if (!enabled || !public_key) return;
-    const reg = await navigator.serviceWorker.ready;
-    let sub = await reg.pushManager.getSubscription();
-    if (!sub) {
-        sub = await reg.pushManager.subscribe({
-            userVisibleOnly: true,
-            applicationServerKey: urlBase64ToUint8Array(public_key),
-        });
-    }
-    await fetch('/api/push/subscribe', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(sub.toJSON()),
-    });
-}
-
-async function unsubscribeWebPush() {
-    if (!('serviceWorker' in navigator)) return;
-    const reg = await navigator.serviceWorker.ready;
-    const sub = await reg.pushManager.getSubscription();
-    if (sub) {
-        await fetch('/api/push/unsubscribe', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ endpoint: sub.endpoint }),
-        });
-        await sub.unsubscribe();
-    }
-}
-
-// Auto-resubscribe on page load if previously enabled
-if (notifEnabled && 'Notification' in window && Notification.permission === 'granted') {
-    subscribeWebPush().catch(() => {});
 }
 
 let notifBatteryFullSent = false;

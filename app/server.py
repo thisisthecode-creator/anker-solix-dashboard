@@ -19,10 +19,7 @@ from pathlib import Path
 from app.config import (
     TIMEZONE, WS_BROADCAST_INTERVAL, ELECTRICITY_PRICE_EUR,
     BATTERY_CAPACITY_WH, SYSTEM_COST_EUR, DASHBOARD_PASSWORD,
-    VAPID_PUBLIC_KEY,
 )
-from app import push as push_lib
-from app.database import add_push_subscription, remove_push_subscription
 from app.database import (
     init_db, close_pool, upsert_daily, update_monthly,
     update_yearly, get_daily, get_monthly, get_yearly,
@@ -61,12 +58,6 @@ CYCLE_SAVE_S = 60        # persist battery_cycles.json at most once a minute
 _last_write_fp: tuple = ()
 _last_daily_upsert: float = 0
 _last_cycle_save: float = 0
-
-# Push notification debounce state (keyed by event type)
-_last_push_sent: dict[str, float] = {}
-_PUSH_COOLDOWN_S = 3600  # at most once per hour per event type
-_last_battery_soc: int | None = None
-_last_solar_w: float | None = None
 
 # Circular buffer of recent raw MQTT messages (RAM only, NOT saved to disk).
 # Used by /api/mqtt-log for the live debug table on the mqtt-monitor page.
@@ -397,140 +388,6 @@ async def on_mqtt_data(raw: dict):
     if (now - _last_cycle_save) >= CYCLE_SAVE_S:
         battery_cycles.save()
         _last_cycle_save = now
-
-    # --- 7. Push notifications (debounced by event type) ---
-    await _maybe_push_events(data, now)
-
-
-def _push_allowed(event: str, now: float) -> bool:
-    last = _last_push_sent.get(event, 0)
-    if now - last < _PUSH_COOLDOWN_S:
-        return False
-    _last_push_sent[event] = now
-    return True
-
-
-async def _maybe_push_events(data: dict, now: float):
-    """Server-side push triggers matching Anker Solix error codes.
-
-    Uses device sensor data as proxies for BMS error codes (E0027/E0028/E0032/
-    E0033 = temperature, E0036 = AC output, E0009/E0010 = USB-C overcurrent).
-    """
-    global _last_battery_soc, _last_solar_w
-    if not push_lib.is_configured():
-        return
-    try:
-        soc = int(data.get("battery_soc", 0) or 0)
-        temp = float(data.get("temperature", 0) or 0)
-        solar = float(data.get("solar_watts", 0) or 0)
-        ac_out = float(data.get("ac_output_watts", 0) or 0)
-        usbc1 = float(data.get("usbc_1_watts", 0) or 0)
-        usbc2 = float(data.get("usbc_2_watts", 0) or 0)
-        usbc3 = float(data.get("usbc_3_watts", 0) or 0)
-        dc_12v = float(data.get("dc_12v_watts", 0) or 0)
-
-        # --- Battery state ---
-        if _last_battery_soc is not None and _last_battery_soc >= 20 and 0 < soc < 20:
-            if _push_allowed("battery_low", now):
-                await push_lib.send_notification(
-                    "Akku niedrig", f"Akku bei {soc}% - laden empfohlen.", "battery_low"
-                )
-        if _last_battery_soc is not None and _last_battery_soc < 100 and soc >= 100:
-            if _push_allowed("battery_full", now):
-                await push_lib.send_notification(
-                    "Akku voll", "Akku ist zu 100% geladen.", "battery_full"
-                )
-
-        # --- BMS temperature errors (E0027/E0028/E0032/E0033) ---
-        # E0032: Discharge temp > 63°C - stop using until <60°C
-        if temp >= 63 and _push_allowed("e0032_discharge_hot", now):
-            await push_lib.send_notification(
-                "E0032: Entladung zu heiss",
-                f"BMS bei {temp:.1f}°C - Nutzung stoppen bis unter 60°C!",
-                "e0032",
-            )
-        # E0027: Charge temp > 58°C - stop charging until <55°C
-        elif temp >= 58 and _push_allowed("e0027_charge_hot", now):
-            await push_lib.send_notification(
-                "E0027: Ladung zu heiss",
-                f"BMS bei {temp:.1f}°C - Laden stoppen bis unter 55°C!",
-                "e0027",
-            )
-        # E0028: Charge temp < 2°C - cannot charge
-        if 0 < temp < 2 and _push_allowed("e0028_charge_cold", now):
-            await push_lib.send_notification(
-                "E0028: Ladung zu kalt",
-                f"BMS bei {temp:.1f}°C - Erwarme auf uber 3°C zum Laden.",
-                "e0028",
-            )
-        # E0033: Discharge temp < -19°C
-        if temp <= -19 and _push_allowed("e0033_discharge_cold", now):
-            await push_lib.send_notification(
-                "E0033: Entladung zu kalt",
-                f"BMS bei {temp:.1f}°C - Erwarme auf uber -17°C.",
-                "e0033",
-            )
-
-        # --- AC output overload (E0036: > 2000W rated max) ---
-        # Warn at 90% for early heads-up, critical at/above 2000W
-        if ac_out > 2000 and _push_allowed("e0036_ac_overload", now):
-            await push_lib.send_notification(
-                "E0036: AC Uberlast",
-                f"AC-Ausgang bei {int(ac_out)}W - Limit 2000W uberschritten!",
-                "e0036",
-            )
-        elif ac_out > 1800 and _push_allowed("ac_high", now):
-            await push_lib.send_notification(
-                "AC Last hoch",
-                f"AC-Ausgang bei {int(ac_out)}W - nahert sich 2000W Limit.",
-                "ac_high",
-            )
-
-        # --- USB-C overload (E0009/E0010) ---
-        # USB-C1: 15W max (C1 alone) / 20W (with USB-A combined)
-        # USB-C2, USB-C3: 140W max each (PD3.1 up to 28V x 5A)
-        if usbc1 > 16 and _push_allowed("e0008_usbc1_overload", now):
-            await push_lib.send_notification(
-                "E0008: USB-C1 Uberlast",
-                f"USB-C1 bei {int(usbc1)}W - Limit 15W uberschritten!",
-                "e0008",
-            )
-        max_c23 = max(usbc2, usbc3)
-        if max_c23 > 140 and _push_allowed("e0009_usbc_overload", now):
-            port = "C2" if usbc2 == max_c23 else "C3"
-            await push_lib.send_notification(
-                "E0009/E0010: USB-C Uberlast",
-                f"USB-{port} bei {int(max_c23)}W - Limit 140W uberschritten!",
-                "e0009",
-            )
-
-        # --- Car socket / 12V overload (E0014: 12V x 10A = 120W max) ---
-        if dc_12v > 120 and _push_allowed("e0014_12v_overload", now):
-            await push_lib.send_notification(
-                "E0014: 12V Uberlast",
-                f"KFZ-Dose bei {int(dc_12v)}W - Limit 120W uberschritten!",
-                "e0014",
-            )
-
-        # --- Solar input overload (> 600W max rated) ---
-        if solar > 600 and _push_allowed("solar_overload", now):
-            await push_lib.send_notification(
-                "Solar Uberlast",
-                f"Solar-Eingang bei {int(solar)}W - Limit 600W uberschritten!",
-                "solar_overload",
-            )
-
-        # --- Solar activation ---
-        if _last_solar_w is not None and _last_solar_w <= 5 and solar > 20:
-            if _push_allowed("solar_active", now):
-                await push_lib.send_notification(
-                    "Solar aktiv", f"Solar-Eingang erkannt: {int(solar)} W.", "solar_active"
-                )
-
-        _last_battery_soc = soc
-        _last_solar_w = solar
-    except Exception as e:
-        logger.warning("Push event check failed: %s", e)
 
 
 async def _background_reconnect():
@@ -1181,46 +1038,6 @@ async def api_battery_cycles():
     """Pre-computed battery cycle stats. Replaces the old client-side
     calculation that fetched a full year of /api/readings on every load."""
     return battery_cycles.stats()
-
-
-@app.get("/api/push/key")
-async def api_push_key():
-    """Public VAPID key + enabled flag. Browser needs this to subscribe."""
-    return {"public_key": VAPID_PUBLIC_KEY, "enabled": push_lib.is_configured()}
-
-
-@app.post("/api/push/subscribe")
-async def api_push_subscribe(request: Request):
-    body = await request.json()
-    endpoint = body.get("endpoint", "")
-    keys = body.get("keys", {}) or {}
-    p256dh = keys.get("p256dh", "")
-    auth = keys.get("auth", "")
-    if not (endpoint and p256dh and auth):
-        raise HTTPException(400, "invalid subscription")
-    ua = request.headers.get("user-agent", "")[:200]
-    await add_push_subscription(endpoint, p256dh, auth, ua)
-    return {"ok": True}
-
-
-@app.post("/api/push/unsubscribe")
-async def api_push_unsubscribe(request: Request):
-    body = await request.json()
-    endpoint = body.get("endpoint", "")
-    if endpoint:
-        await remove_push_subscription(endpoint)
-    return {"ok": True}
-
-
-@app.post("/api/push/test")
-async def api_push_test():
-    """Fire a test notification to all subscribed clients."""
-    sent = await push_lib.send_notification(
-        title="Anker Solix Test",
-        body="Push notifications funktionieren!",
-        tag="test",
-    )
-    return {"sent": sent, "enabled": push_lib.is_configured()}
 
 
 _FORECAST_CACHE = ARCHIVE_DIR.parent / "forecast_cache.json"

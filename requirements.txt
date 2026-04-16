@@ -14,4 +14,3 @@ scikit-learn>=1.4.0
 numpy>=1.26.0
 slowapi>=0.1.9
 prometheus-client>=0.20.0
-pywebpush>=2.0.0
