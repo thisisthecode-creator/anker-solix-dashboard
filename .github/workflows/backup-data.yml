@@ -1,0 +1,50 @@
+name: Backup Anker Data
+
+on:
+  schedule:
+    # Daily at 03:30 UTC (= 05:30 Europe/Warsaw, after nightly log rotation)
+    - cron: '30 3 * * *'
+  workflow_dispatch:  # Manual trigger from Actions tab
+
+jobs:
+  backup:
+    name: Pull data archive from Hetzner
+    runs-on: ubuntu-latest
+    steps:
+      - name: Create tarball on server
+        uses: appleboy/ssh-action@v1
+        with:
+          host: 65.108.90.243
+          username: root
+          key: ${{ secrets.HETZNER_SSH_KEY }}
+          script: |
+            cd /opt/anker-solix
+            tar -czf /tmp/anker-data-latest.tar.gz data/
+            ls -lh /tmp/anker-data-latest.tar.gz
+
+      - name: Download tarball
+        uses: appleboy/scp-action@v0.1.7
+        with:
+          host: 65.108.90.243
+          username: root
+          key: ${{ secrets.HETZNER_SSH_KEY }}
+          source: "/tmp/anker-data-latest.tar.gz"
+          target: "./backup"
+          strip_components: 2
+
+      - name: Upload as artifact (90 day retention)
+        uses: actions/upload-artifact@v4
+        with:
+          name: anker-data-${{ github.run_number }}
+          path: backup/anker-data-latest.tar.gz
+          retention-days: 90
+          if-no-files-found: error
+
+      - name: Cleanup server tmp
+        if: always()
+        uses: appleboy/ssh-action@v1
+        with:
+          host: 65.108.90.243
+          username: root
+          key: ${{ secrets.HETZNER_SSH_KEY }}
+          script: rm -f /tmp/anker-data-latest.tar.gz
