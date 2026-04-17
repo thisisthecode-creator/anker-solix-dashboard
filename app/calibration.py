@@ -43,7 +43,7 @@ except Exception:  # pragma: no cover
     httpx = None
 
 from app.config import TIMEZONE, LATITUDE, LONGITUDE, PANEL_PEAK_KW, PANEL_AZIMUTH_DEG
-from app.database import get_hourly_solar_for_date, get_available_solar_dates
+from app.database import get_hourly_solar_for_date, get_available_solar_dates, get_pool
 
 logger = logging.getLogger(__name__)
 
@@ -252,11 +252,20 @@ async def retrain_calibration() -> dict:
     all_ratios = [r for hr in hour_ratios.values() for r in hr]
     overall_factor = round(_trimmed_mean(all_ratios), 3) if all_ratios else 1.0
 
-    # Effective panel specs from observed data:
-    # effective_peak_w = raw_peak_w × overall_factor
-    # (if overall_factor = 0.85, your actual panels produce 85% of configured peak)
+    # Configured peak (what the code thinks)
     configured_peak_w = PANEL_KWP * PANEL_EFFICIENCY * 1000  # W
-    effective_peak_w = configured_peak_w * overall_factor
+    # Effective peak based on average bias (overall_factor)
+    effective_peak_w_avg = configured_peak_w * overall_factor
+    # Actual max peak ever observed from MQTT data
+    observed_peak_w = 0
+    try:
+        db = await get_pool()
+        cur = await db.execute("SELECT COALESCE(MAX(peak_watts), 0) FROM daily_solar")
+        row = await cur.fetchone()
+        observed_peak_w = float(row[0] or 0) if row else 0
+    except Exception:
+        observed_peak_w = 0
+
     deviation_pct = round((overall_factor - 1.0) * 100, 1)
 
     # Diagnosis: is the base config reasonable?
@@ -272,17 +281,14 @@ async def retrain_calibration() -> dict:
         diagnosis = "forecast_too_high"
         recommendation = (
             f"Prognose ~{abs(deviation_pct):.0f}% zu hoch. "
-            f"Moegliche Ursachen: Verschattung, Panel-Ausrichtung, Alter, "
-            f"oder zu hoher Peak-Wert konfiguriert (aktuell {configured_peak_w:.0f}W, "
-            f"real ~{effective_peak_w:.0f}W)"
+            f"Moegliche Ursachen: Verschattung, Panel-Ausrichtung, Alter "
+            f"oder Anker MQTT Leistungsmessung ungenau."
         )
     elif deviation_pct > 20:
         diagnosis = "forecast_too_low"
         recommendation = (
             f"Prognose ~{deviation_pct:.0f}% zu niedrig. "
-            f"Moegliche Ursachen: bessere Panels als konfiguriert, oder "
-            f"ideale Ausrichtung. Peak gemessen ~{effective_peak_w:.0f}W vs "
-            f"{configured_peak_w:.0f}W konfiguriert"
+            f"Panels produzieren mehr als vorhergesagt - ideale Bedingungen."
         )
     else:
         diagnosis = "moderate_deviation"
@@ -299,7 +305,8 @@ async def retrain_calibration() -> dict:
         "diagnosis": {
             "status": diagnosis,
             "configured_peak_w": round(configured_peak_w, 0),
-            "effective_peak_w": round(effective_peak_w, 0),
+            "observed_peak_w": round(observed_peak_w, 0),
+            "effective_peak_w_avg": round(effective_peak_w_avg, 0),
             "deviation_pct": deviation_pct,
             "recommendation": recommendation,
         },
