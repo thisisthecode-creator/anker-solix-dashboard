@@ -2,42 +2,27 @@ name: Backup Anker Data
 
 # Each backup = FULL snapshot of /opt/anker-solix/data/ (not incremental).
 # Stored in two places:
-#  1. GitHub Actions artifact (400 days retention, easy to download recent)
+#  1. GitHub Actions artifact (90 days retention, easy download for recent)
 #  2. Committed to `backups` branch (permanent, kept forever via git history)
 
 on:
   schedule:
     # Daily at 03:30 UTC (= 05:30 Europe/Warsaw, after nightly log rotation)
     - cron: '30 3 * * *'
-  workflow_dispatch:  # Manual trigger from Actions tab
+  workflow_dispatch:
 
 permissions:
-  contents: write  # Needed to push to backups branch
+  contents: write
 
 jobs:
   backup:
     name: Pull data archive from Hetzner
     runs-on: ubuntu-latest
     steps:
-      - name: Checkout backups branch (or create from main)
+      - name: Checkout main (for workflow source)
         uses: actions/checkout@v4
         with:
-          ref: backups
           fetch-depth: 1
-        continue-on-error: true
-
-      - name: Ensure backups branch exists
-        run: |
-          if [ ! -d .git ]; then
-            git init
-            git remote add origin "https://x-access-token:${{ secrets.GITHUB_TOKEN }}@github.com/${{ github.repository }}.git"
-            git checkout -b backups
-            mkdir -p snapshots
-            echo "# Anker Solix Data Backups" > README.md
-            echo "Permanent archival of /opt/anker-solix/data/ tarballs. Each file is a FULL snapshot." >> README.md
-          fi
-          git config user.name "backup-bot"
-          git config user.email "backup@github-actions.local"
 
       - name: Setup SSH
         run: |
@@ -56,32 +41,51 @@ jobs:
 
       - name: Download tarball
         run: |
-          mkdir -p snapshots
-          TS=$(date -u +%Y-%m-%d)
-          scp -i ~/.ssh/id_ed25519 root@65.108.90.243:/tmp/anker-data-latest.tar.gz "snapshots/${TS}.tar.gz"
-          # Also write a "latest" symlink for easy access
-          cp "snapshots/${TS}.tar.gz" snapshots/latest.tar.gz
-          ls -lh snapshots/ | tail -5
+          mkdir -p /tmp/backup
+          scp -i ~/.ssh/id_ed25519 root@65.108.90.243:/tmp/anker-data-latest.tar.gz /tmp/backup/latest.tar.gz
+          ls -lh /tmp/backup/
+
+      - name: Upload as artifact (90 day retention)
+        uses: actions/upload-artifact@v4
+        with:
+          name: anker-data-${{ github.run_number }}
+          path: /tmp/backup/latest.tar.gz
+          retention-days: 90
+          if-no-files-found: error
 
       - name: Commit to backups branch (permanent archive)
         run: |
           TS=$(date -u +%Y-%m-%d)
-          SIZE=$(du -h "snapshots/${TS}.tar.gz" | cut -f1)
+          SIZE=$(du -h /tmp/backup/latest.tar.gz | cut -f1)
+          WORK=/tmp/backups-work
+          rm -rf "$WORK"
+          mkdir -p "$WORK"
+          cd "$WORK"
+          git init -b backups -q
+          git config user.name "backup-bot"
+          git config user.email "backup@github-actions.local"
+          git remote add origin "https://x-access-token:${{ secrets.GITHUB_TOKEN }}@github.com/${{ github.repository }}.git"
+          # Fetch existing backups branch if it exists
+          if git fetch origin backups 2>/dev/null; then
+            git reset --hard origin/backups
+          else
+            echo "# Anker Solix Data Backups" > README.md
+            echo "" >> README.md
+            echo "Permanent archive of /opt/anker-solix/data/ tarballs." >> README.md
+            echo "Each file is a FULL snapshot (not incremental)." >> README.md
+            mkdir -p snapshots
+          fi
+          mkdir -p snapshots
+          cp /tmp/backup/latest.tar.gz "snapshots/${TS}.tar.gz"
+          cp /tmp/backup/latest.tar.gz snapshots/latest.tar.gz
           git add snapshots/ README.md 2>/dev/null || true
           if git diff --cached --quiet; then
-            echo "No changes to commit (backup already exists for today)"
+            echo "Nothing changed (same content as previous backup)"
           else
             git commit -m "Backup ${TS} (${SIZE})"
-            git push origin backups || git push -u origin backups
+            git push origin backups
+            echo "Pushed backup for ${TS} to backups branch"
           fi
-
-      - name: Upload as artifact (400 day retention)
-        uses: actions/upload-artifact@v4
-        with:
-          name: anker-data-${{ github.run_number }}
-          path: snapshots/latest.tar.gz
-          retention-days: 400
-          if-no-files-found: error
 
       - name: Cleanup server tmp
         if: always()
