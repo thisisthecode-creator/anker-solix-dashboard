@@ -165,7 +165,7 @@ def build_pdf():
     # Info table
     info_data = [
         ["System", "Anker Solix C1000 Gen 2 (A1763)"],
-        ["Kapazitat", "2080 Wh LiFePO4 (C1000 + BP1000)"],
+        ["Kapazitat", "1024 Wh LiFePO4 (+BP1000 Erweiterung moglich)"],
         ["Solar", "2 x 200W flexible Panels (SW 240°, 60°-90° Kurve)"],
         ["Standort", "Warschau, Polen"],
         ["Dashboard", "Echtzeit Web-App (PWA)"],
@@ -437,7 +437,7 @@ def build_pdf():
         "Die Gerate-Info zeigt aktuelle Einstellungen (Ladegrenzen, AC-Limit, Display-Status, Modell). "
         "Die Technischen Daten listen alle Spezifikationen in 4 Kategorien: "
         "Eingang (AC, Solar MPPT, UltraFast), Ausgang (AC 2000W Peak, USB-C 3x140W, DC 12V), "
-        "Batterie (2080Wh LiFePO4: C1000+BP1000, 3000 Zyklen) und Gehause (Masse, Gewicht).",
+        "Batterie (1024Wh LiFePO4, 3000 Zyklen, BP1000 Expansion moglich) und Gehause (Masse, Gewicht).",
         body_style
     ))
     elements.extend(add_screenshot("10_deviceinfo_techspecs",

@@ -1,7 +1,7 @@
 {
   "name": "Anker Solix C1000 Gen 2",
   "short_name": "Anker Solix",
-  "description": "Anker Solix C1000 Gen 2 + BP1000 (2080 Wh) Solar Dashboard",
+  "description": "Anker Solix C1000 Gen 2 Solar Dashboard",
   "start_url": "/",
   "display": "standalone",
   "background_color": "#000000",
