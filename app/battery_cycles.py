@@ -36,6 +36,8 @@ class BatteryCycleTracker:
         self.first_date: str = ""       # earliest day we have data for (for cycles/day)
         self.last_soc: int | None = None
         self._dirty: bool = False
+        # Runtime capacity (updated when BP1000 expansion detected via MQTT)
+        self.current_capacity_wh: int = BATTERY_CAPACITY_WH
 
     # ---------- persistence ----------
 
@@ -150,7 +152,8 @@ class BatteryCycleTracker:
         cycles_per_day = (self.total_cycles / days) if days > 0 else 0.0
         # Battery one-way throughput per day in kWh: total cycles × capacity ÷ days
         # Industry-standard: 1 cycle ≡ 1 full capacity worth of energy in (or out).
-        capacity_kwh = BATTERY_CAPACITY_WH / 1000.0
+        # Uses runtime capacity (adjusts for BP1000 expansion when connected).
+        capacity_kwh = self.current_capacity_wh / 1000.0
         avg_daily_kwh = (self.total_cycles * capacity_kwh / days) if days > 0 else 0.0
         return {
             "total_cycles": self.total_cycles,
