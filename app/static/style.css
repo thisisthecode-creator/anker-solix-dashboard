@@ -3652,3 +3652,68 @@ body.light-mode .log-table td {
     .pf-v-bat-dual { gap: 14px; }
     .pf-bat-sub { font-size: 0.5rem; }
 }
+
+/* === Device power consumption table === */
+.dp-table {
+    width: 100%;
+    border-collapse: collapse;
+    margin-top: 12px;
+    font-size: 0.8rem;
+    background: var(--card, #141419);
+    border-radius: 10px;
+    overflow: hidden;
+    border: 1px solid var(--card-border);
+}
+.dp-table thead {
+    background: rgba(128,128,128,0.08);
+}
+.dp-table th {
+    text-align: left;
+    padding: 8px 12px;
+    font-size: 0.65rem;
+    font-weight: 700;
+    letter-spacing: 0.05em;
+    text-transform: uppercase;
+    color: var(--text-dim);
+    border-bottom: 1px solid var(--card-border);
+}
+.dp-table th:nth-child(2),
+.dp-table th:nth-child(3) { text-align: right; }
+.dp-table td {
+    padding: 9px 12px;
+    border-bottom: 1px solid var(--card-border);
+    vertical-align: middle;
+}
+.dp-table tbody tr:last-child td { border-bottom: none; }
+.dp-table tbody tr:nth-child(even) { background: rgba(128,128,128,0.03); }
+.dp-table td:nth-child(1) {
+    font-weight: 500;
+    color: var(--text);
+}
+.dp-table td:nth-child(2) {
+    text-align: right;
+    color: var(--solar);
+    font-weight: 700;
+    font-variant-numeric: tabular-nums;
+    white-space: nowrap;
+}
+.dp-table td:nth-child(3) {
+    text-align: right;
+    color: var(--text-dim);
+    font-variant-numeric: tabular-nums;
+    font-size: 0.75rem;
+}
+.dp-table .dp-sub {
+    display: inline-block;
+    font-size: 0.6rem;
+    color: var(--text-dim);
+    font-weight: 400;
+    margin-top: 2px;
+}
+@media (max-width: 520px) {
+    .dp-table { font-size: 0.7rem; }
+    .dp-table th { font-size: 0.55rem; padding: 6px 8px; }
+    .dp-table td { padding: 7px 8px; }
+    .dp-table td:nth-child(3) { font-size: 0.65rem; }
+    .dp-table .dp-sub { font-size: 0.52rem; }
+}
