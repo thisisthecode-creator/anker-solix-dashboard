@@ -1930,8 +1930,10 @@ async function buildMlStatsAndCalibration() {
                     + '<div style="font-size:0.75rem;font-weight:600;color:' + col + ';margin-bottom:6px">'
                     + icon + ' ' + (diag.recommendation || '') + '</div>'
                     + '<div style="font-size:0.65rem;color:var(--text-dim);line-height:1.5">'
-                    + '<div>Config-Peak: <strong>' + diag.configured_peak_w + ' W</strong> <span style="opacity:0.7">(2x 200W x 85%)</span></div>'
-                    + '<div>Max gemessen (MQTT): <strong style="color:var(--solar)">' + (diag.observed_peak_w || 0) + ' W</strong></div>'
+                    + '<div>Nameplate: <strong>' + (diag.nameplate_w || 400) + ' W</strong> · Config (× ' + Math.round((diag.configured_peak_w || 340) / (diag.nameplate_w || 400) * 100) + '%): <strong>' + diag.configured_peak_w + ' W</strong></div>'
+                    + '<div>Max gemessen (MQTT): <strong style="color:var(--solar)">' + (diag.observed_peak_w || 0) + ' W</strong>'
+                    + (diag.observed_peak_date ? ' <span style="opacity:0.6">(' + diag.observed_peak_date.slice(8, 10) + '.' + diag.observed_peak_date.slice(5, 7) + '.)</span>' : '')
+                    + ' = <strong>' + (diag.observed_efficiency_pct || 0) + '%</strong> vom Nameplate</div>'
                     + '<div style="margin-top:4px">System-Effizienz gelernt: <strong style="color:' + col + '">' + systemEff + '%</strong> '
                     + '<span style="opacity:0.7">(' + appliedTo + ' auf alle Prognosen)</span></div>'
                     + '<div style="opacity:0.7;margin-top:2px">= Prognose × ' + (overallFactor || 1).toFixed(2) + ' automatisch</div>'
