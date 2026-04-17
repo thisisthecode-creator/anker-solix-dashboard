@@ -1604,6 +1604,24 @@ async function buildHourlyForecastToday(dateStr) {
         const nextBtn = $('hfcNext');
         if (nextBtn) nextBtn.disabled = (dateStr >= today);
 
+        // Past days without solar input: hide chart, show clear message
+        const canvas = $('chart_hourly_forecast_today');
+        const isTodayView = (dateStr === today);
+        const hadRealSolar = totalAct >= 0.1;
+        if (!isTodayView && !hadRealSolar) {
+            if (_hourlyTodayChart) { _hourlyTodayChart.destroy(); _hourlyTodayChart = null; }
+            if (canvas) {
+                const ctx = canvas.getContext('2d');
+                ctx.clearRect(0, 0, canvas.width, canvas.height);
+                ctx.fillStyle = getComputedStyle(document.body).getPropertyValue('--text-dim').trim() || '#888';
+                ctx.font = '13px -apple-system, system-ui, sans-serif';
+                ctx.textAlign = 'center';
+                ctx.textBaseline = 'middle';
+                ctx.fillText('Kein Solar-Eingang an diesem Tag', canvas.width / 2, canvas.height / 2);
+            }
+            return;
+        }
+
         if (!hours.length) {
             if (_hourlyTodayChart) { _hourlyTodayChart.destroy(); _hourlyTodayChart = null; }
             return;
@@ -1802,29 +1820,62 @@ async function buildAccuracyTrend() {
     } catch (e) { console.warn('Accuracy trend error:', e); }
 }
 
-// Date picker wiring
+// Date picker wiring - prev/next skip days without solar input (past days only).
+// List of days WITH solar input cached globally after /api/solar-dates fetch.
+window._solarDaysWithInput = null;
+
+async function _getSolarDaysWithInput() {
+    if (window._solarDaysWithInput) return window._solarDaysWithInput;
+    try {
+        const res = await fetch('/api/solar-dates');
+        const { dates } = await res.json();
+        if (!dates) return [];
+        // Fetch actual kWh for each and keep only days with >= 0.1 kWh
+        const results = await Promise.all(dates.map(async (d) => {
+            try {
+                const r = await fetch('/api/hourly-solar?date=' + d);
+                if (!r.ok) return null;
+                const data = await r.json();
+                return (data.total_kwh || 0) >= 0.1 ? d : null;
+            } catch { return null; }
+        }));
+        window._solarDaysWithInput = results.filter(Boolean).sort();
+        return window._solarDaysWithInput;
+    } catch { return []; }
+}
+
 (function initHfcDatePicker() {
     const dateInput = $('hfcDate');
     const prevBtn = $('hfcPrev');
     const nextBtn = $('hfcNext');
     const todayBtn = $('hfcToday');
+    const today = warsawToday();
     if (dateInput) {
-        dateInput.max = warsawToday();
-        dateInput.value = warsawToday();
+        dateInput.max = today;
+        dateInput.value = today;
         dateInput.addEventListener('change', () => buildHourlyForecastToday(dateInput.value));
     }
-    const shift = (days) => {
-        const cur = _hfcSelectedDate || warsawToday();
-        const [y, m, d] = cur.split('-').map(Number);
-        const dt = new Date(y, m - 1, d);
-        dt.setDate(dt.getDate() + days);
-        const next = dt.getFullYear() + '-' + String(dt.getMonth() + 1).padStart(2, '0') + '-' + String(dt.getDate()).padStart(2, '0');
-        if (next > warsawToday()) return;
-        buildHourlyForecastToday(next);
+    const shift = async (direction) => {
+        const cur = _hfcSelectedDate || today;
+        const validDays = await _getSolarDaysWithInput();
+        // Build sorted list: [valid past days..., today]
+        const candidates = validDays.filter(d => d !== today).concat([today]);
+        const idx = candidates.indexOf(cur);
+        let targetIdx;
+        if (idx === -1) {
+            // Current date not in list - snap to nearest valid
+            targetIdx = candidates.findIndex(d => d > cur);
+            if (direction > 0 && targetIdx === -1) return;
+            if (direction < 0) targetIdx = targetIdx === -1 ? candidates.length - 1 : Math.max(0, targetIdx - 1);
+        } else {
+            targetIdx = idx + direction;
+        }
+        if (targetIdx < 0 || targetIdx >= candidates.length) return;
+        buildHourlyForecastToday(candidates[targetIdx]);
     };
     if (prevBtn) prevBtn.addEventListener('click', () => shift(-1));
     if (nextBtn) nextBtn.addEventListener('click', () => shift(1));
-    if (todayBtn) todayBtn.addEventListener('click', () => buildHourlyForecastToday(warsawToday()));
+    if (todayBtn) todayBtn.addEventListener('click', () => buildHourlyForecastToday(today));
 })();
 
 loadForecast();
