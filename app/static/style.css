@@ -3728,3 +3728,46 @@ body.light-mode .log-table td {
     .dp-col-avg { font-size: 0.68rem; }
     .dp-col-name .dp-micro { font-size: 0.52rem; }
 }
+
+/* === Hourly forecast date navigation === */
+.hfc-date-bar {
+    display: flex;
+    gap: 6px;
+    align-items: center;
+    flex-wrap: wrap;
+    margin-bottom: 8px;
+}
+.hfc-nav,
+.hfc-today {
+    background: var(--card-bg);
+    border: 1px solid var(--card-border);
+    color: var(--text);
+    border-radius: 6px;
+    padding: 6px 10px;
+    font-size: 0.75rem;
+    cursor: pointer;
+    font-weight: 600;
+    transition: background 0.15s, border-color 0.15s;
+}
+.hfc-nav:hover,
+.hfc-today:hover {
+    border-color: var(--solar);
+    color: var(--solar);
+}
+.hfc-nav:disabled { opacity: 0.35; cursor: not-allowed; }
+.hfc-today { background: rgba(245,158,11,0.1); border-color: rgba(245,158,11,0.3); color: var(--solar); }
+.hfc-date-input {
+    flex: 1;
+    min-width: 140px;
+    background: var(--card-bg);
+    border: 1px solid var(--card-border);
+    color: var(--text);
+    border-radius: 6px;
+    padding: 6px 10px;
+    font-size: 0.8rem;
+    font-family: inherit;
+}
+.hfc-date-input::-webkit-calendar-picker-indicator {
+    filter: invert(0.5);
+    cursor: pointer;
+}
