@@ -1999,17 +1999,23 @@ async function buildMlStatsAndCalibration() {
             const details = [];
             if (mlRes && mlRes.available) {
                 const m = mlRes.metrics || {};
-                details.push('🧠 ' + (mlRes.type === 'sklearn_gbr' ? 'GradientBoosting' : 'LinearRegression'));
-                details.push('n=' + (mlRes.n_train || 0));
+                const name = mlRes.type === 'sklearn_gbr' ? 'GradientBoosting' : 'LinearRegression';
+                details.push('🧠 ML-Tagesprognose aktiv: ' + name + ' (n=' + (mlRes.n_train || 0) + ' Tage)');
                 if (m.r2 != null) details.push('R²: ' + m.r2);
-                if (m.mae_kwh != null) details.push('MAE: ' + fmtKwh.format(m.mae_kwh) + ' kWh');
+                if (m.mae_kwh != null) details.push('Ø Fehler: ±' + fmtKwh.format(m.mae_kwh) + ' kWh');
                 if (m.mape_pct != null) details.push('MAPE: ' + m.mape_pct + '%');
             } else {
-                details.push('🧠 ML: noch nicht trainiert');
+                const haveN = (mlRes && mlRes.n_available) || 0;
+                const needN = (mlRes && mlRes.min_to_train) || 5;
+                const gbrN = (mlRes && mlRes.gbr_from) || 20;
+                details.push('🧠 ML-Tagesprognose: sammelt Daten (' + haveN + '/' + needN + ' Tage, GBR ab ' + gbrN + ')');
             }
             if (calRes && calRes.available) {
-                details.push('Kalibrierung: ' + (calRes.sample_days || 0) + ' Tage · '
-                    + (calRes.sample_hours || 0) + ' Stunden');
+                details.push('📚 Selbstlernende Stunden-Kalibrierung aktiv: aus '
+                    + (calRes.sample_days || 0) + ' Tagen / '
+                    + (calRes.sample_hours || 0) + ' Stunden gelernt');
+            } else {
+                details.push('📚 Stunden-Kalibrierung: noch zu wenig Daten');
             }
             parts.push('<span style="width:100%;font-size:0.68rem">'
                 + details.map(d => '<span style="margin-right:10px">' + d + '</span>').join('')

@@ -1168,11 +1168,23 @@ async def api_pvgis_refresh():
 
 @app.get("/api/ml-stats")
 async def api_ml_stats():
-    """Current ML model metrics (MAE, RMSE, R², MAPE) + training metadata."""
+    """Current ML model metrics + training metadata. Always reports the
+    current number of collected training samples and the thresholds so
+    the UI can show "3/5 days collected" before the model is trained."""
     import pickle as _pickle
-    from app.ml_models import SOLAR_MODEL_PATH
+    from app.ml_models import SOLAR_MODEL_PATH, MIN_TRAIN_ROWS, _load_training_pairs
+    try:
+        pairs = await _load_training_pairs()
+        n_available = len(pairs)
+    except Exception:
+        n_available = 0
+    thresholds = {
+        "min_to_train": MIN_TRAIN_ROWS,
+        "gbr_from": 20,
+        "n_available": n_available,
+    }
     if not SOLAR_MODEL_PATH.exists():
-        return {"available": False, "reason": "not trained yet"}
+        return {"available": False, "reason": "not trained yet", **thresholds}
     try:
         with open(SOLAR_MODEL_PATH, "rb") as f:
             m = _pickle.load(f)
@@ -1182,9 +1194,10 @@ async def api_ml_stats():
             "n_train": m.get("n_train"),
             "trained_at": m.get("trained_at"),
             "metrics": m.get("metrics", {}),
+            **thresholds,
         }
     except Exception as e:
-        return {"available": False, "error": str(e)}
+        return {"available": False, "error": str(e), **thresholds}
 
 
 _FORECAST_CACHE = ARCHIVE_DIR.parent / "forecast_cache.json"
