@@ -654,20 +654,25 @@
         <!-- Device Power Consumption Reference -->
         <section class="today-box" id="devicePowerSection">
             <h2>Gerate-Stromverbrauch</h2>
-            <div class="cycle-hint">Typische Werte fur angeschlossene Gerate (Peak / Durchschnitt)</div>
+            <div class="cycle-hint">Typische Werte (Netzlast / Ladeleistung)</div>
             <div class="device-power-grid">
-                <div class="dp-row"><span class="dp-name">Apple TV 4K</span><span class="dp-peak">5 W</span><span class="dp-avg">3-5 W</span></div>
-                <div class="dp-row"><span class="dp-name">HomePod mini</span><span class="dp-peak">10 W</span><span class="dp-avg">1,5-5 W</span></div>
-                <div class="dp-row"><span class="dp-name">LED TV (50-55")</span><span class="dp-peak">150 W</span><span class="dp-avg">100-120 W</span></div>
-                <div class="dp-row"><span class="dp-name">MacBook Air M4 (13")</span><span class="dp-peak">30 W</span><span class="dp-avg">5-15 W</span></div>
-                <div class="dp-row"><span class="dp-name">MacBook Pro 16" M4</span><span class="dp-peak">140 W</span><span class="dp-avg">20-40 W</span></div>
-                <div class="dp-row"><span class="dp-name">iPhone 15 Pro Max</span><span class="dp-peak">27 W</span><span class="dp-avg">15-25 W</span></div>
-                <div class="dp-row"><span class="dp-name">iPhone 16 Pro</span><span class="dp-peak">27 W</span><span class="dp-avg">15-25 W</span></div>
-                <div class="dp-row"><span class="dp-name">iPad Mini (5. Gen)</span><span class="dp-peak">18 W</span><span class="dp-avg">10-15 W</span></div>
-                <div class="dp-row"><span class="dp-name">Anker Laptop Powerbank</span><span class="dp-peak">140 W</span><span class="dp-avg">je nach Last</span></div>
+                <div class="dp-head">
+                    <span>Gerat</span>
+                    <span>Peak (Ladung/Last)</span>
+                    <span>Durchschnitt (Nutzung)</span>
+                </div>
+                <div class="dp-row"><span class="dp-name">Apple TV 4K</span><span class="dp-peak">~5 W</span><span class="dp-avg">3-5 W</span></div>
+                <div class="dp-row"><span class="dp-name">HomePod mini</span><span class="dp-peak">~10 W</span><span class="dp-avg">1,5-5 W</span></div>
+                <div class="dp-row"><span class="dp-name">LED TV (50-55")</span><span class="dp-peak">80-150 W</span><span class="dp-avg">100-120 W</span></div>
+                <div class="dp-row"><span class="dp-name">MacBook Air M4 (13")</span><span class="dp-peak">30 W (Ladegerat)</span><span class="dp-avg">5-15 W</span></div>
+                <div class="dp-row"><span class="dp-name">MacBook Pro 16" M4</span><span class="dp-peak">140 W (Ladegerat)</span><span class="dp-avg">20-40 W, bis 100 W unter Last</span></div>
+                <div class="dp-row"><span class="dp-name">iPhone 15 Pro Max</span><span class="dp-peak">27 W (Laden)</span><span class="dp-avg">15-25 W Laden, ~1 W Idle</span></div>
+                <div class="dp-row"><span class="dp-name">iPhone 16 Pro</span><span class="dp-peak">27 W (Laden)</span><span class="dp-avg">15-25 W Laden, ~1 W Idle</span></div>
+                <div class="dp-row"><span class="dp-name">iPad Mini 5</span><span class="dp-peak">18 W (Laden)</span><span class="dp-avg">10-15 W Laden</span></div>
+                <div class="dp-row"><span class="dp-name">Anker Laptop Powerbank (je)</span><span class="dp-peak">100-140 W (Laden)</span><span class="dp-avg">je nach PD-Output</span></div>
             </div>
             <div class="cycle-hint" style="margin-top:10px">
-                C1000 Akku (1024 Wh): ein HomePod mini = ~200-300 h | ein MacBook Air = ~40-200 h | ein TV = ~8-10 h
+                C1000 Akku (1024 Wh): HomePod mini ~200-300 h | MacBook Air ~40-200 h | TV ~8-10 h
             </div>
         </section>
 

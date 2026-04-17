@@ -3528,3 +3528,29 @@ body.light-mode .log-table td {
     .dp-row { grid-template-columns: 1.4fr 0.7fr 0.9fr; padding: 6px 8px; font-size: 0.7rem; gap: 4px; }
     .dp-avg { font-size: 0.62rem; }
 }
+
+/* Device power: table header + adjusted columns for verbose cell text */
+.dp-head {
+    display: grid;
+    grid-template-columns: 1.3fr 1.1fr 1.3fr;
+    gap: 8px;
+    padding: 8px 12px;
+    font-size: 0.65rem;
+    font-weight: 600;
+    letter-spacing: 0.03em;
+    text-transform: uppercase;
+    color: var(--text-dim);
+    background: rgba(128,128,128,0.06);
+    border-bottom: 1px solid var(--card-border);
+}
+.dp-head > span:not(:first-child) { text-align: right; }
+
+/* Override earlier 3-col ratio for richer text */
+.device-power-grid .dp-row {
+    grid-template-columns: 1.3fr 1.1fr 1.3fr;
+}
+@media (max-width: 640px) {
+    .dp-head { font-size: 0.55rem; padding: 5px 8px; gap: 4px; }
+    .dp-head { grid-template-columns: 1.2fr 1fr 1.2fr; }
+    .device-power-grid .dp-row { grid-template-columns: 1.2fr 1fr 1.2fr; }
+}
