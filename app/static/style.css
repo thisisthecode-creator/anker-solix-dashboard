@@ -3642,15 +3642,17 @@ body.light-mode .log-table td {
     gap: 4px;
 }
 .pf-bat-sub {
-    font-size: 0.55rem;
+    text-align: center;
+    font-size: 0.68rem;
     color: var(--text-dim);
     font-variant-numeric: tabular-nums;
-    margin-top: 2px;
-    letter-spacing: 0.03em;
+    margin-top: 4px;
+    letter-spacing: 0.05em;
+    font-weight: 600;
+    text-transform: uppercase;
 }
 @media (max-width: 480px) {
     .pf-v-bat-dual { gap: 14px; }
-    .pf-bat-sub { font-size: 0.5rem; }
 }
 
 /* === Device power consumption table === */
