@@ -671,71 +671,22 @@
         <section class="today-box" id="devicePowerSection">
             <h2>Gerate-Stromverbrauch</h2>
             <div class="cycle-hint">Typische Werte fur angeschlossene Gerate</div>
-            <div class="dp-cards">
-                <div class="dp-card">
-                    <div class="dp-card-name">Apple TV 4K</div>
-                    <div class="dp-card-stats">
-                        <div><span class="dp-card-label">Peak</span><span class="dp-card-val">~5 W</span></div>
-                        <div><span class="dp-card-label">Avg</span><span class="dp-card-val">3-5 W</span></div>
-                    </div>
-                </div>
-                <div class="dp-card">
-                    <div class="dp-card-name">HomePod mini</div>
-                    <div class="dp-card-stats">
-                        <div><span class="dp-card-label">Peak</span><span class="dp-card-val">~10 W</span></div>
-                        <div><span class="dp-card-label">Avg</span><span class="dp-card-val">1,5-5 W</span></div>
-                    </div>
-                </div>
-                <div class="dp-card">
-                    <div class="dp-card-name">LED TV (50-55")</div>
-                    <div class="dp-card-stats">
-                        <div><span class="dp-card-label">Peak</span><span class="dp-card-val">80-150 W</span></div>
-                        <div><span class="dp-card-label">Avg</span><span class="dp-card-val">100-120 W</span></div>
-                    </div>
-                </div>
-                <div class="dp-card">
-                    <div class="dp-card-name">MacBook Air M4 (13")</div>
-                    <div class="dp-card-stats">
-                        <div><span class="dp-card-label">Ladegerat</span><span class="dp-card-val">30 W</span></div>
-                        <div><span class="dp-card-label">Nutzung</span><span class="dp-card-val">5-15 W</span></div>
-                    </div>
-                </div>
-                <div class="dp-card">
-                    <div class="dp-card-name">MacBook Pro 16" M4</div>
-                    <div class="dp-card-stats">
-                        <div><span class="dp-card-label">Ladegerat</span><span class="dp-card-val">140 W</span></div>
-                        <div><span class="dp-card-label">Nutzung</span><span class="dp-card-val">20-40 W, Peak 100 W</span></div>
-                    </div>
-                </div>
-                <div class="dp-card">
-                    <div class="dp-card-name">iPhone 15 Pro Max</div>
-                    <div class="dp-card-stats">
-                        <div><span class="dp-card-label">Laden</span><span class="dp-card-val">27 W</span></div>
-                        <div><span class="dp-card-label">Idle</span><span class="dp-card-val">~1 W</span></div>
-                    </div>
-                </div>
-                <div class="dp-card">
-                    <div class="dp-card-name">iPhone 16 Pro</div>
-                    <div class="dp-card-stats">
-                        <div><span class="dp-card-label">Laden</span><span class="dp-card-val">27 W</span></div>
-                        <div><span class="dp-card-label">Idle</span><span class="dp-card-val">~1 W</span></div>
-                    </div>
-                </div>
-                <div class="dp-card">
-                    <div class="dp-card-name">iPad Mini 5</div>
-                    <div class="dp-card-stats">
-                        <div><span class="dp-card-label">Laden</span><span class="dp-card-val">18 W</span></div>
-                        <div><span class="dp-card-label">Avg</span><span class="dp-card-val">10-15 W</span></div>
-                    </div>
-                </div>
-                <div class="dp-card">
-                    <div class="dp-card-name">2x Anker A1695 Powerbank <span class="dp-card-sub">25000 mAh · 165 W · 97 Wh</span></div>
-                    <div class="dp-card-stats">
-                        <div><span class="dp-card-label">Input</span><span class="dp-card-val">100 W je</span></div>
-                        <div><span class="dp-card-label">Output</span><span class="dp-card-val">bis 165 W</span></div>
-                    </div>
-                </div>
-            </div>
+            <table class="dp-table">
+                <thead>
+                    <tr><th>Gerat</th><th>Peak</th><th>Durchschnitt</th></tr>
+                </thead>
+                <tbody>
+                    <tr><td>Apple TV 4K</td><td>~5 W</td><td>3-5 W</td></tr>
+                    <tr><td>HomePod mini</td><td>~10 W</td><td>1,5-5 W</td></tr>
+                    <tr><td>LED TV (50-55")</td><td>80-150 W</td><td>100-120 W</td></tr>
+                    <tr><td>MacBook Air M4 (13")</td><td>30 W</td><td>5-15 W</td></tr>
+                    <tr><td>MacBook Pro 16" M4</td><td>140 W</td><td>20-40 W, Peak 100 W</td></tr>
+                    <tr><td>iPhone 15 Pro Max</td><td>27 W</td><td>15-25 W / ~1 W idle</td></tr>
+                    <tr><td>iPhone 16 Pro</td><td>27 W</td><td>15-25 W / ~1 W idle</td></tr>
+                    <tr><td>iPad Mini 5</td><td>18 W</td><td>10-15 W</td></tr>
+                    <tr><td>2x Anker A1695 Powerbank<br><span class="dp-sub">25000 mAh · 97 Wh je</span></td><td>100 W je (Laden)</td><td>bis 165 W Output</td></tr>
+                </tbody>
+            </table>
         </section>
 
     </div>
