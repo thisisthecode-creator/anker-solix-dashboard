@@ -217,22 +217,40 @@ async def retrain_calibration() -> dict:
             cloud_ratios[bucket].append(ratio)
             sample_hours += 1
 
-    # Build output
+    # Overall bias factor computed FIRST so per-hour can be decomposed as
+    # (overall × residual). This way the frontend applies a reliable baseline
+    # + small hourly adjustments rather than one noisy per-hour factor.
+    _all_ratios = [r for hr in hour_ratios.values() for r in hr]
+    _overall_tm = round(_trimmed_mean(_all_ratios), 3) if _all_ratios else 1.0
+    overall_samples = len(_all_ratios)
+    overall_confidence = 0.0
+    if overall_samples >= 10:
+        _mean = sum(_all_ratios) / overall_samples
+        _var = sum((v - _mean) ** 2 for v in _all_ratios) / overall_samples
+        _cv = math.sqrt(_var) / _mean if _mean > 0.01 else 1.0
+        overall_confidence = max(0.0, min(1.0, 1.0 - _cv))
+
+    # Build per-hour factors as RESIDUALS vs the overall factor
     hour_factors: dict[str, dict] = {}
     for h in range(24):
         values = hour_ratios[h]
         if len(values) < MIN_SAMPLES_PER_HOUR:
-            hour_factors[str(h)] = {"factor": 1.0, "samples": len(values), "confidence": 0.0}
+            hour_factors[str(h)] = {
+                "factor": 1.0, "residual": 1.0,
+                "samples": len(values), "confidence": 0.0,
+            }
             continue
         tm = _trimmed_mean(values)
-        # Confidence: 1 - coefficient_of_variation, clamped to [0, 1]
+        residual = tm / _overall_tm if _overall_tm > 0.01 else 1.0
+        # Confidence: 1 - coefficient_of_variation
         mean = sum(values) / len(values)
         variance = sum((v - mean) ** 2 for v in values) / len(values) if len(values) > 1 else 0
         stddev = math.sqrt(variance)
         cv = stddev / mean if mean > 0.01 else 1.0
         confidence = max(0.0, min(1.0, 1.0 - cv))
         hour_factors[str(h)] = {
-            "factor": round(tm, 3),
+            "factor": round(tm, 3),           # absolute factor (actual/forecast)
+            "residual": round(residual, 3),   # after removing overall bias
             "samples": len(values),
             "confidence": round(confidence, 3),
             "stddev": round(stddev, 3),
@@ -248,9 +266,8 @@ async def retrain_calibration() -> dict:
             "samples": len(values),
         }
 
-    # Overall bias factor (how much we should scale everything)
-    all_ratios = [r for hr in hour_ratios.values() for r in hr]
-    overall_factor = round(_trimmed_mean(all_ratios), 3) if all_ratios else 1.0
+    # Re-use values computed above
+    overall_factor = _overall_tm
 
     # Configured peak (what the code thinks)
     configured_peak_w = PANEL_KWP * PANEL_EFFICIENCY * 1000  # W
@@ -295,11 +312,13 @@ async def retrain_calibration() -> dict:
         recommendation = f"Prognose weicht um {deviation_pct:+.1f}% ab - Kalibrierung korrigiert automatisch"
 
     output = {
-        "version": 1,
+        "version": 2,
         "updated_at": datetime.now(tz).isoformat(timespec="seconds"),
         "sample_days": sample_days,
         "sample_hours": sample_hours,
         "overall_factor": overall_factor,
+        "overall_confidence": round(overall_confidence, 3),
+        "overall_samples": overall_samples,
         "hour_factors": hour_factors,
         "cloud_factors": cloud_factors,
         "diagnosis": {
