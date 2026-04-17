@@ -788,8 +788,27 @@ function updateUI(d) {
         }
     }
     $('solarWatts').textContent = fmt.format(d.solar_watts);
-    $('batterySoc').textContent = d.battery_soc;
-    updateFavicon(d.battery_soc);
+    // Combined SOC when BP1000 expansion is connected (weighted by capacity)
+    const expPacksMain = d.expansion_packs || 0;
+    let combinedSoc = d.battery_soc || 0;
+    if (expPacksMain > 0 && d.main_battery_soc > 0 && d.exp_1_soc > 0) {
+        const mainWh = 1024;
+        const expWh = 1056 * expPacksMain;
+        combinedSoc = Math.round((d.main_battery_soc * mainWh + d.exp_1_soc * expWh) / (mainWh + expWh));
+    }
+    $('batterySoc').textContent = combinedSoc;
+    updateFavicon(combinedSoc);
+    // Capacity hint below battery
+    const capEl = $('batteryCapacity');
+    if (capEl) {
+        const totalWh = d.total_capacity_wh || 1024;
+        const kwh = totalWh / 1000;
+        if (expPacksMain > 0) {
+            capEl.textContent = `${kwh.toFixed(2)} kWh (C1000 + ${expPacksMain}x BP1000)`;
+        } else {
+            capEl.textContent = `${kwh.toFixed(2)} kWh`;
+        }
+    }
     $('temperature').textContent = fmt.format(d.temperature);
     // Temperature visual (0-50°C range)
     const temp = d.temperature || 0;
@@ -825,8 +844,10 @@ function updateUI(d) {
     }
 
     const bar = $('batteryBar');
-    bar.style.height = d.battery_soc + '%';
-    bar.className = 'bat-fill' + (d.battery_soc < 20 ? ' low' : d.battery_soc < 50 ? ' mid' : '');
+    // Use combined SOC (already computed above) for fill visual
+    const socForBar = (typeof combinedSoc !== 'undefined' ? combinedSoc : d.battery_soc) || 0;
+    bar.style.height = socForBar + '%';
+    bar.className = 'bat-fill' + (socForBar < 20 ? ' low' : socForBar < 50 ? ' mid' : '');
 
     $('eToday').textContent = fmtWh(d.daily_kwh || 0);
     $('eOutToday').textContent = fmtWh(d.daily_output_kwh || 0);
