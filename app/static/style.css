@@ -3653,67 +3653,78 @@ body.light-mode .log-table td {
     .pf-v-bat-dual { gap: 14px; }
 }
 
-/* === Device power consumption table === */
-.dp-table {
-    width: 100%;
-    border-collapse: collapse;
+/* === Device power consumption list (modern CSS grid) === */
+.dp-list {
     margin-top: 12px;
-    font-size: 0.8rem;
-    background: var(--card, #141419);
-    border-radius: 10px;
-    overflow: hidden;
+    background: var(--card-bg);
     border: 1px solid var(--card-border);
+    border-radius: 12px;
+    overflow: hidden;
 }
-.dp-table thead {
-    background: rgba(128,128,128,0.08);
+.dp-list-head,
+.dp-list-row {
+    display: grid;
+    grid-template-columns: 1.6fr 1fr 1fr;
+    align-items: center;
+    gap: 8px;
+    padding: 10px 14px;
 }
-.dp-table th {
-    text-align: left;
-    padding: 8px 12px;
-    font-size: 0.65rem;
-    font-weight: 700;
-    letter-spacing: 0.05em;
+.dp-list-head {
+    background: linear-gradient(to bottom, rgba(245,158,11,0.08), rgba(245,158,11,0.03));
+    border-bottom: 2px solid var(--solar);
+    font-size: 0.6rem;
+    font-weight: 800;
+    letter-spacing: 0.1em;
     text-transform: uppercase;
     color: var(--text-dim);
-    border-bottom: 1px solid var(--card-border);
 }
-.dp-table th:nth-child(2),
-.dp-table th:nth-child(3) { text-align: right; }
-.dp-table td {
-    padding: 9px 12px;
+.dp-list-row {
     border-bottom: 1px solid var(--card-border);
-    vertical-align: middle;
+    font-size: 0.82rem;
+    transition: background 0.15s;
 }
-.dp-table tbody tr:last-child td { border-bottom: none; }
-.dp-table tbody tr:nth-child(even) { background: rgba(128,128,128,0.03); }
-.dp-table td:nth-child(1) {
-    font-weight: 500;
+.dp-list-row:last-child { border-bottom: none; }
+.dp-list-row:nth-child(even) { background: rgba(128,128,128,0.04); }
+.dp-list-row:hover { background: rgba(245,158,11,0.05); }
+
+.dp-col-name {
+    font-weight: 600;
     color: var(--text);
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+    min-width: 0;
 }
-.dp-table td:nth-child(2) {
-    text-align: right;
-    color: var(--solar);
+.dp-col-peak {
     font-weight: 700;
+    color: var(--solar);
     font-variant-numeric: tabular-nums;
+    text-align: right;
     white-space: nowrap;
 }
-.dp-table td:nth-child(3) {
-    text-align: right;
+.dp-col-avg {
     color: var(--text-dim);
     font-variant-numeric: tabular-nums;
-    font-size: 0.75rem;
+    font-size: 0.78rem;
+    text-align: right;
+    white-space: nowrap;
 }
-.dp-table .dp-sub {
-    display: inline-block;
+.dp-col-name .dp-micro {
     font-size: 0.6rem;
-    color: var(--text-dim);
     font-weight: 400;
-    margin-top: 2px;
+    color: var(--text-dim);
+    letter-spacing: 0;
 }
+
 @media (max-width: 520px) {
-    .dp-table { font-size: 0.7rem; }
-    .dp-table th { font-size: 0.55rem; padding: 6px 8px; }
-    .dp-table td { padding: 7px 8px; }
-    .dp-table td:nth-child(3) { font-size: 0.65rem; }
-    .dp-table .dp-sub { font-size: 0.52rem; }
+    .dp-list-head,
+    .dp-list-row {
+        grid-template-columns: 1.4fr 0.8fr 0.8fr;
+        gap: 6px;
+        padding: 8px 10px;
+    }
+    .dp-list-head { font-size: 0.5rem; }
+    .dp-list-row { font-size: 0.72rem; }
+    .dp-col-avg { font-size: 0.68rem; }
+    .dp-col-name .dp-micro { font-size: 0.52rem; }
 }
