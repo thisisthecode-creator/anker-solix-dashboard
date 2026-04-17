@@ -313,6 +313,7 @@ async def on_mqtt_data(raw: dict):
                 await retrain_calibration()
                 await retrain_and_save()
                 logger.info("Self-learning updated after day rollover")
+                await broadcast_event({"type": "recalibrated", "source": "rollover"})
             except Exception as e:
                 logger.warning("Post-rollover retrain failed: %s", e)
         asyncio.create_task(_post_rollover_retrain())
@@ -455,6 +456,23 @@ async def broadcast_loop():
         ws_clients -= dead
 
 
+async def broadcast_event(event: dict):
+    """Push a typed out-of-band event to all WebSocket clients.
+    Used e.g. to signal completed calibration/ML retrains so the UI
+    can refresh the accuracy chart immediately.
+    """
+    if not ws_clients:
+        return
+    msg = json.dumps(event)
+    dead = set()
+    for ws in ws_clients:
+        try:
+            await ws.send_text(msg)
+        except Exception:
+            dead.add(ws)
+    ws_clients -= dead
+
+
 async def restore_accumulator():
     """Restore today's accumulator state by replaying today's archive CSV.
 
@@ -585,6 +603,7 @@ async def daily_forecast_loop():
                 cal = await retrain_calibration()
                 logger.info("Calibration retrained: %s days, %s hours",
                             cal.get("sample_days"), cal.get("sample_hours"))
+                await broadcast_event({"type": "recalibrated", "source": "daily_forecast"})
             except Exception as e:
                 logger.warning("Calibration retrain failed: %s", e)
         except Exception as e:
@@ -649,6 +668,7 @@ async def lifespan(app: FastAPI):
             if load_pvgis_benchmark() is None:
                 await fetch_pvgis_benchmark()
             logger.info("Initial calibration + ML + PVGIS completed on startup")
+            await broadcast_event({"type": "recalibrated", "source": "startup"})
         except Exception as e:
             logger.warning("Initial calibration/ML retrain failed: %s", e)
     asyncio.create_task(_initial_calibration())
@@ -1120,6 +1140,7 @@ async def api_solar_calibration_retrain():
     """Trigger immediate calibration retrain (useful after adding data)."""
     from app.calibration import retrain_calibration
     result = await retrain_calibration()
+    await broadcast_event({"type": "recalibrated", "source": "manual"})
     return result
 
 

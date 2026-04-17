@@ -714,6 +714,15 @@ function connect() {
             const d = JSON.parse(e.data);
             if (!d) return;
             dot.classList.add('connected');
+            // Out-of-band events: server notifies when self-learning was retrained
+            // so the UI reflects the fresh calibration immediately.
+            if (d.type === 'recalibrated') {
+                _refreshCalibration().then(() => {
+                    try { buildAccuracyTrend(); } catch (_) {}
+                    try { buildMlStatsAndCalibration(); } catch (_) {}
+                });
+                return;
+            }
             // Always update ticker/heartbeat (shows system is alive)
             addTicker(d);
             // Only full UI update when data actually changed
