@@ -1950,16 +1950,24 @@ async function buildMlStatsAndCalibration() {
                 const curMonthData = pvgisRes.monthly && pvgisRes.monthly[curMonth];
                 const mo = curMonthData || {};
                 const monthNames = ['Jan', 'Feb', 'Mär', 'Apr', 'Mai', 'Jun', 'Jul', 'Aug', 'Sep', 'Okt', 'Nov', 'Dez'];
+                const cfg = pvgisRes.config || {};
+                const stripsLine = cfg.curve_strips
+                    ? cfg.curve_strips.map(s => s.tilt + '°').join(' + ')
+                    : (cfg.tilt_deg || 75) + '°';
+                const model = cfg.model === 'curved_5strip' ? '5-Strip Kurven-Modell' : 'Flache Annahme';
                 const pvgisCard = '<div style="width:100%;padding:10px 12px;background:rgba(96,165,250,0.08);'
                     + 'border-left:3px solid var(--blue);border-radius:6px;margin-bottom:8px">'
                     + '<div style="font-size:0.72rem;font-weight:600;color:var(--blue);margin-bottom:6px">'
-                    + '🛰️ PVGIS Klimatologie-Benchmark (15 Jahre Satellit)</div>'
+                    + '🛰️ PVGIS Klimatologie-Benchmark (SARAH-2, 15 Jahre Satellit)</div>'
                     + '<div style="font-size:0.65rem;color:var(--text-dim);line-height:1.5">'
                     + '<div>Erwartet ' + monthNames[now.getMonth()] + ': <strong>' + (mo.monthly_kwh || 0) + ' kWh</strong> '
                     + '<span style="opacity:0.7">(Ø ' + (mo.daily_avg_kwh || 0) + ' kWh/Tag)</span></div>'
                     + '<div>Jahresertrag erwartet: <strong>' + pvgisRes.yearly.total_kwh + ' kWh</strong> '
                     + '<span style="opacity:0.7">(Ø ' + pvgisRes.yearly.daily_avg_kwh + ' kWh/Tag)</span></div>'
-                    + '<div style="opacity:0.7;margin-top:2px">Tilt ' + (pvgisRes.config.tilt_deg) + '° · Aspect ' + (pvgisRes.config.aspect_deg) + '° · ' + pvgisRes.config.peakpower_kw + ' kWp</div>'
+                    + '<div style="opacity:0.7;margin-top:4px">Setup: ' + model + '</div>'
+                    + '<div style="opacity:0.7">Lat ' + cfg.lat + '° · Lon ' + cfg.lon + '° · Aspect ' + cfg.aspect_deg + '° WSW · '
+                    + cfg.peakpower_kw + ' kWp · Verluste ' + cfg.loss_pct + '%</div>'
+                    + '<div style="opacity:0.7">Panel-Kurve: ' + stripsLine + ' (je 20%)</div>'
                     + '</div></div>';
                 parts.push(pvgisCard);
             }

@@ -41,26 +41,55 @@ PVGIS_CACHE_PATH = DATA_DIR / "pvgis_benchmark.json"
 # Our panel 240° compass => 240 - 180 = +60 (WSW)
 PVGIS_ASPECT = PANEL_AZIMUTH_DEG - 180
 
-# Averaged tilt across our curve strips (60-90° sweep -> 75° average).
-# PVGIS uses a single tilt so we pick the effective mean of the curve.
-PVGIS_TILT = 75
+# Curve strips matching the panel's bend (top fixed at ~90°, bottom pulled
+# out to ~60° by the 30° bracket, middle sags 30° from the straight line).
+# Each strip covers 20% of the panel area.
+PVGIS_CURVE_STRIPS = [
+    {"tilt": 63, "weight": 0.20, "label": "unten"},
+    {"tilt": 69, "weight": 0.20, "label": "mitte-unten"},
+    {"tilt": 75, "weight": 0.20, "label": "mitte"},
+    {"tilt": 81, "weight": 0.20, "label": "mitte-oben"},
+    {"tilt": 87, "weight": 0.20, "label": "oben"},
+]
 
-# Default system loss: 14% (PVGIS default) covers cabling, inverter, temp, dust, mismatch
-PVGIS_LOSS = 14
+# System loss % - higher than PVGIS default (14%) to account for curved-panel
+# geometry losses (self-shading between strips, non-uniform incident angles)
+# and typical balcony environment losses (partial shading from railing/building).
+PVGIS_LOSS = 20
+
+
+async def _fetch_pvgis_one(tilt: int, kwp: float) -> dict | None:
+    """Fetch PVGIS /PVcalc for one tilt + our common config."""
+    params = {
+        "lat": LATITUDE, "lon": LONGITUDE,
+        "peakpower": kwp,
+        "loss": PVGIS_LOSS,
+        "angle": tilt,
+        "aspect": PVGIS_ASPECT,
+        "outputformat": "json",
+    }
+    try:
+        async with httpx.AsyncClient(timeout=30) as c:
+            r = await c.get("https://re.jrc.ec.europa.eu/api/v5_2/PVcalc", params=params)
+            r.raise_for_status()
+            return r.json()
+    except Exception as e:
+        logger.warning("PVGIS fetch failed for tilt=%d: %s", tilt, e)
+        return None
 
 
 async def fetch_pvgis_benchmark(force: bool = False) -> dict | None:
-    """Fetch + cache monthly expected PV output from PVGIS.
+    """Fetch PVGIS yield for each curve strip + weighted-sum for curved panels.
 
-    Cached locally because the climatology doesn't change (satellite data is fixed).
-    Re-runs when config (tilt/aspect/kWp) changes - detected via cache hash.
+    Sends 5 parallel requests (one per strip at 63/69/75/81/87°), weighted
+    by their 20% area share. Result is stored in one cached JSON.
     """
     if httpx is None:
         return None
     DATA_DIR.mkdir(parents=True, exist_ok=True)
 
-    # Cache key based on our config - invalidate if anything changes
-    cache_key = f"{LATITUDE}_{LONGITUDE}_{PANEL_PEAK_KW}_{PVGIS_TILT}_{PVGIS_ASPECT}_{PVGIS_LOSS}"
+    strips_key = ",".join(f"{s['tilt']}:{s['weight']}" for s in PVGIS_CURVE_STRIPS)
+    cache_key = f"{LATITUDE}_{LONGITUDE}_{PANEL_PEAK_KW}_{PVGIS_ASPECT}_{PVGIS_LOSS}_{strips_key}"
 
     if not force and PVGIS_CACHE_PATH.exists():
         try:
@@ -70,55 +99,72 @@ async def fetch_pvgis_benchmark(force: bool = False) -> dict | None:
         except Exception:
             pass
 
-    # PVGIS API call
-    params = {
-        "lat": LATITUDE, "lon": LONGITUDE,
-        "peakpower": PANEL_PEAK_KW,
-        "loss": PVGIS_LOSS,
-        "angle": PVGIS_TILT,
-        "aspect": PVGIS_ASPECT,
-        "outputformat": "json",
-    }
-    try:
-        async with httpx.AsyncClient(timeout=30) as c:
-            r = await c.get("https://re.jrc.ec.europa.eu/api/v5_2/PVcalc", params=params)
-            r.raise_for_status()
-            data = r.json()
-    except Exception as e:
-        logger.warning("PVGIS fetch failed: %s", e)
+    # Fetch one call per strip - each strip gets (kWp × weight) of the total
+    import asyncio
+    kwp_per_strip = PANEL_PEAK_KW  # PVcalc scales linearly by peakpower
+    results = await asyncio.gather(*[
+        _fetch_pvgis_one(s["tilt"], kwp_per_strip)
+        for s in PVGIS_CURVE_STRIPS
+    ])
+    if not all(results):
+        logger.warning("PVGIS: one or more strip fetches failed")
         return None
 
-    # Extract monthly + yearly totals
-    # Structure: data["outputs"]["monthly"]["fixed"] = list of 12 dicts
-    #   each with: month, E_d (avg daily kWh), E_m (monthly kWh), H(i)_d, SD_m, etc.
     try:
-        monthly_raw = data["outputs"]["monthly"]["fixed"]
+        # Weighted-sum monthly + yearly across all strips
+        weighted_monthly = {str(m): 0.0 for m in range(1, 13)}
+        weighted_monthly_days = {str(m): 0.0 for m in range(1, 13)}
+        strips_detail = []
+        for strip, data in zip(PVGIS_CURVE_STRIPS, results):
+            monthly_raw = data["outputs"]["monthly"]["fixed"]
+            per_strip = {}
+            for m in monthly_raw:
+                mk = str(m["month"])
+                # Scale: kwp_per_strip was fetched as full kwp, we need weight × that
+                contribution_m = m["E_m"] * strip["weight"]
+                contribution_d = m["E_d"] * strip["weight"]
+                weighted_monthly[mk] += contribution_m
+                weighted_monthly_days[mk] += contribution_d
+                per_strip[mk] = {"E_m": round(m["E_m"], 2), "E_d": round(m["E_d"], 3)}
+            yearly = data["outputs"]["totals"]["fixed"]
+            strips_detail.append({
+                "tilt": strip["tilt"],
+                "weight": strip["weight"],
+                "label": strip["label"],
+                "yearly_kwh_full_kwp": round(yearly.get("E_y", 0), 2),
+                "daily_avg_kwh_full_kwp": round(yearly.get("E_d", 0), 3),
+            })
+
         months = {}
-        for m in monthly_raw:
-            months[str(m["month"])] = {
-                "daily_avg_kwh": round(m["E_d"], 3),
-                "monthly_kwh": round(m["E_m"], 2),
-                "irradiance_daily": round(m.get("H(i)_d", 0), 2),
-                "stddev_monthly": round(m.get("SD_m", 0), 2),
+        for mk in weighted_monthly:
+            months[mk] = {
+                "daily_avg_kwh": round(weighted_monthly_days[mk], 3),
+                "monthly_kwh": round(weighted_monthly[mk], 2),
             }
-        yearly = data["outputs"]["totals"]["fixed"]
+        yearly_total = sum(weighted_monthly.values())
+        yearly_daily = yearly_total / 365
+
         result = {
             "cache_key": cache_key,
             "config": {
-                "lat": LATITUDE, "lon": LONGITUDE, "peakpower_kw": PANEL_PEAK_KW,
-                "tilt_deg": PVGIS_TILT, "aspect_deg": PVGIS_ASPECT, "loss_pct": PVGIS_LOSS,
+                "lat": LATITUDE, "lon": LONGITUDE,
+                "peakpower_kw": PANEL_PEAK_KW,
+                "aspect_deg": PVGIS_ASPECT,
+                "loss_pct": PVGIS_LOSS,
+                "curve_strips": PVGIS_CURVE_STRIPS,
+                "model": "curved_5strip",
             },
             "monthly": months,
             "yearly": {
-                "total_kwh": round(yearly.get("E_y", 0), 2),
-                "daily_avg_kwh": round(yearly.get("E_d", 0), 3),
-                "irradiance_yearly": round(yearly.get("H(i)_y", 0), 2),
+                "total_kwh": round(yearly_total, 2),
+                "daily_avg_kwh": round(yearly_daily, 3),
             },
-            "meta": data.get("meta", {}),
+            "strips_detail": strips_detail,
+            "meta": results[0].get("meta", {}),
         }
         PVGIS_CACHE_PATH.write_text(json.dumps(result, ensure_ascii=False, indent=2))
         logger.info(
-            "PVGIS benchmark cached: yearly=%.1f kWh, daily avg=%.2f kWh",
+            "PVGIS (5-strip curve) cached: yearly=%.1f kWh, daily avg=%.2f kWh",
             result["yearly"]["total_kwh"], result["yearly"]["daily_avg_kwh"],
         )
         return result
