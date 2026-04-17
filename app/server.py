@@ -316,6 +316,8 @@ async def on_mqtt_data(raw: dict):
     # Dynamic total capacity: base C1000 + N expansion packs (auto-detected)
     exp_packs = data.get("expansion_packs", 0) or 0
     total_capacity_wh = BATTERY_CAPACITY_WH + exp_packs * BP1000_CAPACITY_WH
+    # Propagate to cycle tracker so kWh throughput uses the right capacity
+    battery_cycles.current_capacity_wh = total_capacity_wh
 
     battery_time = None
     battery_charging = False
