@@ -1613,17 +1613,25 @@ async function buildHourlyForecastToday(dateStr) {
             }
         }
 
-        // Sum forecast + actual.
-        // Today: sum ALL hours up to current hour (fair partial-day comparison).
-        // Past days: sum all hours of the day (full day).
+        // Display totals: always sum full day (for today: what's expected,
+        // for past days: the actual full day). Keeps the summary informative
+        // even pre-sunrise when currentHour is still 0-5.
         let totalFc = 0, totalAct = 0;
-        const isTodayView = (dateStr === today);
-        const endH = isTodayView ? currentHour : 23;
-        for (let h = 0; h <= endH; h++) {
+        for (let h = 0; h < 24; h++) {
             totalFc += forecastByHour[h] || 0;
             totalAct += actualByHour[h] || 0;
         }
-        console.log('[hourlyFC]', dateStr, 'fc=' + totalFc.toFixed(3), 'act=' + totalAct.toFixed(3),
+        // Progressive sums for the accuracy badge — fair partial-day comparison
+        // for today (forecast capped at current hour vs. actual so far).
+        const isTodayView = (dateStr === today);
+        let accFc = 0, accAct = 0;
+        const accEndH = isTodayView ? currentHour : 23;
+        for (let h = 0; h <= accEndH; h++) {
+            accFc += forecastByHour[h] || 0;
+            accAct += actualByHour[h] || 0;
+        }
+        console.log('[hourlyFC]', dateStr, 'fcDay=' + totalFc.toFixed(3), 'actDay=' + totalAct.toFixed(3),
+                    'accFc=' + accFc.toFixed(3), 'accAct=' + accAct.toFixed(3),
                     'fcHours=' + Object.keys(forecastByHour).length,
                     'actHours=' + Object.keys(actualByHour).filter(h => actualByHour[h] > 0).length);
 
@@ -1646,10 +1654,10 @@ async function buildHourlyForecastToday(dateStr) {
                 : '--';
             const isToday = (dateStr === today);
             const hadSolar = totalAct >= 0.1;
-            // Always compute for today; for past days only when solar was connected
-            const showAccuracy = (isToday || hadSolar) && totalFc > 0.01;
+            // Accuracy uses the progressive (fair) sums, not the full-day display.
+            const showAccuracy = (isToday || hadSolar) && accFc > 0.01 && accAct > 0.01;
             const accuracy = showAccuracy
-                ? Math.round((1 - Math.abs(totalFc - totalAct) / Math.max(totalFc, totalAct)) * 100)
+                ? Math.round((1 - Math.abs(accFc - accAct) / Math.max(accFc, accAct)) * 100)
                 : null;
             const accBadge = accuracy != null
                 ? '<span style="color:' + (accuracy >= 80 ? 'var(--green)' : accuracy >= 60 ? 'var(--solar)' : 'var(--red)') + '">'
