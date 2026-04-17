@@ -1574,19 +1574,23 @@ async function buildHourlyForecastToday(dateStr) {
         if (h2) h2.textContent = (LANG === 'de' ? 'Stündliche Prognose' : 'Hourly Forecast')
             + ' - ' + dayName + ' ' + dd + '.' + mm + '.';
 
-        // Summary with accuracy
+        // Summary with accuracy (only if solar was actually connected)
         const sumEl = $('hourlyFcTodaySummary');
         if (sumEl) {
             const activeRange = startHour != null
                 ? (String(startHour).padStart(2, '0') + ':00 - ' + String(endHour).padStart(2, '0') + ':00')
                 : '--';
-            const accuracy = totalFc > 0.01
+            // Only compute accuracy if there was real solar input (>= 0.1 kWh)
+            const hadSolar = totalAct >= 0.1;
+            const accuracy = (hadSolar && totalFc > 0.01)
                 ? Math.round((1 - Math.abs(totalFc - totalAct) / Math.max(totalFc, totalAct)) * 100)
                 : null;
             const accBadge = accuracy != null
                 ? '<span style="color:' + (accuracy >= 80 ? 'var(--green)' : accuracy >= 60 ? 'var(--solar)' : 'var(--red)') + '">'
                     + '🎯 ' + accuracy + '%</span>'
-                : '';
+                : (totalFc > 0.1 && !hadSolar
+                    ? '<span style="color:var(--text-dim)">kein Solar-Eingang</span>'
+                    : '');
             sumEl.innerHTML = '<span>' + (LANG === 'de' ? 'Prognose' : 'Forecast') + ': ' + fmtKwh.format(totalFc) + ' kWh</span>'
                 + '<span>' + (LANG === 'de' ? 'Real' : 'Actual') + ': ' + fmtKwh.format(totalAct) + ' kWh</span>'
                 + '<span>' + (LANG === 'de' ? 'Aktiv' : 'Active') + ': ' + activeRange + '</span>'
@@ -1699,21 +1703,28 @@ async function buildAccuracyTrend() {
         }));
 
         // Build chart: oldest -> newest
+        // Only include days with actual solar input (filter out days where system
+        // was unplugged - otherwise 0 actual vs positive forecast distorts the accuracy).
         const sorted = pastDates.slice().sort();
+        const MIN_KWH = 0.1;  // below this: treat as "not connected" / skip
         const labels = [];
         const fcData = [];
         const actData = [];
         const accData = [];
         let sumFc = 0, sumAct = 0, nDays = 0;
+        let skippedNoInput = 0;
         for (const d of sorted) {
             const fc = fcByDay[d] || 0;
             const act = actByDay[d] || 0;
-            if (fc < 0.01 && act < 0.01) continue;  // skip empty days
+            // Skip days with no real solar input (system unplugged / broken)
+            if (act < MIN_KWH) { skippedNoInput++; continue; }
+            // Also skip days with no forecast (data missing)
+            if (fc < 0.01) continue;
             const [yy, mm, dd] = d.split('-');
             labels.push(dd + '.' + mm + '.');
             fcData.push(Math.round(fc * 100) / 100);
             actData.push(Math.round(act * 100) / 100);
-            const acc = fc > 0.01 ? Math.round((1 - Math.abs(fc - act) / Math.max(fc, act)) * 100) : null;
+            const acc = Math.round((1 - Math.abs(fc - act) / Math.max(fc, act)) * 100);
             accData.push(acc);
             sumFc += fc;
             sumAct += act;
@@ -1723,17 +1734,25 @@ async function buildAccuracyTrend() {
         // Overall summary
         const sumEl = $('hfcAccuracySummary');
         if (sumEl) {
-            const overallAcc = sumFc > 0.01
-                ? Math.round((1 - Math.abs(sumFc - sumAct) / Math.max(sumFc, sumAct)) * 100)
-                : 0;
-            const bias = sumFc > 0 ? Math.round((sumAct / sumFc - 1) * 100) : 0;
-            const biasStr = bias > 0 ? '+' + bias + '%' : bias + '%';
-            const biasLbl = bias > 5 ? 'Prognose zu niedrig' : bias < -5 ? 'Prognose zu hoch' : 'ausgeglichen';
-            sumEl.innerHTML = '<span>📊 ' + nDays + ' Tage</span>'
-                + '<span style="color:var(--solar)">Ø Prognose: ' + fmtKwh.format(sumFc / nDays) + ' kWh</span>'
-                + '<span>Ø Real: ' + fmtKwh.format(sumAct / nDays) + ' kWh</span>'
-                + '<span style="color:' + (overallAcc >= 80 ? 'var(--green)' : overallAcc >= 60 ? 'var(--solar)' : 'var(--red)') + '">🎯 ' + overallAcc + '% Ø</span>'
-                + '<span>Bias: ' + biasStr + ' (' + biasLbl + ')</span>';
+            if (nDays === 0) {
+                sumEl.innerHTML = '<span>Keine Tage mit Solar-Eingang vorhanden.</span>';
+            } else {
+                const overallAcc = sumFc > 0.01
+                    ? Math.round((1 - Math.abs(sumFc - sumAct) / Math.max(sumFc, sumAct)) * 100)
+                    : 0;
+                const bias = sumFc > 0 ? Math.round((sumAct / sumFc - 1) * 100) : 0;
+                const biasStr = bias > 0 ? '+' + bias + '%' : bias + '%';
+                const biasLbl = bias > 5 ? 'Prognose zu niedrig' : bias < -5 ? 'Prognose zu hoch' : 'ausgeglichen';
+                const skippedInfo = skippedNoInput > 0
+                    ? '<span style="color:var(--text-dim)">(' + skippedNoInput + ' Tage ohne Eingang ausgeblendet)</span>'
+                    : '';
+                sumEl.innerHTML = '<span>📊 ' + nDays + ' Tage mit Solar</span>'
+                    + '<span style="color:var(--solar)">Ø Prognose: ' + fmtKwh.format(sumFc / nDays) + ' kWh</span>'
+                    + '<span>Ø Real: ' + fmtKwh.format(sumAct / nDays) + ' kWh</span>'
+                    + '<span style="color:' + (overallAcc >= 80 ? 'var(--green)' : overallAcc >= 60 ? 'var(--solar)' : 'var(--red)') + '">🎯 ' + overallAcc + '% Ø</span>'
+                    + '<span>Bias: ' + biasStr + ' (' + biasLbl + ')</span>'
+                    + skippedInfo;
+            }
         }
 
         if (_hfcAccuracyChart) _hfcAccuracyChart.destroy();
