@@ -1911,12 +1911,13 @@ async function buildMlStatsAndCalibration() {
                 const icon = statusIcons[diag.status] || '📊';
                 const diagCard = '<div style="width:100%;padding:10px 12px;background:rgba(128,128,128,0.06);'
                     + 'border-left:3px solid ' + col + ';border-radius:6px;margin-bottom:8px">'
-                    + '<div style="font-size:0.75rem;font-weight:600;color:' + col + ';margin-bottom:4px">'
+                    + '<div style="font-size:0.75rem;font-weight:600;color:' + col + ';margin-bottom:6px">'
                     + icon + ' ' + (diag.recommendation || '') + '</div>'
-                    + '<div style="font-size:0.68rem;color:var(--text-dim)">'
-                    + 'Peak konfiguriert: <strong>' + diag.configured_peak_w + ' W</strong> · '
-                    + 'Real gemessen: <strong>' + diag.effective_peak_w + ' W</strong> · '
-                    + 'Abweichung: <strong style="color:' + col + '">' + (diag.deviation_pct >= 0 ? '+' : '') + diag.deviation_pct + '%</strong>'
+                    + '<div style="font-size:0.65rem;color:var(--text-dim);line-height:1.5">'
+                    + '<div>Config-Peak: <strong>' + diag.configured_peak_w + ' W</strong> <span style="opacity:0.7">(400W x 85% Effizienz)</span></div>'
+                    + '<div>Max tatsachlich gemessen: <strong>' + (diag.observed_peak_w || 0) + ' W</strong> <span style="opacity:0.7">(hoechster je aufgezeichneter Wert)</span></div>'
+                    + '<div>Ø Kalibrierungs-Faktor: <strong>' + (diag.effective_peak_w_avg || 0) + ' W</strong> <span style="opacity:0.7">(= Config x Durchschnitts-Bias ' + (Math.round((1 + diag.deviation_pct / 100) * 100) / 100) + 'x)</span></div>'
+                    + '<div style="margin-top:4px">Bias-Abweichung: <strong style="color:' + col + '">' + (diag.deviation_pct >= 0 ? '+' : '') + diag.deviation_pct + '%</strong></div>'
                     + '</div></div>';
                 parts.push(diagCard);
             }
