@@ -1574,21 +1574,23 @@ async function buildHourlyForecastToday(dateStr) {
         if (h2) h2.textContent = (LANG === 'de' ? 'Stündliche Prognose' : 'Hourly Forecast')
             + ' - ' + dayName + ' ' + dd + '.' + mm + '.';
 
-        // Summary with accuracy (only if solar was actually connected)
+        // Summary with accuracy. For today: always show. For past days: only if solar was connected.
         const sumEl = $('hourlyFcTodaySummary');
         if (sumEl) {
             const activeRange = startHour != null
                 ? (String(startHour).padStart(2, '0') + ':00 - ' + String(endHour).padStart(2, '0') + ':00')
                 : '--';
-            // Only compute accuracy if there was real solar input (>= 0.1 kWh)
+            const isToday = (dateStr === today);
             const hadSolar = totalAct >= 0.1;
-            const accuracy = (hadSolar && totalFc > 0.01)
+            // Always compute for today; for past days only when solar was connected
+            const showAccuracy = (isToday || hadSolar) && totalFc > 0.01;
+            const accuracy = showAccuracy
                 ? Math.round((1 - Math.abs(totalFc - totalAct) / Math.max(totalFc, totalAct)) * 100)
                 : null;
             const accBadge = accuracy != null
                 ? '<span style="color:' + (accuracy >= 80 ? 'var(--green)' : accuracy >= 60 ? 'var(--solar)' : 'var(--red)') + '">'
-                    + '🎯 ' + accuracy + '%</span>'
-                : (totalFc > 0.1 && !hadSolar
+                    + '🎯 ' + accuracy + '%' + (isToday && !hadSolar ? ' (bisher)' : '') + '</span>'
+                : (totalFc > 0.1 && !hadSolar && !isToday
                     ? '<span style="color:var(--text-dim)">kein Solar-Eingang</span>'
                     : '');
             sumEl.innerHTML = '<span>' + (LANG === 'de' ? 'Prognose' : 'Forecast') + ': ' + fmtKwh.format(totalFc) + ' kWh</span>'
