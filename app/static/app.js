@@ -1357,6 +1357,32 @@ function renderForecast(fc) {
     }
 }
 
+// Self-learning calibration cache (fetched once, refreshed periodically).
+// Shape: { available: bool, hour_factors: {"0": {factor, confidence, samples}}, overall_factor, ... }
+window._solarCalibration = null;
+async function _refreshCalibration() {
+    try {
+        const r = await fetch('/api/solar-calibration');
+        if (r.ok) window._solarCalibration = await r.json();
+    } catch (_) {}
+}
+_refreshCalibration();
+setInterval(_refreshCalibration, 900000);  // every 15 min
+
+// Apply per-hour calibration factor to a raw forecast kWh value.
+// When confidence is low, blend toward the raw value (less aggressive correction).
+function applyHourCalibration(rawKwh, hourOfDay) {
+    const cal = window._solarCalibration;
+    if (!cal || !cal.available || !cal.hour_factors) return rawKwh;
+    const hf = cal.hour_factors[String(hourOfDay)];
+    if (!hf || hf.samples < 3) return rawKwh;
+    const factor = hf.factor;
+    const confidence = hf.confidence || 0;
+    // Blend: confidence=1 uses factor fully, confidence=0 keeps raw
+    const effective = 1 + (factor - 1) * confidence;
+    return rawKwh * effective;
+}
+
 function processForecastData(dailyRes, stripResults) {
     const d = dailyRes.daily;
     const hBase = dailyRes.hourly;
@@ -1373,7 +1399,16 @@ function processForecastData(dailyRes, stripResults) {
         for (let s = 0; s < CURVE_STRIPS.length; s++) {
             weightedGTI += (stripResults[s].global_tilted_irradiance[i] || 0) * CURVE_STRIPS[s].weight;
         }
-        dailyGTI[day] += weightedGTI;
+        // Apply calibration (self-learned) so daily totals reflect the corrected forecast
+        const h = parseInt(hBase.time[i].slice(11, 13), 10);
+        const calFactor = (() => {
+            const cal = window._solarCalibration;
+            if (!cal || !cal.available || !cal.hour_factors) return 1.0;
+            const hf = cal.hour_factors[String(h)];
+            if (!hf || hf.samples < 3) return 1.0;
+            return 1 + (hf.factor - 1) * (hf.confidence || 0);
+        })();
+        dailyGTI[day] += weightedGTI * calFactor;
         dailyDirect[day] += (hBase.direct_radiation[i] || 0);
         dailyDiffuse[day] += (hBase.diffuse_radiation[i] || 0);
     }
@@ -1385,7 +1420,10 @@ function processForecastData(dailyRes, stripResults) {
         for (let s = 0; s < CURVE_STRIPS.length; s++) {
             weightedGTI += (stripResults[s].global_tilted_irradiance[i] || 0) * CURVE_STRIPS[s].weight;
         }
-        hourlyKwh.push(Math.round(weightedGTI / 1000 * PANEL_KWP * PANEL_EFFICIENCY * 1000) / 1000);
+        const rawKwh = weightedGTI / 1000 * PANEL_KWP * PANEL_EFFICIENCY;
+        const h = parseInt(hBase.time[i].slice(11, 13), 10);
+        const calibrated = applyHourCalibration(rawKwh, h);
+        hourlyKwh.push(Math.round(calibrated * 1000) / 1000);
     }
 
     return { daily: d, dailyGTI, dailyDirect, dailyDiffuse, hourlyTimes, hourlyKwh };
@@ -1554,22 +1592,17 @@ async function buildHourlyForecastToday(dateStr) {
 
         // Sum forecast + actual.
         // Today: sum ALL hours up to current hour (fair partial-day comparison).
-        // Past days: only active solar hours (startHour..endHour).
+        // Past days: sum all hours of the day (full day).
         let totalFc = 0, totalAct = 0;
         const isTodayView = (dateStr === today);
-        if (isTodayView) {
-            for (let h = 0; h <= currentHour; h++) {
-                totalFc += forecastByHour[h] || 0;
-                totalAct += actualByHour[h] || 0;
-            }
-        } else if (startHour != null && endHour != null) {
-            for (let h = startHour; h <= endHour; h++) {
-                if ((actualByHour[h] || 0) > 0.001) {
-                    totalFc += forecastByHour[h] || 0;
-                    totalAct += actualByHour[h] || 0;
-                }
-            }
+        const endH = isTodayView ? currentHour : 23;
+        for (let h = 0; h <= endH; h++) {
+            totalFc += forecastByHour[h] || 0;
+            totalAct += actualByHour[h] || 0;
         }
+        console.log('[hourlyFC]', dateStr, 'fc=' + totalFc.toFixed(3), 'act=' + totalAct.toFixed(3),
+                    'fcHours=' + Object.keys(forecastByHour).length,
+                    'actHours=' + Object.keys(actualByHour).filter(h => actualByHour[h] > 0).length);
 
         const section = $('hourlyForecastTodaySection');
         if (!section) return;
@@ -1845,6 +1878,100 @@ async function buildAccuracyTrend() {
         });
     } catch (e) { console.warn('Accuracy trend error:', e); }
 }
+
+// === Self-Learning ML + Calibration status ===
+let _hourCalChart = null;
+
+async function buildMlStatsAndCalibration() {
+    try {
+        const [mlRes, calRes] = await Promise.all([
+            fetch('/api/ml-stats').then(r => r.ok ? r.json() : null).catch(() => null),
+            fetch('/api/solar-calibration').then(r => r.ok ? r.json() : null).catch(() => null),
+        ]);
+
+        // ML stats line
+        const mlEl = $('mlStatsRow');
+        if (mlEl) {
+            const parts = [];
+            if (mlRes && mlRes.available) {
+                const m = mlRes.metrics || {};
+                parts.push('<span>🧠 ' + (mlRes.type === 'sklearn_gbr' ? 'GradientBoosting' : 'LinearRegression') + '</span>');
+                parts.push('<span>n=' + (mlRes.n_train || 0) + '</span>');
+                if (m.r2 != null) parts.push('<span>R²: ' + m.r2 + '</span>');
+                if (m.mae_kwh != null) parts.push('<span>MAE: ' + fmtKwh.format(m.mae_kwh) + ' kWh</span>');
+                if (m.mape_pct != null) parts.push('<span>MAPE: ' + m.mape_pct + '%</span>');
+            } else {
+                parts.push('<span>🧠 ML-Modell: noch nicht trainiert</span>');
+            }
+            if (calRes && calRes.available) {
+                parts.push('<span>· Kalibrierung: ' + (calRes.sample_days || 0) + ' Tage, '
+                    + (calRes.sample_hours || 0) + ' Stunden</span>');
+                parts.push('<span>Overall-Faktor: ' + (calRes.overall_factor || 1).toFixed(2) + 'x</span>');
+            }
+            mlEl.innerHTML = parts.join(' ');
+        }
+
+        // Per-hour calibration chart
+        if (calRes && calRes.available && calRes.hour_factors) {
+            const hours = [];
+            const factors = [];
+            const confidences = [];
+            for (let h = 0; h < 24; h++) {
+                const hf = calRes.hour_factors[String(h)];
+                hours.push(String(h).padStart(2, '0'));
+                factors.push(hf ? hf.factor : 1.0);
+                confidences.push(hf ? Math.round((hf.confidence || 0) * 100) : 0);
+            }
+            if (_hourCalChart) _hourCalChart.destroy();
+            const canvas = $('chart_hour_calibration');
+            if (canvas) {
+                _hourCalChart = new Chart(canvas, {
+                    data: {
+                        labels: hours,
+                        datasets: [
+                            { type: 'bar', label: 'Faktor (1.0 = Prognose exakt)',
+                              data: factors,
+                              backgroundColor: factors.map(f => f >= 0.9 && f <= 1.1 ? 'rgba(34,197,94,0.5)' : 'rgba(245,158,11,0.5)'),
+                              borderColor: factors.map(f => f >= 0.9 && f <= 1.1 ? '#22c55e' : '#f59e0b'),
+                              borderWidth: 1, borderRadius: 2, yAxisID: 'y' },
+                            { type: 'line', label: 'Konfidenz %', data: confidences,
+                              borderColor: '#60a5fa', backgroundColor: 'rgba(96,165,250,0.1)',
+                              borderWidth: 2, tension: 0.3, pointRadius: 2, yAxisID: 'y2' }
+                        ]
+                    },
+                    options: {
+                        responsive: true, maintainAspectRatio: false, animation: false,
+                        interaction: { intersect: false, mode: 'index' },
+                        plugins: {
+                            legend: { display: true, position: 'top', labels: { boxWidth: 8, font: { size: 9 } } },
+                            tooltip: { callbacks: { label: ctx => {
+                                if (ctx.dataset.label.startsWith('Faktor')) {
+                                    const hf = calRes.hour_factors[String(ctx.dataIndex)] || {};
+                                    return 'Faktor: ' + ctx.parsed.y.toFixed(2) + 'x (n=' + (hf.samples || 0) + ')';
+                                }
+                                return ctx.dataset.label + ': ' + ctx.parsed.y + '%';
+                            } } }
+                        },
+                        scales: {
+                            x: { grid: { display: false }, ticks: { maxTicksLimit: 12, font: { size: 9 } } },
+                            y: { position: 'left', beginAtZero: true, suggestedMax: 2,
+                                 grid: { color: chartGridColor() },
+                                 ticks: { maxTicksLimit: 4, font: { size: 9 }, callback: v => v.toFixed(1) + 'x' } },
+                            y2: { position: 'right', beginAtZero: true, max: 100, grid: { display: false },
+                                 ticks: { maxTicksLimit: 4, font: { size: 9 }, callback: v => v + '%' } }
+                        }
+                    }
+                });
+            }
+        } else if (_hourCalChart) {
+            _hourCalChart.destroy();
+            _hourCalChart = null;
+        }
+    } catch (e) { console.warn('ML stats error:', e); }
+}
+
+setTimeout(buildMlStatsAndCalibration, 8000);
+setInterval(buildMlStatsAndCalibration, 1800000);  // every 30 min
 
 // Date picker wiring - prev/next skip days without solar input (past days only).
 // List of days WITH solar input cached globally after /api/solar-dates fetch.

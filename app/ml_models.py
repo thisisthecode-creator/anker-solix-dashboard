@@ -145,25 +145,64 @@ async def retrain_and_save():
         pairs = []
 
     solar_trained = False
+    solar_metrics: dict = {}
     if len(pairs) >= MIN_TRAIN_ROWS:
         try:
-            from sklearn.linear_model import LinearRegression  # lazy import
             import numpy as np
             X = np.array([p[0] for p in pairs])
             y = np.array([p[1] for p in pairs])
-            model = LinearRegression()
+
+            # With >= 20 samples use GradientBoosting (much better non-linear fit).
+            # With < 20, stick to LinearRegression to avoid overfitting.
+            if len(pairs) >= 20:
+                from sklearn.ensemble import GradientBoostingRegressor
+                model = GradientBoostingRegressor(
+                    n_estimators=100, max_depth=3, learning_rate=0.05,
+                    random_state=42, min_samples_leaf=2,
+                )
+                model_type = "sklearn_gbr"
+            else:
+                from sklearn.linear_model import LinearRegression
+                model = LinearRegression()
+                model_type = "sklearn_linreg"
+
+            # Compute holdout metrics via k-fold CV for models with enough data
+            if len(pairs) >= 10:
+                from sklearn.model_selection import cross_val_predict
+                k = min(5, max(2, len(pairs) // 4))
+                preds = cross_val_predict(model, X, y, cv=k)
+                errors = y - preds
+                mae = float(np.mean(np.abs(errors)))
+                rmse = float(np.sqrt(np.mean(errors ** 2)))
+                # R² = 1 - SSR/SST
+                ss_res = float(np.sum(errors ** 2))
+                ss_tot = float(np.sum((y - np.mean(y)) ** 2))
+                r2 = 1 - (ss_res / ss_tot) if ss_tot > 0 else 0.0
+                # MAPE, skip zero actuals
+                mape_items = [abs(e / a) * 100 for e, a in zip(errors, y) if a > 0.05]
+                mape = float(np.mean(mape_items)) if mape_items else 0.0
+                solar_metrics = {
+                    "mae_kwh": round(mae, 3),
+                    "rmse_kwh": round(rmse, 3),
+                    "r2": round(r2, 3),
+                    "mape_pct": round(mape, 1),
+                    "cv_folds": k,
+                }
+
+            # Fit full model and persist (for prediction we use .predict via pickled model)
             model.fit(X, y)
             with open(SOLAR_MODEL_PATH, "wb") as f:
                 pickle.dump({
-                    "type": "sklearn_linreg",
+                    "type": model_type,
                     "feature_keys": FEATURE_KEYS,
-                    "coef": model.coef_.tolist(),
-                    "intercept": float(model.intercept_),
+                    "model_pickle": pickle.dumps(model),
                     "n_train": len(pairs),
                     "trained_at": datetime.now().isoformat(timespec="seconds"),
+                    "metrics": solar_metrics,
                 }, f)
             solar_trained = True
-            logger.info("Solar ML model retrained on %d pairs", len(pairs))
+            logger.info("Solar ML (%s) retrained on %d pairs. metrics=%s",
+                        model_type, len(pairs), solar_metrics)
         except Exception as e:
             logger.warning("Solar model training failed: %s", e)
     else:
@@ -244,6 +283,13 @@ def _predict_solar(weather: dict, date_str: str) -> float | None:
         return None
     feats = _features_from_weather(weather, date_str)
     try:
+        # New format: real pickled sklearn model
+        if "model_pickle" in model:
+            sk_model = pickle.loads(model["model_pickle"])
+            import numpy as np
+            pred = float(sk_model.predict(np.array([feats]))[0])
+            return max(0.0, round(pred, 3))
+        # Legacy format: coef + intercept
         pred = model["intercept"] + sum(
             c * x for c, x in zip(model["coef"], feats)
         )
