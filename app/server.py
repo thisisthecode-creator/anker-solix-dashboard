@@ -24,6 +24,7 @@ from app.database import (
     init_db, close_pool, upsert_daily, update_monthly,
     update_yearly, get_daily, get_monthly, get_yearly,
     get_readings, get_latest_reading, get_stats, get_energy_summary,
+    get_hourly_solar_for_date, get_available_solar_dates,
     get_soh_trend, get_daily_stats, cleanup_old_readings,
     cleanup_old_forecasts,
     get_cumulative_savings, insert_forecast,
@@ -1052,6 +1053,18 @@ async def api_battery_cycles():
     """Pre-computed battery cycle stats. Replaces the old client-side
     calculation that fetched a full year of /api/readings on every load."""
     return battery_cycles.stats()
+
+
+@app.get("/api/hourly-solar")
+async def api_hourly_solar(date: str = Query(..., regex=r"^\d{4}-\d{2}-\d{2}$")):
+    """Per-hour actual solar Wh for a specific date (YYYY-MM-DD)."""
+    return await get_hourly_solar_for_date(date)
+
+
+@app.get("/api/solar-dates")
+async def api_solar_dates():
+    """List all dates with archived solar data (newest first)."""
+    return {"dates": await get_available_solar_dates()}
 
 
 _FORECAST_CACHE = ARCHIVE_DIR.parent / "forecast_cache.json"

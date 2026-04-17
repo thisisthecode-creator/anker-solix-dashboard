@@ -129,11 +129,20 @@
             <div class="forecast-grid" id="forecastGrid"><div style="text-align:center;color:var(--text-dim);padding:20px;font-size:0.8rem">Lade Prognose...</div></div>
         </section>
 
-        <!-- Hourly Forecast: today with actual overlay -->
+        <!-- Hourly Forecast: any day with actual overlay + accuracy trend -->
         <section class="today-box" id="hourlyForecastTodaySection">
             <h2>Stündliche Prognose</h2>
-            <div id="hourlyFcTodaySummary" style="font-size:0.7rem;color:var(--text-dim);margin-bottom:10px;display:flex;gap:16px;flex-wrap:wrap"></div>
+            <div class="hfc-date-bar">
+                <button class="hfc-nav" id="hfcPrev" type="button">◀</button>
+                <input type="date" id="hfcDate" class="hfc-date-input">
+                <button class="hfc-nav" id="hfcNext" type="button">▶</button>
+                <button class="hfc-today" id="hfcToday" type="button">Heute</button>
+            </div>
+            <div id="hourlyFcTodaySummary" style="font-size:0.7rem;color:var(--text-dim);margin:8px 0 10px;display:flex;gap:16px;flex-wrap:wrap"></div>
             <div class="chart-wrap" style="height:180px"><canvas id="chart_hourly_forecast_today"></canvas></div>
+            <h3 style="font-size:0.75rem;color:var(--text-dim);text-transform:uppercase;letter-spacing:0.05em;margin:20px 0 8px">Prognose-Genauigkeit (alle Tage)</h3>
+            <div id="hfcAccuracySummary" style="font-size:0.7rem;color:var(--text-dim);margin-bottom:8px;display:flex;gap:16px;flex-wrap:wrap"></div>
+            <div class="chart-wrap" style="height:150px"><canvas id="chart_forecast_accuracy_trend"></canvas></div>
         </section>
 
 

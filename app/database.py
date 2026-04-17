@@ -703,6 +703,74 @@ async def get_readings(hours: int = 24) -> list[dict]:
     return out
 
 
+async def get_hourly_solar_for_date(date_str: str) -> dict:
+    """Average solar_watts per hour for a specific date (YYYY-MM-DD).
+
+    Reads the day's CSV (or .csv.gz) from ARCHIVE_DIR, trapezoidal-integrates
+    per-hour Wh, and returns 24 buckets of Wh + actual kWh total.
+    """
+    # Try .csv first (today), then .csv.gz (archived)
+    csv_path = ARCHIVE_DIR / f"{date_str}.csv"
+    gz_path = ARCHIVE_DIR / f"{date_str}.csv.gz"
+    opener = None
+    if csv_path.exists():
+        opener = lambda: open(csv_path, "r")
+    elif gz_path.exists():
+        opener = lambda: gzip.open(gz_path, "rt")
+    else:
+        return {"date": date_str, "hourly_wh": [0.0] * 24, "total_kwh": 0.0, "samples": 0}
+
+    hour_wh = [0.0] * 24
+    last_ts: dict[int, float] = {}
+    last_w: dict[int, float] = {}
+    samples = 0
+
+    try:
+        with opener() as f:
+            next(f, None)  # header
+            for line in f:
+                parts = line.strip().split(",")
+                if len(parts) < 14:
+                    continue
+                try:
+                    ts = datetime.fromisoformat(parts[0])
+                    solar_w = float(parts[1] or 0)
+                except (ValueError, IndexError):
+                    continue
+                h = ts.hour
+                ts_sec = ts.timestamp()
+                samples += 1
+                if h in last_ts:
+                    dt_s = ts_sec - last_ts[h]
+                    if 0 < dt_s < 3600:  # cap at 1h gap
+                        # Trapezoidal: avg power * dt hours -> Wh
+                        hour_wh[h] += ((last_w[h] + solar_w) / 2) * (dt_s / 3600)
+                last_ts[h] = ts_sec
+                last_w[h] = solar_w
+    except Exception as e:
+        logger.warning("get_hourly_solar_for_date failed for %s: %s", date_str, e)
+        return {"date": date_str, "hourly_wh": [0.0] * 24, "total_kwh": 0.0, "samples": 0}
+
+    total_kwh = sum(hour_wh) / 1000
+    return {
+        "date": date_str,
+        "hourly_wh": [round(w, 1) for w in hour_wh],
+        "total_kwh": round(total_kwh, 3),
+        "samples": samples,
+    }
+
+
+async def get_available_solar_dates() -> list[str]:
+    """List all dates (YYYY-MM-DD) we have solar data for, newest first."""
+    dates = set()
+    ARCHIVE_DIR.mkdir(parents=True, exist_ok=True)
+    for p in ARCHIVE_DIR.glob("*.csv*"):
+        name = p.name.replace(".csv.gz", "").replace(".csv", "")
+        if len(name) == 10 and name[4] == "-" and name[7] == "-":
+            dates.add(name)
+    return sorted(dates, reverse=True)
+
+
 async def get_energy_summary() -> dict:
     """Get energy totals for today, this week, this month, this year, and all-time."""
     db = await get_pool()
