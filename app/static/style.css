@@ -3643,13 +3643,11 @@ body.light-mode .log-table td {
 }
 .pf-bat-sub {
     text-align: center;
-    font-size: 0.68rem;
+    font-size: 0.75rem;
     color: var(--text-dim);
     font-variant-numeric: tabular-nums;
-    margin-top: 4px;
-    letter-spacing: 0.05em;
-    font-weight: 600;
-    text-transform: uppercase;
+    margin-top: 6px;
+    font-weight: 400;
 }
 @media (max-width: 480px) {
     .pf-v-bat-dual { gap: 14px; }
