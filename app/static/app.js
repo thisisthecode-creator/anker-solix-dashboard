@@ -1679,41 +1679,57 @@ async function buildAccuracyTrend() {
         const { dates } = await datesRes.json();
         if (!dates || !dates.length) return;
         const today = warsawToday();
-        // Only past days (today may still be mid-day)
-        const pastDates = dates.filter(d => d < today).slice(0, 60);  // cap at 60 days
-        if (!pastDates.length) {
+        const currentHour = warsawNow().getHours();
+        // Include today + past days (cap at 60)
+        const allDates = dates.filter(d => d <= today).slice(0, 60);
+        if (!allDates.length) {
             const sumEl = $('hfcAccuracySummary');
-            if (sumEl) sumEl.textContent = 'Noch keine abgeschlossenen Tage.';
+            if (sumEl) sumEl.textContent = 'Noch keine Daten vorhanden.';
             return;
         }
 
-        // Batch-fetch archive GTI for all past days in one API call
-        const startDate = pastDates[pastDates.length - 1];
-        const endDate = pastDates[0];
-        const strips = await Promise.all(CURVE_STRIPS.map(s =>
-            fetch('https://archive-api.open-meteo.com/v1/archive?latitude=52.1928&longitude=21.0103'
-                + '&hourly=global_tilted_irradiance'
-                + '&tilt=' + s.tilt + '&azimuth=' + AZIMUTH
-                + '&timezone=Europe%2FWarsaw'
-                + '&start_date=' + startDate + '&end_date=' + endDate
-            ).then(r => r.json()).then(d => d.hourly)
-        ));
-        if (!strips[0] || !strips[0].time) return;
-
-        // Aggregate forecast kWh per day
+        // Batch-fetch archive GTI for past days (not today - archive lags)
+        const pastOnly = allDates.filter(d => d < today);
         const fcByDay = {};
-        for (let i = 0; i < strips[0].time.length; i++) {
-            const day = strips[0].time[i].slice(0, 10);
-            let wgti = 0;
-            for (let s = 0; s < CURVE_STRIPS.length; s++) {
-                wgti += (strips[s].global_tilted_irradiance[i] || 0) * CURVE_STRIPS[s].weight;
+
+        if (pastOnly.length) {
+            const startDate = pastOnly[pastOnly.length - 1];
+            const endDate = pastOnly[0];
+            const strips = await Promise.all(CURVE_STRIPS.map(s =>
+                fetch('https://archive-api.open-meteo.com/v1/archive?latitude=52.1928&longitude=21.0103'
+                    + '&hourly=global_tilted_irradiance'
+                    + '&tilt=' + s.tilt + '&azimuth=' + AZIMUTH
+                    + '&timezone=Europe%2FWarsaw'
+                    + '&start_date=' + startDate + '&end_date=' + endDate
+                ).then(r => r.json()).then(d => d.hourly)
+            ));
+            if (strips[0] && strips[0].time) {
+                for (let i = 0; i < strips[0].time.length; i++) {
+                    const day = strips[0].time[i].slice(0, 10);
+                    let wgti = 0;
+                    for (let s = 0; s < CURVE_STRIPS.length; s++) {
+                        wgti += (strips[s].global_tilted_irradiance[i] || 0) * CURVE_STRIPS[s].weight;
+                    }
+                    fcByDay[day] = (fcByDay[day] || 0) + wgti / 1000 * PANEL_KWP * PANEL_EFFICIENCY;
+                }
             }
-            fcByDay[day] = (fcByDay[day] || 0) + wgti / 1000 * PANEL_KWP * PANEL_EFFICIENCY;
         }
 
-        // Fetch actual kWh per day (batch via /api/hourly-solar per day)
+        // For today: use cached hourly forecast but only sum hours 0..currentHour
+        // (fair comparison vs partial actual production so far)
+        if (allDates.includes(today) && window._forecastHourly) {
+            let sumToday = 0;
+            for (const [ts, kwh] of Object.entries(window._forecastHourly)) {
+                if (!ts.startsWith(today)) continue;
+                const h = parseInt(ts.slice(11, 13), 10);
+                if (h <= currentHour) sumToday += kwh;
+            }
+            fcByDay[today] = sumToday;
+        }
+
+        // Fetch actual kWh per day
         const actByDay = {};
-        await Promise.all(pastDates.map(async (date) => {
+        await Promise.all(allDates.map(async (date) => {
             try {
                 const res = await fetch('/api/hourly-solar?date=' + date);
                 if (!res.ok) return;
@@ -1725,7 +1741,7 @@ async function buildAccuracyTrend() {
         // Build chart: oldest -> newest
         // Only include days with actual solar input (filter out days where system
         // was unplugged - otherwise 0 actual vs positive forecast distorts the accuracy).
-        const sorted = pastDates.slice().sort();
+        const sorted = allDates.slice().sort();
         const MIN_KWH = 0.1;  // below this: treat as "not connected" / skip
         const labels = [];
         const fcData = [];
@@ -1733,6 +1749,7 @@ async function buildAccuracyTrend() {
         const accData = [];
         let sumFc = 0, sumAct = 0, nDays = 0;
         let skippedNoInput = 0;
+        const isTodayFlags = [];
         for (const d of sorted) {
             const fc = fcByDay[d] || 0;
             const act = actByDay[d] || 0;
@@ -1741,11 +1758,13 @@ async function buildAccuracyTrend() {
             // Also skip days with no forecast (data missing)
             if (fc < 0.01) continue;
             const [yy, mm, dd] = d.split('-');
-            labels.push(dd + '.' + mm + '.');
+            const isToday = (d === today);
+            labels.push(dd + '.' + mm + '.' + (isToday ? ' (heute)' : ''));
             fcData.push(Math.round(fc * 100) / 100);
             actData.push(Math.round(act * 100) / 100);
             const acc = Math.round((1 - Math.abs(fc - act) / Math.max(fc, act)) * 100);
             accData.push(acc);
+            isTodayFlags.push(isToday);
             sumFc += fc;
             sumAct += act;
             nDays++;
