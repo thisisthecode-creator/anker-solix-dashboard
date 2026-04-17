@@ -1218,13 +1218,14 @@ function getDailyData() {
 const PANEL_KWP = 0.40;        // 2 × 200 W flexible panels
 const PANEL_EFFICIENCY = 0.85;
 
-// 30° bracket + 30° panel bend → tilt sweeps 60°..90° from horizontal
+// Top vertical on railing (90°), bottom pulled out by 30° bracket (60°),
+// middle sags between. Each strip = 20% of panel area.
 const CURVE_STRIPS = [
-    { tilt: 63, weight: 1/5 },
-    { tilt: 69, weight: 1/5 },
+    { tilt: 60, weight: 1/5 },
+    { tilt: 68, weight: 1/5 },
     { tilt: 75, weight: 1/5 },
-    { tilt: 81, weight: 1/5 },
-    { tilt: 87, weight: 1/5 },
+    { tilt: 83, weight: 1/5 },
+    { tilt: 90, weight: 1/5 },
 ];
 // Open-Meteo azimuth convention: 0=south, -90=east, +90=west, ±180=north
 // Panel compass heading is 240° (SW) → Open-Meteo = 240 - 180 = 60
@@ -1758,12 +1759,17 @@ async function buildAccuracyTrend() {
             ));
             if (strips[0] && strips[0].time) {
                 for (let i = 0; i < strips[0].time.length; i++) {
-                    const day = strips[0].time[i].slice(0, 10);
+                    const ts = strips[0].time[i];
+                    const day = ts.slice(0, 10);
+                    const hour = parseInt(ts.slice(11, 13), 10);
                     let wgti = 0;
                     for (let s = 0; s < CURVE_STRIPS.length; s++) {
                         wgti += (strips[s].global_tilted_irradiance[i] || 0) * CURVE_STRIPS[s].weight;
                     }
-                    fcByDay[day] = (fcByDay[day] || 0) + wgti / 1000 * PANEL_KWP * PANEL_EFFICIENCY;
+                    const rawKwh = wgti / 1000 * PANEL_KWP * PANEL_EFFICIENCY;
+                    // Apply current calibration so historical accuracy reflects
+                    // the live self-learning state (auto-"retroactive recalibrate").
+                    fcByDay[day] = (fcByDay[day] || 0) + applyHourCalibration(rawKwh, hour);
                 }
             }
         }
