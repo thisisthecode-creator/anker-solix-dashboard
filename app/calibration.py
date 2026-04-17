@@ -273,40 +273,56 @@ async def retrain_calibration() -> dict:
     configured_peak_w = PANEL_KWP * PANEL_EFFICIENCY * 1000  # W
     # Effective peak based on average bias (overall_factor)
     effective_peak_w_avg = configured_peak_w * overall_factor
-    # Actual max peak ever observed from MQTT data
+    # Actual max peak ever observed from MQTT data + lookup date
     observed_peak_w = 0
+    observed_peak_date = None
     try:
         db = await get_pool()
-        cur = await db.execute("SELECT COALESCE(MAX(peak_watts), 0) FROM daily_solar")
+        cur = await db.execute(
+            "SELECT date, peak_watts FROM daily_solar "
+            "WHERE peak_watts IS NOT NULL ORDER BY peak_watts DESC LIMIT 1"
+        )
         row = await cur.fetchone()
-        observed_peak_w = float(row[0] or 0) if row else 0
+        if row:
+            observed_peak_date = row[0]
+            observed_peak_w = float(row[1] or 0)
     except Exception:
         observed_peak_w = 0
+
+    # Effective efficiency from observed peak vs nameplate
+    # nameplate = PANEL_KWP × 1000 (W, without efficiency)
+    nameplate_w = PANEL_KWP * 1000
+    observed_efficiency = observed_peak_w / nameplate_w if nameplate_w > 0 else 0
 
     deviation_pct = round((overall_factor - 1.0) * 100, 1)
 
     # Diagnosis: is the base config reasonable?
     diagnosis = "ok"
     recommendation = None
+    peak_ratio = observed_peak_w / configured_peak_w if configured_peak_w > 0 else 0
     if sample_days < 3:
         diagnosis = "insufficient_data"
         recommendation = "Noch zu wenig Daten - System lernt nach einigen Tagen"
+    elif peak_ratio > 1.05:
+        diagnosis = "peak_higher"
+        recommendation = (
+            f"Beobachteter Peak ({observed_peak_w:.0f} W) uebertrifft Config-Peak "
+            f"({configured_peak_w:.0f} W) um {(peak_ratio - 1) * 100:.0f}%. "
+            f"Panels arbeiten ueber der Annahme - evtl. PANEL_EFFICIENCY hoeher setzen."
+        )
     elif abs(deviation_pct) < 10:
         diagnosis = "good_match"
         recommendation = "Grundeinstellungen passen gut zur Realitat"
     elif deviation_pct < -20:
         diagnosis = "forecast_too_high"
         recommendation = (
-            f"Prognose ~{abs(deviation_pct):.0f}% zu hoch. "
-            f"Moegliche Ursachen: Verschattung, Panel-Ausrichtung, Alter "
-            f"oder Anker MQTT Leistungsmessung ungenau."
+            f"Prognose ~{abs(deviation_pct):.0f}% zu hoch (Ø Tagesbias). "
+            f"Peak ist ok (gemessen {observed_peak_w:.0f}W vs config {configured_peak_w:.0f}W), "
+            f"aber Off-Peak-Stunden uberschaetzt Open-Meteo. Kalibrierung korrigiert das."
         )
     elif deviation_pct > 20:
         diagnosis = "forecast_too_low"
-        recommendation = (
-            f"Prognose ~{deviation_pct:.0f}% zu niedrig. "
-            f"Panels produzieren mehr als vorhergesagt - ideale Bedingungen."
-        )
+        recommendation = f"Prognose ~{deviation_pct:.0f}% zu niedrig - Panels ueberperformen."
     else:
         diagnosis = "moderate_deviation"
         recommendation = f"Prognose weicht um {deviation_pct:+.1f}% ab - Kalibrierung korrigiert automatisch"
@@ -323,8 +339,11 @@ async def retrain_calibration() -> dict:
         "cloud_factors": cloud_factors,
         "diagnosis": {
             "status": diagnosis,
+            "nameplate_w": round(nameplate_w, 0),
             "configured_peak_w": round(configured_peak_w, 0),
             "observed_peak_w": round(observed_peak_w, 0),
+            "observed_peak_date": observed_peak_date,
+            "observed_efficiency_pct": round(observed_efficiency * 100, 1),
             "effective_peak_w_avg": round(effective_peak_w_avg, 0),
             "deviation_pct": deviation_pct,
             "recommendation": recommendation,
