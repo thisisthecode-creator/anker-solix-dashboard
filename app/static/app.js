@@ -2969,7 +2969,7 @@ loadHeatmap();
 // Reads pre-computed cycle stats from the server (RAM-tracked every 3s,
 // persisted in data/battery_cycles.json). Replaces the old client-side
 // computation that fetched a full year of /api/readings on each page load.
-const BATTERY_CAPACITY_KWH = 1.024;  // C1000 Gen 2
+const BATTERY_CAPACITY_KWH = 2.080;  // C1000 Gen 2 (1.024) + BP1000 (1.056)
 
 async function loadBatteryCycles() {
     try {
