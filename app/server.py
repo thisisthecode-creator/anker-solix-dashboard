@@ -642,9 +642,13 @@ async def lifespan(app: FastAPI):
         try:
             from app.calibration import retrain_calibration
             from app.ml_models import retrain_and_save
+            from app.pvgis import fetch_pvgis_benchmark, load_pvgis_benchmark
             await retrain_calibration()
             await retrain_and_save()
-            logger.info("Initial calibration + ML retrain completed on startup")
+            # PVGIS: fetch once if cache empty, otherwise skip (long-term data)
+            if load_pvgis_benchmark() is None:
+                await fetch_pvgis_benchmark()
+            logger.info("Initial calibration + ML + PVGIS completed on startup")
         except Exception as e:
             logger.warning("Initial calibration/ML retrain failed: %s", e)
     asyncio.create_task(_initial_calibration())
@@ -1117,6 +1121,28 @@ async def api_solar_calibration_retrain():
     from app.calibration import retrain_calibration
     result = await retrain_calibration()
     return result
+
+
+@app.get("/api/pvgis-benchmark")
+async def api_pvgis_benchmark():
+    """PVGIS long-term climatological PV yield for this install.
+
+    Returns per-month and yearly expected kWh based on SARAH-2 satellite
+    data (2005-2020). Use to benchmark actual output vs climatology.
+    """
+    from app.pvgis import load_pvgis_benchmark, fetch_pvgis_benchmark
+    cached = load_pvgis_benchmark()
+    if cached is None:
+        cached = await fetch_pvgis_benchmark()
+    return cached or {"available": False}
+
+
+@app.post("/api/pvgis-benchmark/refresh")
+async def api_pvgis_refresh():
+    """Force re-fetch PVGIS (e.g. after panel config change)."""
+    from app.pvgis import fetch_pvgis_benchmark
+    result = await fetch_pvgis_benchmark(force=True)
+    return result or {"available": False}
 
 
 @app.get("/api/ml-stats")

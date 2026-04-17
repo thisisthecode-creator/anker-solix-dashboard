@@ -1897,9 +1897,10 @@ let _hourCalChart = null;
 
 async function buildMlStatsAndCalibration() {
     try {
-        const [mlRes, calRes] = await Promise.all([
+        const [mlRes, calRes, pvgisRes] = await Promise.all([
             fetch('/api/ml-stats').then(r => r.ok ? r.json() : null).catch(() => null),
             fetch('/api/solar-calibration').then(r => r.ok ? r.json() : null).catch(() => null),
+            fetch('/api/pvgis-benchmark').then(r => r.ok ? r.json() : null).catch(() => null),
         ]);
 
         // ML stats line + diagnosis card
@@ -1940,6 +1941,27 @@ async function buildMlStatsAndCalibration() {
                     + '</div></div>';
                 // Note: overallFactor must be defined in this scope
                 parts.push(diagCard);
+            }
+
+            // PVGIS climatological benchmark card
+            if (pvgisRes && pvgisRes.yearly) {
+                const now = new Date();
+                const curMonth = String(now.getMonth() + 1);
+                const curMonthData = pvgisRes.monthly && pvgisRes.monthly[curMonth];
+                const mo = curMonthData || {};
+                const monthNames = ['Jan', 'Feb', 'Mär', 'Apr', 'Mai', 'Jun', 'Jul', 'Aug', 'Sep', 'Okt', 'Nov', 'Dez'];
+                const pvgisCard = '<div style="width:100%;padding:10px 12px;background:rgba(96,165,250,0.08);'
+                    + 'border-left:3px solid var(--blue);border-radius:6px;margin-bottom:8px">'
+                    + '<div style="font-size:0.72rem;font-weight:600;color:var(--blue);margin-bottom:6px">'
+                    + '🛰️ PVGIS Klimatologie-Benchmark (15 Jahre Satellit)</div>'
+                    + '<div style="font-size:0.65rem;color:var(--text-dim);line-height:1.5">'
+                    + '<div>Erwartet ' + monthNames[now.getMonth()] + ': <strong>' + (mo.monthly_kwh || 0) + ' kWh</strong> '
+                    + '<span style="opacity:0.7">(Ø ' + (mo.daily_avg_kwh || 0) + ' kWh/Tag)</span></div>'
+                    + '<div>Jahresertrag erwartet: <strong>' + pvgisRes.yearly.total_kwh + ' kWh</strong> '
+                    + '<span style="opacity:0.7">(Ø ' + pvgisRes.yearly.daily_avg_kwh + ' kWh/Tag)</span></div>'
+                    + '<div style="opacity:0.7;margin-top:2px">Tilt ' + (pvgisRes.config.tilt_deg) + '° · Aspect ' + (pvgisRes.config.aspect_deg) + '° · ' + pvgisRes.config.peakpower_kw + ' kWp</div>'
+                    + '</div></div>';
+                parts.push(pvgisCard);
             }
 
             // Details line
