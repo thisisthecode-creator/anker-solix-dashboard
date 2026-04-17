@@ -252,6 +252,42 @@ async def retrain_calibration() -> dict:
     all_ratios = [r for hr in hour_ratios.values() for r in hr]
     overall_factor = round(_trimmed_mean(all_ratios), 3) if all_ratios else 1.0
 
+    # Effective panel specs from observed data:
+    # effective_peak_w = raw_peak_w × overall_factor
+    # (if overall_factor = 0.85, your actual panels produce 85% of configured peak)
+    configured_peak_w = PANEL_KWP * PANEL_EFFICIENCY * 1000  # W
+    effective_peak_w = configured_peak_w * overall_factor
+    deviation_pct = round((overall_factor - 1.0) * 100, 1)
+
+    # Diagnosis: is the base config reasonable?
+    diagnosis = "ok"
+    recommendation = None
+    if sample_days < 3:
+        diagnosis = "insufficient_data"
+        recommendation = "Noch zu wenig Daten - System lernt nach einigen Tagen"
+    elif abs(deviation_pct) < 10:
+        diagnosis = "good_match"
+        recommendation = "Grundeinstellungen passen gut zur Realitat"
+    elif deviation_pct < -20:
+        diagnosis = "forecast_too_high"
+        recommendation = (
+            f"Prognose ~{abs(deviation_pct):.0f}% zu hoch. "
+            f"Moegliche Ursachen: Verschattung, Panel-Ausrichtung, Alter, "
+            f"oder zu hoher Peak-Wert konfiguriert (aktuell {configured_peak_w:.0f}W, "
+            f"real ~{effective_peak_w:.0f}W)"
+        )
+    elif deviation_pct > 20:
+        diagnosis = "forecast_too_low"
+        recommendation = (
+            f"Prognose ~{deviation_pct:.0f}% zu niedrig. "
+            f"Moegliche Ursachen: bessere Panels als konfiguriert, oder "
+            f"ideale Ausrichtung. Peak gemessen ~{effective_peak_w:.0f}W vs "
+            f"{configured_peak_w:.0f}W konfiguriert"
+        )
+    else:
+        diagnosis = "moderate_deviation"
+        recommendation = f"Prognose weicht um {deviation_pct:+.1f}% ab - Kalibrierung korrigiert automatisch"
+
     output = {
         "version": 1,
         "updated_at": datetime.now(tz).isoformat(timespec="seconds"),
@@ -260,10 +296,17 @@ async def retrain_calibration() -> dict:
         "overall_factor": overall_factor,
         "hour_factors": hour_factors,
         "cloud_factors": cloud_factors,
+        "diagnosis": {
+            "status": diagnosis,
+            "configured_peak_w": round(configured_peak_w, 0),
+            "effective_peak_w": round(effective_peak_w, 0),
+            "deviation_pct": deviation_pct,
+            "recommendation": recommendation,
+        },
     }
     CALIBRATION_PATH.write_text(json.dumps(output, ensure_ascii=False, indent=2))
-    logger.info("Calibration updated: %d days, %d hours, overall=%.3f",
-                sample_days, sample_hours, overall_factor)
+    logger.info("Calibration updated: %d days, %d hours, overall=%.3f, diagnosis=%s",
+                sample_days, sample_hours, overall_factor, diagnosis)
     return output
 
 

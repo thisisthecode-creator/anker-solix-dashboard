@@ -1889,26 +1889,58 @@ async function buildMlStatsAndCalibration() {
             fetch('/api/solar-calibration').then(r => r.ok ? r.json() : null).catch(() => null),
         ]);
 
-        // ML stats line
+        // ML stats line + diagnosis card
         const mlEl = $('mlStatsRow');
         if (mlEl) {
             const parts = [];
+            // Diagnosis card (prominent at top)
+            if (calRes && calRes.available && calRes.diagnosis) {
+                const diag = calRes.diagnosis;
+                const statusColors = {
+                    ok: 'var(--green)', good_match: 'var(--green)',
+                    moderate_deviation: 'var(--solar)',
+                    forecast_too_high: 'var(--red)', forecast_too_low: 'var(--red)',
+                    insufficient_data: 'var(--text-dim)',
+                };
+                const statusIcons = {
+                    good_match: '✅', moderate_deviation: '⚙️',
+                    forecast_too_high: '⚠️', forecast_too_low: '⚠️',
+                    insufficient_data: '⏳',
+                };
+                const col = statusColors[diag.status] || 'var(--text)';
+                const icon = statusIcons[diag.status] || '📊';
+                const diagCard = '<div style="width:100%;padding:10px 12px;background:rgba(128,128,128,0.06);'
+                    + 'border-left:3px solid ' + col + ';border-radius:6px;margin-bottom:8px">'
+                    + '<div style="font-size:0.75rem;font-weight:600;color:' + col + ';margin-bottom:4px">'
+                    + icon + ' ' + (diag.recommendation || '') + '</div>'
+                    + '<div style="font-size:0.68rem;color:var(--text-dim)">'
+                    + 'Peak konfiguriert: <strong>' + diag.configured_peak_w + ' W</strong> · '
+                    + 'Real gemessen: <strong>' + diag.effective_peak_w + ' W</strong> · '
+                    + 'Abweichung: <strong style="color:' + col + '">' + (diag.deviation_pct >= 0 ? '+' : '') + diag.deviation_pct + '%</strong>'
+                    + '</div></div>';
+                parts.push(diagCard);
+            }
+
+            // Details line
+            const details = [];
             if (mlRes && mlRes.available) {
                 const m = mlRes.metrics || {};
-                parts.push('<span>🧠 ' + (mlRes.type === 'sklearn_gbr' ? 'GradientBoosting' : 'LinearRegression') + '</span>');
-                parts.push('<span>n=' + (mlRes.n_train || 0) + '</span>');
-                if (m.r2 != null) parts.push('<span>R²: ' + m.r2 + '</span>');
-                if (m.mae_kwh != null) parts.push('<span>MAE: ' + fmtKwh.format(m.mae_kwh) + ' kWh</span>');
-                if (m.mape_pct != null) parts.push('<span>MAPE: ' + m.mape_pct + '%</span>');
+                details.push('🧠 ' + (mlRes.type === 'sklearn_gbr' ? 'GradientBoosting' : 'LinearRegression'));
+                details.push('n=' + (mlRes.n_train || 0));
+                if (m.r2 != null) details.push('R²: ' + m.r2);
+                if (m.mae_kwh != null) details.push('MAE: ' + fmtKwh.format(m.mae_kwh) + ' kWh');
+                if (m.mape_pct != null) details.push('MAPE: ' + m.mape_pct + '%');
             } else {
-                parts.push('<span>🧠 ML-Modell: noch nicht trainiert</span>');
+                details.push('🧠 ML: noch nicht trainiert');
             }
             if (calRes && calRes.available) {
-                parts.push('<span>· Kalibrierung: ' + (calRes.sample_days || 0) + ' Tage, '
-                    + (calRes.sample_hours || 0) + ' Stunden</span>');
-                parts.push('<span>Overall-Faktor: ' + (calRes.overall_factor || 1).toFixed(2) + 'x</span>');
+                details.push('Kalibrierung: ' + (calRes.sample_days || 0) + ' Tage · '
+                    + (calRes.sample_hours || 0) + ' Stunden');
             }
-            mlEl.innerHTML = parts.join(' ');
+            parts.push('<span style="width:100%;font-size:0.68rem">'
+                + details.map(d => '<span style="margin-right:10px">' + d + '</span>').join('')
+                + '</span>');
+            mlEl.innerHTML = parts.join('');
         }
 
         // Per-hour calibration chart
