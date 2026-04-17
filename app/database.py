@@ -704,12 +704,11 @@ async def get_readings(hours: int = 24) -> list[dict]:
 
 
 async def get_hourly_solar_for_date(date_str: str) -> dict:
-    """Average solar_watts per hour for a specific date (YYYY-MM-DD).
+    """Per-hour Wh for a specific date (YYYY-MM-DD).
 
-    Reads the day's CSV (or .csv.gz) from ARCHIVE_DIR, trapezoidal-integrates
-    per-hour Wh, and returns 24 buckets of Wh + actual kWh total.
+    Trapezoidal integration between consecutive readings (deduped archive can
+    have sparse data). Intervals that cross hour boundaries are split pro-rata.
     """
-    # Try .csv first (today), then .csv.gz (archived)
     csv_path = ARCHIVE_DIR / f"{date_str}.csv"
     gz_path = ARCHIVE_DIR / f"{date_str}.csv.gz"
     opener = None
@@ -721,8 +720,8 @@ async def get_hourly_solar_for_date(date_str: str) -> dict:
         return {"date": date_str, "hourly_wh": [0.0] * 24, "total_kwh": 0.0, "samples": 0}
 
     hour_wh = [0.0] * 24
-    last_ts: dict[int, float] = {}
-    last_w: dict[int, float] = {}
+    last_ts: float | None = None
+    last_w: float = 0.0
     samples = 0
 
     try:
@@ -737,16 +736,27 @@ async def get_hourly_solar_for_date(date_str: str) -> dict:
                     solar_w = float(parts[1] or 0)
                 except (ValueError, IndexError):
                     continue
-                h = ts.hour
                 ts_sec = ts.timestamp()
                 samples += 1
-                if h in last_ts:
-                    dt_s = ts_sec - last_ts[h]
-                    if 0 < dt_s < 3600:  # cap at 1h gap
-                        # Trapezoidal: avg power * dt hours -> Wh
-                        hour_wh[h] += ((last_w[h] + solar_w) / 2) * (dt_s / 3600)
-                last_ts[h] = ts_sec
-                last_w[h] = solar_w
+                if last_ts is not None:
+                    dt_s = ts_sec - last_ts
+                    if 0 < dt_s < 7200:  # cap at 2h gap to avoid huge extrapolation
+                        avg_w = (last_w + solar_w) / 2
+                        # Split interval across hour boundaries
+                        cursor = last_ts
+                        end = ts_sec
+                        while cursor < end:
+                            h = datetime.fromtimestamp(cursor, tz=ts.tzinfo).hour
+                            # End of current hour (at cursor)
+                            hour_dt = datetime.fromtimestamp(cursor, tz=ts.tzinfo)
+                            next_hour_start = hour_dt.replace(minute=0, second=0, microsecond=0) + timedelta(hours=1)
+                            chunk_end = min(next_hour_start.timestamp(), end)
+                            chunk_dt = chunk_end - cursor
+                            if chunk_dt > 0:
+                                hour_wh[h] += avg_w * (chunk_dt / 3600)
+                            cursor = chunk_end
+                last_ts = ts_sec
+                last_w = solar_w
     except Exception as e:
         logger.warning("get_hourly_solar_for_date failed for %s: %s", date_str, e)
         return {"date": date_str, "hourly_wh": [0.0] * 24, "total_kwh": 0.0, "samples": 0}
@@ -754,7 +764,7 @@ async def get_hourly_solar_for_date(date_str: str) -> dict:
     total_kwh = sum(hour_wh) / 1000
     return {
         "date": date_str,
-        "hourly_wh": [round(w, 1) for w in hour_wh],
+        "hourly_wh": [round(w, 2) for w in hour_wh],
         "total_kwh": round(total_kwh, 3),
         "samples": samples,
     }

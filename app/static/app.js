@@ -1517,7 +1517,7 @@ async function buildHourlyForecastToday(dateStr) {
             const data = await res.json();
             if (data.hourly_wh) {
                 for (let h = 0; h < 24; h++) {
-                    actualByHour[h] = Math.round((data.hourly_wh[h] || 0)) / 1000;  // kWh
+                    actualByHour[h] = (data.hourly_wh[h] || 0) / 1000;  // Wh -> kWh
                 }
             }
         }
@@ -1552,9 +1552,17 @@ async function buildHourlyForecastToday(dateStr) {
             }
         }
 
-        // Sum forecast + actual over active hours only
+        // Sum forecast + actual.
+        // Today: sum ALL hours up to current hour (fair partial-day comparison).
+        // Past days: only active solar hours (startHour..endHour).
         let totalFc = 0, totalAct = 0;
-        if (startHour != null && endHour != null) {
+        const isTodayView = (dateStr === today);
+        if (isTodayView) {
+            for (let h = 0; h <= currentHour; h++) {
+                totalFc += forecastByHour[h] || 0;
+                totalAct += actualByHour[h] || 0;
+            }
+        } else if (startHour != null && endHour != null) {
             for (let h = startHour; h <= endHour; h++) {
                 if ((actualByHour[h] || 0) > 0.001) {
                     totalFc += forecastByHour[h] || 0;
@@ -1606,7 +1614,6 @@ async function buildHourlyForecastToday(dateStr) {
 
         // Past days without solar input: hide chart, show clear message
         const canvas = $('chart_hourly_forecast_today');
-        const isTodayView = (dateStr === today);
         const hadRealSolar = totalAct >= 0.1;
         if (!isTodayView && !hadRealSolar) {
             if (_hourlyTodayChart) { _hourlyTodayChart.destroy(); _hourlyTodayChart = null; }
