@@ -3626,3 +3626,29 @@ body.light-mode .log-table td {
 @media (max-width: 400px) {
     .dp-cards { grid-template-columns: 1fr; }
 }
+
+/* === Dual battery display in energy flow (C1000 + BP1000) === */
+.pf-v-bat-dual {
+    display: flex;
+    flex-direction: row;
+    justify-content: center;
+    gap: 20px;
+    align-items: flex-start;
+}
+.pf-bat-unit {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 4px;
+}
+.pf-bat-sub {
+    font-size: 0.55rem;
+    color: var(--text-dim);
+    font-variant-numeric: tabular-nums;
+    margin-top: 2px;
+    letter-spacing: 0.03em;
+}
+@media (max-width: 480px) {
+    .pf-v-bat-dual { gap: 14px; }
+    .pf-bat-sub { font-size: 0.5rem; }
+}

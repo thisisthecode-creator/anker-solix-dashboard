@@ -226,15 +226,29 @@
                 </div>
                 <!-- Arrow down -->
                 <div class="pf-v-arrow pf-line pf-line-in" id="flowArrowIn"><span class="pf-dots">&#9660;</span></div>
-                <!-- Battery center (Akku) -->
-                <div class="pf-v-bat">
-                    <div class="pf-bat-label">Akku</div>
-                    <div class="pf-bat-visual">
-                        <div class="pf-bat-body">
-                            <div class="pf-bat-fill" id="flowBatFill"></div>
-                            <div class="pf-bat-pct" id="flowBatSoc"></div>
+                <!-- Battery center: main C1000 + optional BP1000 expansion -->
+                <div class="pf-v-bat pf-v-bat-dual" id="flowBatWrap">
+                    <div class="pf-bat-unit" id="flowBatMain">
+                        <div class="pf-bat-label">C1000</div>
+                        <div class="pf-bat-visual">
+                            <div class="pf-bat-body">
+                                <div class="pf-bat-fill" id="flowBatFill"></div>
+                                <div class="pf-bat-pct" id="flowBatSoc"></div>
+                            </div>
+                            <div class="pf-bat-tip"></div>
                         </div>
-                        <div class="pf-bat-tip"></div>
+                        <div class="pf-bat-sub" id="flowBatMainSub">1024 Wh</div>
+                    </div>
+                    <div class="pf-bat-unit" id="flowBatExp" style="display:none">
+                        <div class="pf-bat-label" id="flowBatExpLabel">BP1000</div>
+                        <div class="pf-bat-visual">
+                            <div class="pf-bat-body">
+                                <div class="pf-bat-fill" id="flowBatExpFill"></div>
+                                <div class="pf-bat-pct" id="flowBatExpSoc"></div>
+                            </div>
+                            <div class="pf-bat-tip"></div>
+                        </div>
+                        <div class="pf-bat-sub" id="flowBatExpSub">1056 Wh</div>
                     </div>
                 </div>
                 <!-- Arrow down -->
