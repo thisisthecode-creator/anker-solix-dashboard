@@ -27,7 +27,8 @@ GAP_THRESHOLD = 7200
 # Poland household electricity price in EUR/kWh (2025/2026)
 ELECTRICITY_PRICE_EUR = 0.25
 
-BATTERY_CAPACITY_WH = 2080  # C1000 Gen 2 (1024 Wh) + BP1000 expansion (1056 Wh)
+BATTERY_CAPACITY_WH = 1024  # C1000 Gen 2 base. Expansion packs auto-detected at runtime.
+BP1000_CAPACITY_WH = 1056   # Added per detected expansion pack
 # System cost in EUR (4011 PLN ÷ 4.2623 NBP rate 2026-04-08)
 SYSTEM_COST_EUR = 941
 # Location: Warsaw, Poland (52°11'34"N 21°0'37"E, 120m, SW facing 240°)

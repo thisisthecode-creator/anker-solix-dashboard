@@ -18,7 +18,7 @@ from pathlib import Path
 
 from app.config import (
     TIMEZONE, WS_BROADCAST_INTERVAL, ELECTRICITY_PRICE_EUR,
-    BATTERY_CAPACITY_WH, SYSTEM_COST_EUR, DASHBOARD_PASSWORD,
+    BATTERY_CAPACITY_WH, BP1000_CAPACITY_WH, SYSTEM_COST_EUR, DASHBOARD_PASSWORD,
 )
 from app.database import (
     init_db, close_pool, upsert_daily, update_monthly,
@@ -239,6 +239,13 @@ def extract_data(raw: dict) -> dict:
         "total_output_watts": float(total_out),
         "ac_input_watts": float(ac_in),
         "temperature": float(temp),
+        # Expansion battery detection (BP1000 when exp_packs >= 1)
+        "expansion_packs": int(raw.get("expansion_packs", 0) or 0),
+        "exp_1_type": str(raw.get("exp_1_type", "") or ""),
+        "exp_1_soc": int(raw.get("exp_1_soc", 0) or 0),
+        "exp_1_soh": int(raw.get("exp_1_soh", 0) or 0),
+        "exp_1_temperature": float(raw.get("exp_1_temperature", 0) or 0),
+        "main_battery_soc": int(raw.get("main_battery_soc", 0) or 0),
         # Extended MQTT fields (delivered by C1000 Gen 2 / A1763)
         "ac_switch": int(raw.get("ac_output_power_switch", 0) or 0),
         "dc_switch": int(raw.get("dc_output_power_switch", 0) or 0),
@@ -306,16 +313,20 @@ async def on_mqtt_data(raw: dict):
     soc = data["battery_soc"]
     charging = data["ac_input_watts"] + data["solar_watts"]
     discharging = data["total_output_watts"]
+    # Dynamic total capacity: base C1000 + N expansion packs (auto-detected)
+    exp_packs = data.get("expansion_packs", 0) or 0
+    total_capacity_wh = BATTERY_CAPACITY_WH + exp_packs * BP1000_CAPACITY_WH
+
     battery_time = None
     battery_charging = False
     if charging > discharging and soc < 100:
         net_watts = charging - discharging
-        remaining_wh = BATTERY_CAPACITY_WH * (100 - soc) / 100
+        remaining_wh = total_capacity_wh * (100 - soc) / 100
         battery_time = round(remaining_wh / net_watts, 1) if net_watts > 0 else None
         battery_charging = True
     elif discharging > charging and soc > 0:
         net_watts = discharging - charging
-        remaining_wh = BATTERY_CAPACITY_WH * soc / 100
+        remaining_wh = total_capacity_wh * soc / 100
         battery_time = round(remaining_wh / net_watts, 1) if net_watts > 0 else None
         battery_charging = False
 
@@ -339,6 +350,7 @@ async def on_mqtt_data(raw: dict):
         "battery_charging": battery_charging,
         "battery_cycles_total": battery_cycles.total_cycles,
         "battery_cycles_today": battery_cycles.today_cycles,
+        "total_capacity_wh": total_capacity_wh,  # 1024 base, 2080 with BP1000
     }
 
     # --- 4. Disk writes — only on MEANINGFUL changes ---

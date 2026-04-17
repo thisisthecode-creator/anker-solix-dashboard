@@ -762,6 +762,31 @@ function updateFavicon(soc) {
 }
 
 function updateUI(d) {
+    // Dynamic battery capacity: update when BP1000 expansion detected
+    if (d.total_capacity_wh && d.total_capacity_wh > 0) {
+        BATTERY_CAPACITY_KWH = d.total_capacity_wh / 1000;
+        const specCap = $('specCapacityVal');
+        const exp = d.expansion_packs || 0;
+        if (specCap) {
+            specCap.textContent = exp > 0
+                ? `${d.total_capacity_wh} Wh (C1000 + ${exp}x BP1000)`
+                : `${d.total_capacity_wh} Wh`;
+        }
+        const expRow = $('expPackRow');
+        const expInfo = $('expPackInfo');
+        if (expRow && expInfo) {
+            if (exp > 0) {
+                const typ = d.exp_1_type || 'BP1000';
+                const soc = d.exp_1_soc || 0;
+                const soh = d.exp_1_soh || 0;
+                const temp = d.exp_1_temperature || 0;
+                expInfo.textContent = `${exp}x ${typ} · SOC ${soc}% · SOH ${soh}% · ${temp.toFixed(1)}°C`;
+                expRow.style.display = '';
+            } else {
+                expRow.style.display = 'none';
+            }
+        }
+    }
     $('solarWatts').textContent = fmt.format(d.solar_watts);
     $('batterySoc').textContent = d.battery_soc;
     updateFavicon(d.battery_soc);
@@ -2969,7 +2994,9 @@ loadHeatmap();
 // Reads pre-computed cycle stats from the server (RAM-tracked every 3s,
 // persisted in data/battery_cycles.json). Replaces the old client-side
 // computation that fetched a full year of /api/readings on each page load.
-const BATTERY_CAPACITY_KWH = 2.080;  // C1000 Gen 2 (1.024) + BP1000 (1.056)
+// Base C1000 Gen 2. Auto-expanded at runtime when BP1000 expansion packs
+// are detected via MQTT (total_capacity_wh field from server).
+let BATTERY_CAPACITY_KWH = 1.024;
 
 async function loadBatteryCycles() {
     try {
