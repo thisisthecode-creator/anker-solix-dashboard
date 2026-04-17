@@ -1369,18 +1369,34 @@ async function _refreshCalibration() {
 _refreshCalibration();
 setInterval(_refreshCalibration, 900000);  // every 15 min
 
-// Apply per-hour calibration factor to a raw forecast kWh value.
-// When confidence is low, blend toward the raw value (less aggressive correction).
+// Apply calibration: overall system bias + per-hour residual.
+// Always apply the overall_factor (if enough samples) since the base system
+// efficiency is a property of the install, not the hour. Per-hour residuals
+// just add nuance.
 function applyHourCalibration(rawKwh, hourOfDay) {
     const cal = window._solarCalibration;
-    if (!cal || !cal.available || !cal.hour_factors) return rawKwh;
-    const hf = cal.hour_factors[String(hourOfDay)];
-    if (!hf || hf.samples < 3) return rawKwh;
-    const factor = hf.factor;
-    const confidence = hf.confidence || 0;
-    // Blend: confidence=1 uses factor fully, confidence=0 keeps raw
-    const effective = 1 + (factor - 1) * confidence;
-    return rawKwh * effective;
+    if (!cal || !cal.available) return rawKwh;
+
+    // Base correction: overall system efficiency (learned from all data)
+    const overallF = cal.overall_factor || 1.0;
+    const overallConf = cal.overall_confidence || 0;
+    const overallSamples = cal.overall_samples || 0;
+    // Only apply overall factor when we have enough evidence
+    const base = overallSamples >= 20
+        ? 1 + (overallF - 1) * Math.max(0.5, overallConf)  // min 50% application
+        : 1.0;
+
+    // Per-hour residual (on top of overall baseline)
+    let residual = 1.0;
+    if (cal.hour_factors) {
+        const hf = cal.hour_factors[String(hourOfDay)];
+        if (hf && hf.samples >= 3) {
+            const r = (hf.residual != null) ? hf.residual : (hf.factor / overallF);
+            residual = 1 + (r - 1) * (hf.confidence || 0);
+        }
+    }
+
+    return rawKwh * base * residual;
 }
 
 function processForecastData(dailyRes, stripResults) {
@@ -1401,13 +1417,10 @@ function processForecastData(dailyRes, stripResults) {
         }
         // Apply calibration (self-learned) so daily totals reflect the corrected forecast
         const h = parseInt(hBase.time[i].slice(11, 13), 10);
-        const calFactor = (() => {
-            const cal = window._solarCalibration;
-            if (!cal || !cal.available || !cal.hour_factors) return 1.0;
-            const hf = cal.hour_factors[String(h)];
-            if (!hf || hf.samples < 3) return 1.0;
-            return 1 + (hf.factor - 1) * (hf.confidence || 0);
-        })();
+        const rawKwh = weightedGTI / 1000 * PANEL_KWP * PANEL_EFFICIENCY;
+        const calibratedKwh = applyHourCalibration(rawKwh, h);
+        // Back-convert to GTI equivalent so dailyGTI keeps consistent units
+        const calFactor = rawKwh > 0.001 ? calibratedKwh / rawKwh : 1.0;
         dailyGTI[day] += weightedGTI * calFactor;
         dailyDirect[day] += (hBase.direct_radiation[i] || 0);
         dailyDiffuse[day] += (hBase.diffuse_radiation[i] || 0);
@@ -1896,6 +1909,7 @@ async function buildMlStatsAndCalibration() {
             // Diagnosis card (prominent at top)
             if (calRes && calRes.available && calRes.diagnosis) {
                 const diag = calRes.diagnosis;
+                const overallFactor = calRes.overall_factor || 1.0;
                 const statusColors = {
                     ok: 'var(--green)', good_match: 'var(--green)',
                     moderate_deviation: 'var(--solar)',
@@ -1909,16 +1923,20 @@ async function buildMlStatsAndCalibration() {
                 };
                 const col = statusColors[diag.status] || 'var(--text)';
                 const icon = statusIcons[diag.status] || '📊';
+                const systemEff = Math.round((1 + diag.deviation_pct / 100) * 100);
+                const appliedTo = calRes.overall_samples >= 20 ? 'aktiv angewendet' : 'sammelt noch Daten';
                 const diagCard = '<div style="width:100%;padding:10px 12px;background:rgba(128,128,128,0.06);'
                     + 'border-left:3px solid ' + col + ';border-radius:6px;margin-bottom:8px">'
                     + '<div style="font-size:0.75rem;font-weight:600;color:' + col + ';margin-bottom:6px">'
                     + icon + ' ' + (diag.recommendation || '') + '</div>'
                     + '<div style="font-size:0.65rem;color:var(--text-dim);line-height:1.5">'
-                    + '<div>Config-Peak: <strong>' + diag.configured_peak_w + ' W</strong> <span style="opacity:0.7">(400W x 85% Effizienz)</span></div>'
-                    + '<div>Max tatsachlich gemessen: <strong>' + (diag.observed_peak_w || 0) + ' W</strong> <span style="opacity:0.7">(hoechster je aufgezeichneter Wert)</span></div>'
-                    + '<div>Ø Kalibrierungs-Faktor: <strong>' + (diag.effective_peak_w_avg || 0) + ' W</strong> <span style="opacity:0.7">(= Config x Durchschnitts-Bias ' + (Math.round((1 + diag.deviation_pct / 100) * 100) / 100) + 'x)</span></div>'
-                    + '<div style="margin-top:4px">Bias-Abweichung: <strong style="color:' + col + '">' + (diag.deviation_pct >= 0 ? '+' : '') + diag.deviation_pct + '%</strong></div>'
+                    + '<div>Config-Peak: <strong>' + diag.configured_peak_w + ' W</strong> <span style="opacity:0.7">(2x 200W x 85%)</span></div>'
+                    + '<div>Max gemessen (MQTT): <strong style="color:var(--solar)">' + (diag.observed_peak_w || 0) + ' W</strong></div>'
+                    + '<div style="margin-top:4px">System-Effizienz gelernt: <strong style="color:' + col + '">' + systemEff + '%</strong> '
+                    + '<span style="opacity:0.7">(' + appliedTo + ' auf alle Prognosen)</span></div>'
+                    + '<div style="opacity:0.7;margin-top:2px">= Prognose × ' + (overallFactor || 1).toFixed(2) + ' automatisch</div>'
                     + '</div></div>';
+                // Note: overallFactor must be defined in this scope
                 parts.push(diagCard);
             }
 
