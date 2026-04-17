@@ -3172,9 +3172,31 @@ function updatePowerFlow(d) {
     const totalEl = $('flowTotalOutVal');
     if (totalEl) totalEl.textContent = fmt.format(d.total_output_watts || totalOut) + ' W';
 
-    // Battery fill height (0-100%)
+    // Battery fill height (0-100%) - main C1000
     const batFill = $('flowBatFill');
-    if (batFill) batFill.style.height = (d.battery_soc || 0) + '%';
+    const mainSoc = (d.main_battery_soc > 0 ? d.main_battery_soc : d.battery_soc) || 0;
+    if (batFill) batFill.style.height = mainSoc + '%';
+    const socMainEl = $('flowBatSoc');
+    if (socMainEl) socMainEl.textContent = mainSoc > 0 ? mainSoc + '%' : '';
+
+    // BP1000 expansion battery (show only when connected)
+    const expPacks = d.expansion_packs || 0;
+    const expWrap = $('flowBatExp');
+    if (expWrap) {
+        if (expPacks > 0) {
+            expWrap.style.display = '';
+            const expSoc = d.exp_1_soc || 0;
+            const expType = d.exp_1_type || 'BP1000';
+            const expFill = $('flowBatExpFill');
+            if (expFill) expFill.style.height = expSoc + '%';
+            const expSocEl = $('flowBatExpSoc');
+            if (expSocEl) expSocEl.textContent = expSoc > 0 ? expSoc + '%' : '';
+            const expLabel = $('flowBatExpLabel');
+            if (expLabel) expLabel.textContent = expType;
+        } else {
+            expWrap.style.display = 'none';
+        }
+    }
 
     // Light up each source + port card based on its power flow
     const activate = (id, on) => {
