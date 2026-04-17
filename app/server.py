@@ -304,6 +304,18 @@ async def on_mqtt_data(raw: dict):
         await update_monthly(finalized["date"][:7])
         await update_yearly(finalized["date"][:4])
         battery_cycles.save(force=True)  # freeze the day's cycle state
+        # Self-learning: retrain calibration + ML right after a day rolls over
+        # so tomorrow's forecast benefits from yesterday's data immediately.
+        async def _post_rollover_retrain():
+            try:
+                from app.calibration import retrain_calibration
+                from app.ml_models import retrain_and_save
+                await retrain_calibration()
+                await retrain_and_save()
+                logger.info("Self-learning updated after day rollover")
+            except Exception as e:
+                logger.warning("Post-rollover retrain failed: %s", e)
+        asyncio.create_task(_post_rollover_retrain())
 
     # --- 2. Skip 0-spike startup readings ---
     if data.get("battery_soc", 0) == 0 and data.get("temperature", 0) == 0:
@@ -623,6 +635,20 @@ async def lifespan(app: FastAPI):
     task = asyncio.create_task(broadcast_loop())
     cleanup_task = asyncio.create_task(cleanup_loop())
     forecast_task = asyncio.create_task(daily_forecast_loop())
+
+    # Initial calibration retrain on startup (non-blocking) so the frontend
+    # sees self-learning results immediately rather than waiting until midnight.
+    async def _initial_calibration():
+        try:
+            from app.calibration import retrain_calibration
+            from app.ml_models import retrain_and_save
+            await retrain_calibration()
+            await retrain_and_save()
+            logger.info("Initial calibration + ML retrain completed on startup")
+        except Exception as e:
+            logger.warning("Initial calibration/ML retrain failed: %s", e)
+    asyncio.create_task(_initial_calibration())
+
     yield
     task.cancel()
     cleanup_task.cancel()
