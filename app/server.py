@@ -567,6 +567,14 @@ async def daily_forecast_loop():
                     logger.info("ML forecast saved: %s", ml_pred)
             except Exception as e:
                 logger.warning("ML retrain/predict failed: %s", e)
+            # Retrain per-hour calibration table
+            try:
+                from app.calibration import retrain_calibration
+                cal = await retrain_calibration()
+                logger.info("Calibration retrained: %s days, %s hours",
+                            cal.get("sample_days"), cal.get("sample_hours"))
+            except Exception as e:
+                logger.warning("Calibration retrain failed: %s", e)
         except Exception as e:
             logger.error("daily_forecast_loop error: %s", e)
 
@@ -1065,6 +1073,45 @@ async def api_hourly_solar(date: str = Query(..., regex=r"^\d{4}-\d{2}-\d{2}$"))
 async def api_solar_dates():
     """List all dates with archived solar data (newest first)."""
     return {"dates": await get_available_solar_dates()}
+
+
+@app.get("/api/solar-calibration")
+async def api_solar_calibration():
+    """Current per-hour calibration factors (self-learned from archived data)."""
+    from app.calibration import load_calibration
+    cal = load_calibration()
+    if cal is None:
+        return {"available": False, "reason": "not trained yet"}
+    return {"available": True, **cal}
+
+
+@app.post("/api/solar-calibration/retrain")
+async def api_solar_calibration_retrain():
+    """Trigger immediate calibration retrain (useful after adding data)."""
+    from app.calibration import retrain_calibration
+    result = await retrain_calibration()
+    return result
+
+
+@app.get("/api/ml-stats")
+async def api_ml_stats():
+    """Current ML model metrics (MAE, RMSE, R², MAPE) + training metadata."""
+    import pickle as _pickle
+    from app.ml_models import SOLAR_MODEL_PATH
+    if not SOLAR_MODEL_PATH.exists():
+        return {"available": False, "reason": "not trained yet"}
+    try:
+        with open(SOLAR_MODEL_PATH, "rb") as f:
+            m = _pickle.load(f)
+        return {
+            "available": True,
+            "type": m.get("type"),
+            "n_train": m.get("n_train"),
+            "trained_at": m.get("trained_at"),
+            "metrics": m.get("metrics", {}),
+        }
+    except Exception as e:
+        return {"available": False, "error": str(e)}
 
 
 _FORECAST_CACHE = ARCHIVE_DIR.parent / "forecast_cache.json"
