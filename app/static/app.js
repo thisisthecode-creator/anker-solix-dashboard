@@ -720,6 +720,7 @@ function connect() {
                 _refreshCalibration().then(() => {
                     try { buildAccuracyTrend(); } catch (_) {}
                     try { buildMlStatsAndCalibration(); } catch (_) {}
+                    try { buildAuxInsights(); } catch (_) {}
                 });
                 return;
             }
@@ -2084,6 +2085,230 @@ async function buildMlStatsAndCalibration() {
 
 setTimeout(buildMlStatsAndCalibration, 8000);
 setInterval(buildMlStatsAndCalibration, 1800000);  // every 30 min
+
+
+// === 🌑 Schattenwurf-Analyse ===
+// Interprets the existing hour_factors from calibration: a hour whose
+// residual is persistently well below 1.0 with enough samples is likely
+// being shaded by something fixed (house across the street, railing, etc).
+function buildShadingInsights() {
+    const el = $('shadingInsights');
+    if (!el) return;
+    const cal = window._solarCalibration;
+    if (!cal || !cal.available || !cal.hour_factors) {
+        el.innerHTML = '<span>Noch zu wenig Daten - benötigt mindestens 3 Samples pro Stunde.</span>';
+        return;
+    }
+    const SHADE_THRESHOLD = 0.75;  // residual below = systematic loss
+    const OVERPRODUCE_THRESHOLD = 1.25;  // way above average = reflection / edge
+    const MIN_SAMPLES = 3;
+
+    const suspects = [];
+    const reflectors = [];
+    for (let h = 0; h < 24; h++) {
+        const hf = cal.hour_factors[String(h)];
+        if (!hf || (hf.samples || 0) < MIN_SAMPLES) continue;
+        const residual = hf.residual != null ? hf.residual : hf.factor;
+        if (residual < SHADE_THRESHOLD) {
+            suspects.push({ hour: h, residual, samples: hf.samples, loss: Math.round((1 - residual) * 100) });
+        } else if (residual > OVERPRODUCE_THRESHOLD) {
+            reflectors.push({ hour: h, residual, samples: hf.samples, gain: Math.round((residual - 1) * 100) });
+        }
+    }
+
+    const parts = [];
+    if (suspects.length) {
+        suspects.sort((a, b) => a.residual - b.residual);
+        const list = suspects.map(s =>
+            '<span style="color:var(--red)">' + String(s.hour).padStart(2, '0') + ':00 (−' + s.loss + '%, n=' + s.samples + ')</span>'
+        ).join(', ');
+        parts.push('<div>⚠️ <strong>Verdacht auf Schatten:</strong> ' + list + '</div>');
+        parts.push('<div style="opacity:0.7;margin-top:2px">Konstanter Verlust zur gleichen Uhrzeit → fester Schattenwurf (Gebäude, Geländer, Baum).</div>');
+    }
+    if (reflectors.length) {
+        const list = reflectors.map(s =>
+            '<span style="color:var(--green)">' + String(s.hour).padStart(2, '0') + ':00 (+' + s.gain + '%, n=' + s.samples + ')</span>'
+        ).join(', ');
+        parts.push('<div style="margin-top:4px">✨ <strong>Mehr als erwartet:</strong> ' + list + '</div>');
+        parts.push('<div style="opacity:0.7;margin-top:2px">Reflexionen von Fassade/Boden oder Modell unterschätzt diese Stunde.</div>');
+    }
+    if (!suspects.length && !reflectors.length) {
+        parts.push('<div>✅ Kein systematischer Schatten erkannt - alle Stunden bewegen sich im Erwartungsbereich (0.75-1.25x).</div>');
+    }
+
+    // Bias-by-time-of-day summary
+    const morning = [], midday = [], evening = [];
+    for (let h = 0; h < 24; h++) {
+        const hf = cal.hour_factors[String(h)];
+        if (!hf || (hf.samples || 0) < MIN_SAMPLES) continue;
+        const residual = hf.residual != null ? hf.residual : hf.factor;
+        if (h >= 6 && h <= 10) morning.push(residual);
+        else if (h >= 11 && h <= 15) midday.push(residual);
+        else if (h >= 16 && h <= 20) evening.push(residual);
+    }
+    const avg = (arr) => arr.length ? (arr.reduce((a, b) => a + b, 0) / arr.length) : null;
+    const fmtPct = (v) => v == null ? '–' : ((v - 1) * 100 >= 0 ? '+' : '') + Math.round((v - 1) * 100) + '%';
+    parts.push('<div style="margin-top:6px;opacity:0.85">'
+        + 'Morgen (6-10): <strong>' + fmtPct(avg(morning)) + '</strong> · '
+        + 'Mittag (11-15): <strong>' + fmtPct(avg(midday)) + '</strong> · '
+        + 'Abend (16-20): <strong>' + fmtPct(avg(evening)) + '</strong>'
+        + '</div>');
+
+    el.innerHTML = parts.join('');
+}
+
+
+// === ☁️ Wetter-konditionierte Accuracy ===
+// Uses cloud_factors from calibration (buckets 0-25%, 25-50%, 50-75%, 75-100%).
+// Shows how accurate our forecast is under different cloud conditions.
+let _weatherAccChart = null;
+function buildWeatherAccuracy() {
+    const row = $('weatherAccuracyRow');
+    const cal = window._solarCalibration;
+    if (!cal || !cal.available || !cal.cloud_factors) {
+        if (row) row.innerHTML = '<span>Noch keine Cloud-Daten - Kalibrierung braucht mehr Samples.</span>';
+        if (_weatherAccChart) { _weatherAccChart.destroy(); _weatherAccChart = null; }
+        return;
+    }
+
+    const buckets = ['0-25% Wolken', '25-50% Wolken', '50-75% Wolken', '75-100% Wolken'];
+    const icons = ['☀️', '⛅', '🌥️', '☁️'];
+    const factors = [];
+    const samples = [];
+    for (let i = 0; i < 4; i++) {
+        const cf = cal.cloud_factors[String(i)];
+        factors.push(cf ? cf.factor : 1.0);
+        samples.push(cf ? (cf.samples || 0) : 0);
+    }
+
+    if (row) {
+        const parts = [];
+        for (let i = 0; i < 4; i++) {
+            const f = factors[i];
+            const dev = Math.round((f - 1) * 100);
+            const devStr = (dev >= 0 ? '+' : '') + dev + '%';
+            const col = Math.abs(dev) <= 15 ? 'var(--green)' : Math.abs(dev) <= 30 ? 'var(--solar)' : 'var(--red)';
+            const sampleLabel = samples[i] < 3 ? ' <span style="opacity:0.5">(zu wenig Daten)</span>' : '';
+            parts.push('<div style="display:inline-block;margin-right:14px">'
+                + icons[i] + ' ' + buckets[i] + ': <strong style="color:' + col + '">' + devStr + '</strong> '
+                + '<span style="opacity:0.6">n=' + samples[i] + '</span>'
+                + sampleLabel + '</div>');
+        }
+        row.innerHTML = parts.join('');
+    }
+
+    const canvas = $('chart_weather_accuracy');
+    if (!canvas) return;
+    if (_weatherAccChart) _weatherAccChart.destroy();
+    _weatherAccChart = new Chart(canvas, {
+        type: 'bar',
+        data: {
+            labels: buckets.map((b, i) => icons[i] + ' ' + b),
+            datasets: [{
+                label: 'Faktor (1.0 = exakte Prognose)',
+                data: factors,
+                backgroundColor: factors.map(f => Math.abs(f - 1) <= 0.15 ? 'rgba(34,197,94,0.5)'
+                    : Math.abs(f - 1) <= 0.3 ? 'rgba(245,158,11,0.5)' : 'rgba(239,68,68,0.5)'),
+                borderColor: factors.map(f => Math.abs(f - 1) <= 0.15 ? '#22c55e'
+                    : Math.abs(f - 1) <= 0.3 ? '#f59e0b' : '#ef4444'),
+                borderWidth: 1, borderRadius: 2,
+            }]
+        },
+        options: {
+            responsive: true, maintainAspectRatio: false, animation: false,
+            plugins: {
+                legend: { display: false },
+                tooltip: { callbacks: { label: ctx => {
+                    const s = samples[ctx.dataIndex];
+                    return 'Faktor: ' + ctx.parsed.y.toFixed(2) + 'x (n=' + s + ')';
+                } } }
+            },
+            scales: {
+                x: { grid: { display: false }, ticks: { font: { size: 9 } } },
+                y: { beginAtZero: true, suggestedMax: 1.5, grid: { color: chartGridColor() },
+                     ticks: { maxTicksLimit: 4, font: { size: 9 }, callback: v => v.toFixed(1) + 'x' } }
+            }
+        }
+    });
+}
+
+
+// === 🔌 Verbraucher-Fingerprint ===
+let _deviceFpChart = null;
+async function buildDeviceFingerprint() {
+    const row = $('deviceFpRow');
+    try {
+        const res = await fetch('/api/device-fingerprint?days=7');
+        if (!res.ok) throw new Error('HTTP ' + res.status);
+        const data = await res.json();
+
+        if (!data.available || !data.steps || !data.steps.length) {
+            if (row) row.innerHTML = '<span>Noch keine Daten - sammelt aus MQTT-Archiv.</span>';
+            if (_deviceFpChart) { _deviceFpChart.destroy(); _deviceFpChart = null; }
+            return;
+        }
+
+        if (row) {
+            const identified = data.steps.filter(s => s.label).length;
+            row.innerHTML = '<span>' + data.days_analyzed + ' Tage analysiert · '
+                + data.total_steps + ' Sprünge erkannt · '
+                + identified + ' bekannt zugeordnet · '
+                + (data.unknown_count || 0) + ' unbekannt</span>';
+        }
+
+        // Show top 15 (data may have up to 30)
+        const top = data.steps.slice(0, 15);
+        const labels = top.map(s => s.watts.toFixed(1) + ' W' + (s.label ? ' · ' + s.label : ''));
+        const counts = top.map(s => s.count);
+        const colors = top.map(s => s.label ? 'rgba(96,165,250,0.7)' : 'rgba(156,163,175,0.4)');
+
+        const canvas = $('chart_device_fingerprint');
+        if (!canvas) return;
+        if (_deviceFpChart) _deviceFpChart.destroy();
+        _deviceFpChart = new Chart(canvas, {
+            type: 'bar',
+            data: {
+                labels,
+                datasets: [{
+                    label: 'Schaltvorgänge (An+Aus)',
+                    data: counts,
+                    backgroundColor: colors,
+                    borderColor: colors.map(c => c.replace('0.7', '1.0').replace('0.4', '0.8')),
+                    borderWidth: 1, borderRadius: 2,
+                }]
+            },
+            options: {
+                indexAxis: 'y',
+                responsive: true, maintainAspectRatio: false, animation: false,
+                plugins: {
+                    legend: { display: false },
+                    tooltip: { callbacks: { label: ctx => {
+                        const s = top[ctx.dataIndex];
+                        return 'An: ' + s.on_count + ' · Aus: ' + s.off_count + (s.label ? ' · ' + s.label : '');
+                    } } }
+                },
+                scales: {
+                    x: { beginAtZero: true, grid: { color: chartGridColor() }, ticks: { font: { size: 9 } } },
+                    y: { grid: { display: false }, ticks: { font: { size: 9 }, autoSkip: false } }
+                }
+            }
+        });
+    } catch (e) {
+        console.warn('Device fingerprint error:', e);
+        if (row) row.innerHTML = '<span style="color:var(--red)">Fehler beim Laden.</span>';
+    }
+}
+
+// Render all three new cards together. Called after calibration refresh
+// so they use the fresh data.
+function buildAuxInsights() {
+    buildShadingInsights();
+    buildWeatherAccuracy();
+    buildDeviceFingerprint();
+}
+
+setTimeout(buildAuxInsights, 9500);
+setInterval(buildAuxInsights, 1800000);  // every 30 min
 
 // Date picker wiring - prev/next skip days without solar input (past days only).
 // List of days WITH solar input cached globally after /api/solar-dates fetch.
