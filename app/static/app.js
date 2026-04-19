@@ -310,7 +310,7 @@ const fmt2 = new Intl.NumberFormat(locale, { maximumFractionDigits: 2 });
 const fmtKwh = new Intl.NumberFormat(locale, { minimumFractionDigits: 2, maximumFractionDigits: 2 });
 const fmtEur = new Intl.NumberFormat(locale, { minimumFractionDigits: 2, maximumFractionDigits: 2 });
 const EUR_PER_KWH = 0.25; // Poland household electricity price
-const SYSTEM_COST_EUR = 1340; // 941 Basis + 399 BP1000 Expansion
+const SYSTEM_COST_EUR = 997; // Amortisation: nur C1000 (598,07) + BP1000 (399) = 2 kWh Batterie
 const CAFE_PRICE_EUR = 3.70; // Price of a café in Warsaw
 
 // === Warsaw timezone helpers ===
