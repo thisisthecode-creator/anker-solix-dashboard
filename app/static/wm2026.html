@@ -1,0 +1,601 @@
+<!DOCTYPE html>
+<html lang="de">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>WM 2026 - Warschauer Zeit</title>
+<style>
+  :root {
+    --bg: #f5f6f9;
+    --panel: #ffffff;
+    --panel-2: #f0f2f6;
+    --border: #dfe3ea;
+    --text: #1a1d24;
+    --muted: #5f6773;
+    --accent: #e5630d;
+    --accent-2: #b8540b;
+    --green: #16a34a;
+    --blue: #2563eb;
+    --red: #dc2626;
+    --yellow: #ca8a04;
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0;
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+    background: var(--bg);
+    color: var(--text);
+    min-height: 100vh;
+    -webkit-font-smoothing: antialiased;
+  }
+  header {
+    position: sticky;
+    top: 0;
+    z-index: 10;
+    background: var(--panel);
+    border-bottom: 1px solid var(--border);
+    padding: 16px 20px;
+  }
+  .header-row {
+    max-width: 1400px;
+    margin: 0 auto;
+    display: flex;
+    align-items: center;
+    gap: 16px;
+    flex-wrap: wrap;
+  }
+  h1 {
+    margin: 0;
+    font-size: 20px;
+    font-weight: 700;
+    letter-spacing: -0.3px;
+  }
+  h1 span { color: var(--accent); }
+  .sub {
+    font-size: 12px;
+    color: var(--muted);
+    margin-top: 2px;
+  }
+  .spacer { flex: 1; }
+  .btn {
+    background: var(--panel-2);
+    border: 1px solid var(--border);
+    color: var(--text);
+    padding: 8px 14px;
+    border-radius: 8px;
+    cursor: pointer;
+    font-size: 13px;
+    font-weight: 500;
+    transition: all 0.15s;
+  }
+  .btn:hover { border-color: var(--accent); }
+  .btn.active { background: var(--accent); color: #fff; border-color: var(--accent); }
+  .filters {
+    max-width: 1400px;
+    margin: 0 auto;
+    padding: 12px 20px;
+    display: flex;
+    gap: 8px;
+    flex-wrap: wrap;
+    align-items: center;
+  }
+  .filter-group { display: flex; gap: 6px; flex-wrap: wrap; }
+  .filter-label {
+    font-size: 11px;
+    text-transform: uppercase;
+    color: var(--muted);
+    letter-spacing: 0.5px;
+    margin-right: 4px;
+    align-self: center;
+  }
+  .btn.chip { padding: 5px 11px; font-size: 12px; }
+  main {
+    max-width: 1400px;
+    margin: 0 auto;
+    padding: 12px 20px 60px;
+  }
+  .day-group { margin-bottom: 28px; }
+  .day-header {
+    display: flex;
+    align-items: baseline;
+    gap: 10px;
+    padding: 10px 0 12px;
+    border-bottom: 1px solid var(--border);
+    margin-bottom: 14px;
+  }
+  .day-date {
+    font-size: 16px;
+    font-weight: 700;
+    color: var(--accent);
+  }
+  .day-weekday {
+    font-size: 13px;
+    color: var(--muted);
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+  }
+  .day-count {
+    font-size: 12px;
+    color: var(--muted);
+    margin-left: auto;
+  }
+  .matches {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(340px, 1fr));
+    gap: 10px;
+  }
+  .match {
+    background: var(--panel);
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    padding: 12px 14px;
+    display: grid;
+    grid-template-columns: 64px 1fr auto;
+    gap: 12px;
+    align-items: center;
+    transition: border-color 0.15s;
+  }
+  .match:hover { border-color: var(--accent); }
+  .match.live {
+    border-color: var(--red);
+    box-shadow: 0 0 0 1px var(--red);
+  }
+  .match.done { opacity: 0.55; }
+  .match.upcoming-next { border-color: var(--accent); }
+  .time { text-align: center; }
+  .time-main {
+    font-size: 18px;
+    font-weight: 700;
+    font-variant-numeric: tabular-nums;
+    line-height: 1.1;
+  }
+  .time-local {
+    font-size: 10px;
+    color: var(--muted);
+    margin-top: 3px;
+  }
+  .teams { min-width: 0; }
+  .team-row {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    font-size: 14px;
+    font-weight: 600;
+    line-height: 1.4;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+  .flag { font-size: 16px; flex-shrink: 0; }
+  .vs {
+    font-size: 10px;
+    color: var(--muted);
+    font-weight: 400;
+    margin: 1px 0;
+  }
+  .meta {
+    text-align: right;
+    font-size: 10px;
+    color: var(--muted);
+    line-height: 1.4;
+  }
+  .meta-round {
+    display: inline-block;
+    padding: 2px 6px;
+    background: var(--panel-2);
+    border-radius: 4px;
+    margin-bottom: 3px;
+    font-weight: 600;
+    letter-spacing: 0.3px;
+  }
+  .group-A .meta-round { color: var(--blue); }
+  .group-B .meta-round { color: var(--green); }
+  .group-C .meta-round { color: var(--yellow); }
+  .group-D .meta-round { color: var(--red); }
+  .group-E .meta-round { color: #a78bfa; }
+  .group-F .meta-round { color: #f472b6; }
+  .group-G .meta-round { color: #2dd4bf; }
+  .group-H .meta-round { color: #fb923c; }
+  .group-I .meta-round { color: #38bdf8; }
+  .group-J .meta-round { color: #a3e635; }
+  .group-K .meta-round { color: #e879f9; }
+  .group-L .meta-round { color: #facc15; }
+  .group-KO .meta-round { color: var(--accent); }
+  .countdown {
+    font-size: 11px;
+    color: var(--accent-2);
+    font-weight: 600;
+    margin-top: 2px;
+  }
+  .search {
+    background: var(--panel-2);
+    border: 1px solid var(--border);
+    color: var(--text);
+    padding: 7px 12px;
+    border-radius: 8px;
+    font-size: 13px;
+    min-width: 180px;
+  }
+  .search:focus { outline: none; border-color: var(--accent); }
+  .empty {
+    text-align: center;
+    padding: 40px;
+    color: var(--muted);
+  }
+  .stats {
+    font-size: 11px;
+    color: var(--muted);
+    margin-left: auto;
+  }
+  @media (max-width: 600px) {
+    .matches { grid-template-columns: 1fr; }
+    .match { grid-template-columns: 55px 1fr auto; padding: 10px 12px; }
+    .team-row { font-size: 13px; }
+  }
+</style>
+</head>
+<body>
+<header>
+  <div class="header-row">
+    <div>
+      <h1>FIFA WM <span>2026</span></h1>
+      <div class="sub">Alle Spiele in Warschauer Zeit (CEST, UTC+2) · 11.06. - 19.07.2026 · Quelle: fifa.com</div>
+    </div>
+    <div class="spacer"></div>
+    <input type="text" class="search" id="search" placeholder="Team/Stadt suchen...">
+  </div>
+</header>
+
+<div class="filters">
+  <span class="filter-label">Phase</span>
+  <div class="filter-group" id="phaseFilters">
+    <button class="btn chip active" data-phase="all">Alle</button>
+    <button class="btn chip" data-phase="upcoming">Kommend</button>
+    <button class="btn chip" data-phase="group">Gruppe</button>
+    <button class="btn chip" data-phase="r32">Sechzehntelfinale</button>
+    <button class="btn chip" data-phase="r16">Achtelfinale</button>
+    <button class="btn chip" data-phase="qf">Viertelfinale</button>
+    <button class="btn chip" data-phase="sf">Halbfinale</button>
+    <button class="btn chip" data-phase="3p">Platz 3</button>
+    <button class="btn chip" data-phase="final">Finale</button>
+  </div>
+  <span class="stats" id="stats"></span>
+</div>
+
+<main id="app"></main>
+
+<script>
+const VENUES = {
+  MEX: { name: "Estadio Azteca",            city: "Mexiko-Stadt",  tz: "America/Mexico_City" },
+  GDL: { name: "Estadio Akron",             city: "Guadalajara",   tz: "America/Mexico_City" },
+  MTY: { name: "Estadio BBVA",              city: "Monterrey",     tz: "America/Monterrey" },
+  DAL: { name: "AT&T Stadium",              city: "Dallas",        tz: "America/Chicago" },
+  HOU: { name: "NRG Stadium",               city: "Houston",       tz: "America/Chicago" },
+  KC:  { name: "Arrowhead Stadium",         city: "Kansas City",   tz: "America/Chicago" },
+  ATL: { name: "Mercedes-Benz Stadium",     city: "Atlanta",       tz: "America/New_York" },
+  MIA: { name: "Hard Rock Stadium",         city: "Miami",         tz: "America/New_York" },
+  PHI: { name: "Lincoln Financial Field",   city: "Philadelphia",  tz: "America/New_York" },
+  NYC: { name: "MetLife Stadium",           city: "New York/NJ",   tz: "America/New_York" },
+  BOS: { name: "Gillette Stadium",          city: "Boston",        tz: "America/New_York" },
+  TOR: { name: "BMO Field",                 city: "Toronto",       tz: "America/Toronto" },
+  SEA: { name: "Lumen Field",               city: "Seattle",       tz: "America/Los_Angeles" },
+  LA:  { name: "SoFi Stadium",              city: "Los Angeles",   tz: "America/Los_Angeles" },
+  SF:  { name: "Levi's Stadium",            city: "San Francisco", tz: "America/Los_Angeles" },
+  VAN: { name: "BC Place",                  city: "Vancouver",     tz: "America/Vancouver" }
+};
+
+const F = {
+  "Mexiko":"🇲🇽","Südafrika":"🇿🇦","Südkorea":"🇰🇷","Tschechien":"🇨🇿",
+  "Kanada":"🇨🇦","Bosnien-Herzegowina":"🇧🇦","Katar":"🇶🇦","Schweiz":"🇨🇭",
+  "Brasilien":"🇧🇷","Haiti":"🇭🇹","Schottland":"🏴󠁧󠁢󠁳󠁣󠁴󠁿","Marokko":"🇲🇦",
+  "USA":"🇺🇸","Paraguay":"🇵🇾","Australien":"🇦🇺","Türkei":"🇹🇷",
+  "Deutschland":"🇩🇪","Elfenbeinküste":"🇨🇮","Ecuador":"🇪🇨","Curaçao":"🇨🇼",
+  "Niederlande":"🇳🇱","Japan":"🇯🇵","Schweden":"🇸🇪","Tunesien":"🇹🇳",
+  "Belgien":"🇧🇪","Ägypten":"🇪🇬","Iran":"🇮🇷","Neuseeland":"🇳🇿",
+  "Spanien":"🇪🇸","Saudi-Arabien":"🇸🇦","Uruguay":"🇺🇾","Kap Verde":"🇨🇻",
+  "Frankreich":"🇫🇷","Senegal":"🇸🇳","Irak":"🇮🇶","Norwegen":"🇳🇴",
+  "Argentinien":"🇦🇷","Algerien":"🇩🇿","Österreich":"🇦🇹","Jordanien":"🇯🇴",
+  "Portugal":"🇵🇹","DR Kongo":"🇨🇩","Usbekistan":"🇺🇿","Kolumbien":"🇨🇴",
+  "England":"🏴󠁧󠁢󠁥󠁮󠁧󠁿","Kroatien":"🇭🇷","Ghana":"🇬🇭","Panama":"🇵🇦"
+};
+
+// Alle Zeiten direkt in Warschauer Zeit (CEST, UTC+2) - Quelle: FIFA.com (Filter Österreich)
+// Datum/Zeit = Ortszeit in Warschau
+const MATCHES = [
+  // === GRUPPENPHASE ===
+  { n:1,  d:"2026-06-11", t:"21:00", v:"MEX", g:"A", h:"Mexiko",              a:"Südafrika",           p:"group" },
+  { n:2,  d:"2026-06-12", t:"04:00", v:"GDL", g:"A", h:"Südkorea",            a:"Tschechien",          p:"group" },
+  { n:3,  d:"2026-06-12", t:"21:00", v:"TOR", g:"B", h:"Kanada",              a:"Bosnien-Herzegowina", p:"group" },
+  { n:4,  d:"2026-06-13", t:"03:00", v:"LA",  g:"D", h:"USA",                 a:"Paraguay",            p:"group" },
+  { n:5,  d:"2026-06-13", t:"21:00", v:"SF",  g:"B", h:"Katar",               a:"Schweiz",             p:"group" },
+  { n:6,  d:"2026-06-14", t:"00:00", v:"NYC", g:"C", h:"Brasilien",           a:"Marokko",             p:"group" },
+  { n:7,  d:"2026-06-14", t:"03:00", v:"BOS", g:"C", h:"Haiti",               a:"Schottland",          p:"group" },
+  { n:8,  d:"2026-06-14", t:"06:00", v:"VAN", g:"D", h:"Australien",          a:"Türkei",              p:"group" },
+  { n:9,  d:"2026-06-14", t:"19:00", v:"HOU", g:"E", h:"Deutschland",         a:"Curaçao",             p:"group" },
+  { n:10, d:"2026-06-14", t:"22:00", v:"DAL", g:"F", h:"Niederlande",         a:"Japan",               p:"group" },
+  { n:11, d:"2026-06-15", t:"01:00", v:"PHI", g:"E", h:"Elfenbeinküste",      a:"Ecuador",             p:"group" },
+  { n:12, d:"2026-06-15", t:"04:00", v:"MTY", g:"F", h:"Schweden",            a:"Tunesien",            p:"group" },
+  { n:13, d:"2026-06-15", t:"18:00", v:"ATL", g:"H", h:"Spanien",             a:"Kap Verde",           p:"group" },
+  { n:14, d:"2026-06-15", t:"21:00", v:"SEA", g:"G", h:"Belgien",             a:"Ägypten",             p:"group" },
+  { n:15, d:"2026-06-16", t:"00:00", v:"MIA", g:"H", h:"Saudi-Arabien",       a:"Uruguay",             p:"group" },
+  { n:16, d:"2026-06-16", t:"03:00", v:"LA",  g:"G", h:"Iran",                a:"Neuseeland",          p:"group" },
+  { n:17, d:"2026-06-16", t:"21:00", v:"NYC", g:"I", h:"Frankreich",          a:"Senegal",             p:"group" },
+  { n:18, d:"2026-06-17", t:"00:00", v:"BOS", g:"I", h:"Irak",                a:"Norwegen",            p:"group" },
+  { n:19, d:"2026-06-17", t:"03:00", v:"KC",  g:"J", h:"Argentinien",         a:"Algerien",            p:"group" },
+  { n:20, d:"2026-06-17", t:"06:00", v:"SF",  g:"J", h:"Österreich",          a:"Jordanien",           p:"group" },
+  { n:21, d:"2026-06-17", t:"19:00", v:"HOU", g:"K", h:"Portugal",            a:"DR Kongo",            p:"group" },
+  { n:22, d:"2026-06-17", t:"22:00", v:"DAL", g:"L", h:"England",             a:"Kroatien",            p:"group" },
+  { n:23, d:"2026-06-18", t:"01:00", v:"TOR", g:"L", h:"Ghana",               a:"Panama",              p:"group" },
+  { n:24, d:"2026-06-18", t:"04:00", v:"MEX", g:"K", h:"Usbekistan",          a:"Kolumbien",           p:"group" },
+  { n:25, d:"2026-06-18", t:"18:00", v:"ATL", g:"A", h:"Tschechien",          a:"Südafrika",           p:"group" },
+  { n:26, d:"2026-06-18", t:"21:00", v:"LA",  g:"B", h:"Schweiz",             a:"Bosnien-Herzegowina", p:"group" },
+  { n:27, d:"2026-06-19", t:"00:00", v:"VAN", g:"B", h:"Kanada",              a:"Katar",               p:"group" },
+  { n:28, d:"2026-06-19", t:"03:00", v:"GDL", g:"A", h:"Mexiko",              a:"Südkorea",            p:"group" },
+  { n:29, d:"2026-06-19", t:"21:00", v:"SEA", g:"D", h:"USA",                 a:"Australien",          p:"group" },
+  { n:30, d:"2026-06-20", t:"00:00", v:"BOS", g:"C", h:"Schottland",          a:"Marokko",             p:"group" },
+  { n:31, d:"2026-06-20", t:"02:30", v:"PHI", g:"C", h:"Brasilien",           a:"Haiti",               p:"group" },
+  { n:32, d:"2026-06-20", t:"05:00", v:"SF",  g:"D", h:"Türkei",              a:"Paraguay",            p:"group" },
+  { n:33, d:"2026-06-20", t:"19:00", v:"HOU", g:"F", h:"Niederlande",         a:"Schweden",            p:"group" },
+  { n:34, d:"2026-06-20", t:"22:00", v:"TOR", g:"E", h:"Deutschland",         a:"Elfenbeinküste",      p:"group" },
+  { n:35, d:"2026-06-21", t:"02:00", v:"KC",  g:"E", h:"Ecuador",             a:"Curaçao",             p:"group" },
+  { n:36, d:"2026-06-21", t:"06:00", v:"MTY", g:"F", h:"Tunesien",            a:"Japan",               p:"group" },
+  { n:37, d:"2026-06-21", t:"18:00", v:"ATL", g:"H", h:"Spanien",             a:"Saudi-Arabien",       p:"group" },
+  { n:38, d:"2026-06-21", t:"21:00", v:"LA",  g:"G", h:"Belgien",             a:"Iran",                p:"group" },
+  { n:39, d:"2026-06-22", t:"00:00", v:"MIA", g:"H", h:"Uruguay",             a:"Kap Verde",           p:"group" },
+  { n:40, d:"2026-06-22", t:"03:00", v:"VAN", g:"G", h:"Neuseeland",          a:"Ägypten",             p:"group" },
+  { n:41, d:"2026-06-22", t:"19:00", v:"DAL", g:"J", h:"Argentinien",         a:"Österreich",          p:"group" },
+  { n:42, d:"2026-06-22", t:"23:00", v:"PHI", g:"I", h:"Frankreich",          a:"Irak",                p:"group" },
+  { n:43, d:"2026-06-23", t:"02:00", v:"NYC", g:"I", h:"Norwegen",            a:"Senegal",             p:"group" },
+  { n:44, d:"2026-06-23", t:"05:00", v:"SF",  g:"J", h:"Jordanien",           a:"Algerien",            p:"group" },
+  { n:45, d:"2026-06-23", t:"19:00", v:"HOU", g:"K", h:"Portugal",            a:"Usbekistan",          p:"group" },
+  { n:46, d:"2026-06-23", t:"22:00", v:"BOS", g:"L", h:"England",             a:"Ghana",               p:"group" },
+  { n:47, d:"2026-06-24", t:"01:00", v:"TOR", g:"L", h:"Panama",              a:"Kroatien",            p:"group" },
+  { n:48, d:"2026-06-24", t:"04:00", v:"GDL", g:"K", h:"Kolumbien",           a:"DR Kongo",            p:"group" },
+  { n:49, d:"2026-06-24", t:"21:00", v:"VAN", g:"B", h:"Schweiz",             a:"Kanada",              p:"group" },
+  { n:50, d:"2026-06-24", t:"21:00", v:"SEA", g:"B", h:"Bosnien-Herzegowina", a:"Katar",               p:"group" },
+  { n:51, d:"2026-06-25", t:"00:00", v:"MIA", g:"C", h:"Schottland",          a:"Brasilien",           p:"group" },
+  { n:52, d:"2026-06-25", t:"00:00", v:"ATL", g:"C", h:"Marokko",             a:"Haiti",               p:"group" },
+  { n:53, d:"2026-06-25", t:"03:00", v:"MEX", g:"A", h:"Tschechien",          a:"Mexiko",              p:"group" },
+  { n:54, d:"2026-06-25", t:"03:00", v:"MTY", g:"A", h:"Südafrika",           a:"Südkorea",            p:"group" },
+  { n:55, d:"2026-06-25", t:"22:00", v:"PHI", g:"E", h:"Curaçao",             a:"Elfenbeinküste",      p:"group" },
+  { n:56, d:"2026-06-25", t:"22:00", v:"NYC", g:"E", h:"Ecuador",             a:"Deutschland",         p:"group" },
+  { n:57, d:"2026-06-26", t:"01:00", v:"DAL", g:"F", h:"Japan",               a:"Schweden",            p:"group" },
+  { n:58, d:"2026-06-26", t:"01:00", v:"KC",  g:"F", h:"Tunesien",            a:"Niederlande",         p:"group" },
+  { n:59, d:"2026-06-26", t:"04:00", v:"LA",  g:"D", h:"Türkei",              a:"USA",                 p:"group" },
+  { n:60, d:"2026-06-26", t:"04:00", v:"SF",  g:"D", h:"Paraguay",            a:"Australien",          p:"group" },
+  { n:61, d:"2026-06-26", t:"21:00", v:"BOS", g:"I", h:"Norwegen",            a:"Frankreich",          p:"group" },
+  { n:62, d:"2026-06-26", t:"21:00", v:"TOR", g:"I", h:"Senegal",             a:"Irak",                p:"group" },
+  { n:63, d:"2026-06-27", t:"02:00", v:"HOU", g:"H", h:"Kap Verde",           a:"Saudi-Arabien",       p:"group" },
+  { n:64, d:"2026-06-27", t:"02:00", v:"GDL", g:"H", h:"Uruguay",             a:"Spanien",             p:"group" },
+  { n:65, d:"2026-06-27", t:"05:00", v:"SEA", g:"G", h:"Ägypten",             a:"Iran",                p:"group" },
+  { n:66, d:"2026-06-27", t:"05:00", v:"VAN", g:"G", h:"Neuseeland",          a:"Belgien",             p:"group" },
+  { n:67, d:"2026-06-27", t:"23:00", v:"NYC", g:"L", h:"Panama",              a:"England",             p:"group" },
+  { n:68, d:"2026-06-27", t:"23:00", v:"PHI", g:"L", h:"Kroatien",            a:"Ghana",               p:"group" },
+  { n:69, d:"2026-06-28", t:"01:30", v:"MIA", g:"K", h:"Kolumbien",           a:"Portugal",            p:"group" },
+  { n:70, d:"2026-06-28", t:"01:30", v:"ATL", g:"K", h:"DR Kongo",            a:"Usbekistan",          p:"group" },
+  { n:71, d:"2026-06-28", t:"04:00", v:"DAL", g:"J", h:"Jordanien",           a:"Argentinien",         p:"group" },
+  { n:72, d:"2026-06-28", t:"04:00", v:"KC",  g:"J", h:"Algerien",            a:"Österreich",          p:"group" },
+
+  // === SECHZEHNTELFINALE (Round of 32) ===
+  { n:73, d:"2026-06-28", t:"21:00", v:"LA",  g:"KO", h:"Zweiter A",  a:"Zweiter B",  p:"r32" },
+  { n:74, d:"2026-06-29", t:"22:30", v:"BOS", g:"KO", h:"Erster E",   a:"3. A/B/C/D/F", p:"r32" },
+  { n:75, d:"2026-06-30", t:"03:00", v:"MTY", g:"KO", h:"Erster F",   a:"Zweiter C",  p:"r32" },
+  { n:76, d:"2026-06-29", t:"19:00", v:"HOU", g:"KO", h:"Erster C",   a:"Zweiter F",  p:"r32" },
+  { n:77, d:"2026-06-30", t:"23:00", v:"NYC", g:"KO", h:"Erster I",   a:"3. C/D/F/G/H", p:"r32" },
+  { n:78, d:"2026-06-30", t:"19:00", v:"DAL", g:"KO", h:"Zweiter E",  a:"Zweiter I",  p:"r32" },
+  { n:79, d:"2026-07-01", t:"03:00", v:"MEX", g:"KO", h:"Erster A",   a:"3. C/E/F/H/I", p:"r32" },
+  { n:80, d:"2026-07-01", t:"18:00", v:"ATL", g:"KO", h:"Erster L",   a:"3. E/H/I/J/K", p:"r32" },
+  { n:81, d:"2026-07-02", t:"02:00", v:"SF",  g:"KO", h:"Erster D",   a:"3. B/E/F/I/J", p:"r32" },
+  { n:82, d:"2026-07-01", t:"22:00", v:"SEA", g:"KO", h:"Erster G",   a:"3. A/E/H/I/J", p:"r32" },
+  { n:83, d:"2026-07-03", t:"01:00", v:"TOR", g:"KO", h:"Zweiter K",  a:"Zweiter L",  p:"r32" },
+  { n:84, d:"2026-07-02", t:"21:00", v:"LA",  g:"KO", h:"Erster H",   a:"Zweiter J",  p:"r32" },
+  { n:85, d:"2026-07-03", t:"05:00", v:"VAN", g:"KO", h:"Erster B",   a:"3. E/F/G/I/J", p:"r32" },
+  { n:86, d:"2026-07-04", t:"00:00", v:"MIA", g:"KO", h:"Erster J",   a:"Zweiter H",  p:"r32" },
+  { n:87, d:"2026-07-04", t:"03:30", v:"KC",  g:"KO", h:"Erster K",   a:"3. D/E/I/J/L", p:"r32" },
+  { n:88, d:"2026-07-03", t:"20:00", v:"DAL", g:"KO", h:"Zweiter D",  a:"Zweiter G",  p:"r32" },
+
+  // === ACHTELFINALE (Round of 16) ===
+  { n:89,  d:"2026-07-04", t:"23:00", v:"PHI", g:"KO", h:"Sieger M74", a:"Sieger M77", p:"r16" },
+  { n:90,  d:"2026-07-04", t:"19:00", v:"HOU", g:"KO", h:"Sieger M73", a:"Sieger M75", p:"r16" },
+  { n:91,  d:"2026-07-05", t:"22:00", v:"NYC", g:"KO", h:"Sieger M76", a:"Sieger M78", p:"r16" },
+  { n:92,  d:"2026-07-06", t:"02:00", v:"MEX", g:"KO", h:"Sieger M79", a:"Sieger M80", p:"r16" },
+  { n:93,  d:"2026-07-06", t:"21:00", v:"DAL", g:"KO", h:"Sieger M83", a:"Sieger M84", p:"r16" },
+  { n:94,  d:"2026-07-07", t:"02:00", v:"SEA", g:"KO", h:"Sieger M81", a:"Sieger M82", p:"r16" },
+  { n:95,  d:"2026-07-07", t:"18:00", v:"ATL", g:"KO", h:"Sieger M86", a:"Sieger M88", p:"r16" },
+  { n:96,  d:"2026-07-07", t:"22:00", v:"VAN", g:"KO", h:"Sieger M85", a:"Sieger M87", p:"r16" },
+
+  // === VIERTELFINALE ===
+  { n:97,  d:"2026-07-09", t:"22:00", v:"BOS", g:"KO", h:"Sieger M89", a:"Sieger M90", p:"qf" },
+  { n:98,  d:"2026-07-10", t:"21:00", v:"LA",  g:"KO", h:"Sieger M93", a:"Sieger M94", p:"qf" },
+  { n:99,  d:"2026-07-11", t:"23:00", v:"MIA", g:"KO", h:"Sieger M91", a:"Sieger M92", p:"qf" },
+  { n:100, d:"2026-07-12", t:"03:00", v:"KC",  g:"KO", h:"Sieger M95", a:"Sieger M96", p:"qf" },
+
+  // === HALBFINALE ===
+  { n:101, d:"2026-07-14", t:"21:00", v:"DAL", g:"KO", h:"Sieger M97", a:"Sieger M98",  p:"sf" },
+  { n:102, d:"2026-07-15", t:"21:00", v:"ATL", g:"KO", h:"Sieger M99", a:"Sieger M100", p:"sf" },
+
+  // === SPIEL UM PLATZ 3 ===
+  { n:103, d:"2026-07-18", t:"23:00", v:"MIA", g:"KO", h:"Verlierer M101", a:"Verlierer M102", p:"3p" },
+
+  // === FINALE ===
+  { n:104, d:"2026-07-19", t:"21:00", v:"NYC", g:"KO", h:"Sieger M101", a:"Sieger M102", p:"final" }
+];
+
+// Parse Warsaw date+time as a real Date object (using Europe/Warsaw context = UTC+2 during June-July 2026)
+function warsawToDate(dateStr, timeStr) {
+  const [y, mo, d] = dateStr.split("-").map(Number);
+  const [h, mi] = timeStr.split(":").map(Number);
+  // Warsaw is UTC+2 during June-July (CEST)
+  return new Date(Date.UTC(y, mo - 1, d, h - 2, mi));
+}
+
+function phaseLabel(p) {
+  return {
+    group: "Gruppe",
+    r32: "Sechzehntelfinale",
+    r16: "Achtelfinale",
+    qf: "Viertelfinale",
+    sf: "Halbfinale",
+    "3p": "Platz 3",
+    final: "FINALE"
+  }[p] || p;
+}
+
+const MONTHS = ["Jan", "Feb", "Mär", "Apr", "Mai", "Jun", "Jul", "Aug", "Sep", "Okt", "Nov", "Dez"];
+
+function warsawParts(d) {
+  const fmt = new Intl.DateTimeFormat("de-DE", {
+    timeZone: "Europe/Warsaw",
+    year: "numeric", month: "2-digit", day: "2-digit",
+    weekday: "short", hour: "2-digit", minute: "2-digit", hour12: false
+  });
+  const parts = fmt.formatToParts(d);
+  const get = t => parts.find(p => p.type === t).value;
+  return {
+    weekday: get("weekday").replace(".", ""),
+    day: get("day"),
+    month: MONTHS[parseInt(get("month")) - 1],
+    year: get("year"),
+    hour: get("hour"),
+    minute: get("minute"),
+    dayKey: `${get("year")}-${get("month")}-${get("day")}`
+  };
+}
+
+function localTime(d, tz) {
+  return new Intl.DateTimeFormat("de-DE", {
+    timeZone: tz, hour: "2-digit", minute: "2-digit", hour12: false
+  }).format(d);
+}
+
+function countdown(d, now) {
+  const diff = d - now;
+  if (diff < 0) return null;
+  const days = Math.floor(diff / 86400000);
+  const hours = Math.floor((diff % 86400000) / 3600000);
+  const mins = Math.floor((diff % 3600000) / 60000);
+  if (days > 0) return `in ${days}T ${hours}h`;
+  if (hours > 0) return `in ${hours}h ${mins}m`;
+  return `in ${mins} min`;
+}
+
+let filterPhase = "all";
+let filterSearch = "";
+
+function render() {
+  const app = document.getElementById("app");
+  const now = new Date();
+
+  const enriched = MATCHES.map(m => ({
+    ...m,
+    ts: warsawToDate(m.d, m.t)
+  }));
+
+  let filtered = enriched;
+  if (filterPhase === "upcoming") {
+    filtered = filtered.filter(m => m.ts > now);
+  } else if (filterPhase !== "all") {
+    filtered = filtered.filter(m => m.p === filterPhase);
+  }
+  if (filterSearch) {
+    const q = filterSearch.toLowerCase();
+    filtered = filtered.filter(m =>
+      m.h.toLowerCase().includes(q) ||
+      m.a.toLowerCase().includes(q) ||
+      VENUES[m.v].city.toLowerCase().includes(q) ||
+      String(m.n).includes(q)
+    );
+  }
+
+  // Sort by timestamp for chronological display
+  filtered = [...filtered].sort((a, b) => a.ts - b.ts);
+
+  const byDay = {};
+  filtered.forEach(m => {
+    const w = warsawParts(m.ts);
+    if (!byDay[w.dayKey]) byDay[w.dayKey] = { info: w, matches: [] };
+    byDay[w.dayKey].matches.push({ ...m, w });
+  });
+
+  const totalUpcoming = enriched.filter(m => m.ts > now).length;
+  document.getElementById("stats").textContent =
+    `${filtered.length} Spiele · ${totalUpcoming} ausstehend`;
+
+  if (filtered.length === 0) {
+    app.innerHTML = '<div class="empty">Keine Spiele gefunden</div>';
+    return;
+  }
+
+  const upcoming = enriched.filter(m => m.ts > now).sort((a, b) => a.ts - b.ts);
+  const nextMatchN = upcoming[0]?.n;
+
+  const html = Object.values(byDay).map(day => {
+    const matchesHtml = day.matches.map(m => {
+      const isDone = m.ts < now && (now - m.ts) > 2 * 3600000;
+      const isLive = m.ts < now && (now - m.ts) <= 2 * 3600000;
+      const isNext = m.n === nextMatchN;
+      const cls = ["match", `group-${m.g}`];
+      if (isDone) cls.push("done");
+      if (isLive) cls.push("live");
+      if (isNext) cls.push("upcoming-next");
+
+      const roundLabel = m.p === "group" ? `Gruppe ${m.g}` : phaseLabel(m.p);
+      const cd = countdown(m.ts, now);
+      const venue = VENUES[m.v];
+      const warsaw = `${m.w.hour}:${m.w.minute}`;
+      const local = localTime(m.ts, venue.tz);
+      const hFlag = F[m.h] || "";
+      const aFlag = F[m.a] || "";
+
+      return `<div class="${cls.join(" ")}">
+        <div class="time">
+          <div class="time-main">${warsaw}</div>
+          <div class="time-local">${local} lokal</div>
+        </div>
+        <div class="teams">
+          <div class="team-row">${hFlag ? `<span class="flag">${hFlag}</span>` : ""}${m.h}</div>
+          <div class="vs">vs</div>
+          <div class="team-row">${aFlag ? `<span class="flag">${aFlag}</span>` : ""}${m.a}</div>
+        </div>
+        <div class="meta">
+          <div class="meta-round">${roundLabel}</div>
+          <div>#${m.n} · ${venue.city}</div>
+          <div>${venue.name}</div>
+          ${cd && !isLive ? `<div class="countdown">${cd}</div>` : ""}
+          ${isLive ? `<div class="countdown" style="color:var(--red)">LIVE</div>` : ""}
+        </div>
+      </div>`;
+    }).join("");
+
+    return `<div class="day-group">
+      <div class="day-header">
+        <div class="day-date">${day.info.day}. ${day.info.month}</div>
+        <div class="day-weekday">${day.info.weekday}</div>
+        <div class="day-count">${day.matches.length} ${day.matches.length === 1 ? "Spiel" : "Spiele"}</div>
+      </div>
+      <div class="matches">${matchesHtml}</div>
+    </div>`;
+  }).join("");
+
+  app.innerHTML = html;
+}
+
+document.getElementById("phaseFilters").addEventListener("click", e => {
+  if (e.target.matches(".btn")) {
+    document.querySelectorAll("#phaseFilters .btn").forEach(b => b.classList.remove("active"));
+    e.target.classList.add("active");
+    filterPhase = e.target.dataset.phase;
+    render();
+  }
+});
+
+document.getElementById("search").addEventListener("input", e => {
+  filterSearch = e.target.value.trim();
+  render();
+});
+
+render();
+setInterval(render, 60000);
+</script>
+</body>
+</html>

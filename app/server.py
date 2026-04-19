@@ -707,7 +707,7 @@ AUTH_SECRET = os.getenv("DASHBOARD_AUTH_SECRET", "") or (DASHBOARD_PASSWORD or "
 SESSION_COOKIE = "anker_session"
 SESSION_TTL_S = 60 * 60 * 24 * 30  # 30 days
 
-OPEN_PATHS = {"/api/health", "/auth/login", "/auth/logout", "/favicon.ico"}
+OPEN_PATHS = {"/api/health", "/auth/login", "/auth/logout", "/favicon.ico", "/wm2026"}
 
 
 def _sign_session() -> str:
@@ -1094,6 +1094,12 @@ async def api_mqtt_log(limit: int = Query(50, ge=1, le=100)):
 async def mqtt_monitor_page():
     """Standalone raw MQTT data monitor page."""
     return FileResponse(STATIC / "mqtt-monitor.html")
+
+
+@app.get("/wm2026")
+async def wm2026_page():
+    """Standalone FIFA World Cup 2026 schedule in Warsaw time."""
+    return FileResponse(STATIC / "wm2026.html")
 
 
 @app.get("/api/status")
