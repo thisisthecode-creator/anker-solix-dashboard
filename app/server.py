@@ -707,7 +707,7 @@ AUTH_SECRET = os.getenv("DASHBOARD_AUTH_SECRET", "") or (DASHBOARD_PASSWORD or "
 SESSION_COOKIE = "anker_session"
 SESSION_TTL_S = 60 * 60 * 24 * 30  # 30 days
 
-OPEN_PATHS = {"/api/health", "/auth/login", "/auth/logout", "/favicon.ico"}
+OPEN_PATHS = {"/api/health", "/auth/login", "/auth/logout", "/favicon.ico", "/wm2026"}
 
 
 def _sign_session() -> str:
@@ -1096,6 +1096,12 @@ async def mqtt_monitor_page():
     return FileResponse(STATIC / "mqtt-monitor.html")
 
 
+@app.get("/wm2026")
+async def wm2026_page():
+    """Standalone FIFA World Cup 2026 schedule in Warsaw time."""
+    return FileResponse(STATIC / "wm2026.html")
+
+
 @app.get("/api/status")
 async def api_status():
     return {
@@ -1164,6 +1170,14 @@ async def api_pvgis_refresh():
     from app.pvgis import fetch_pvgis_benchmark
     result = await fetch_pvgis_benchmark(force=True)
     return result or {"available": False}
+
+
+@app.get("/api/device-fingerprint")
+async def api_device_fingerprint(days: int = Query(7, ge=1, le=30)):
+    """Histogram of AC output step sizes over the last N days, with known-device
+    labels applied. Helps identify which consumers are drawing power when."""
+    from app.devices import analyze_device_steps
+    return await analyze_device_steps(days=days)
 
 
 @app.get("/api/ml-stats")
