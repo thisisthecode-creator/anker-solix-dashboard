@@ -310,7 +310,7 @@ const fmt2 = new Intl.NumberFormat(locale, { maximumFractionDigits: 2 });
 const fmtKwh = new Intl.NumberFormat(locale, { minimumFractionDigits: 2, maximumFractionDigits: 2 });
 const fmtEur = new Intl.NumberFormat(locale, { minimumFractionDigits: 2, maximumFractionDigits: 2 });
 const EUR_PER_KWH = 0.25; // Poland household electricity price
-const SYSTEM_COST_EUR = 941; // 4011 PLN ÷ 4.2623 (NBP rate 2026-04-08)
+const SYSTEM_COST_EUR = 997; // Amortisation: nur C1000 (598,07) + BP1000 (399) = 2 kWh Batterie
 const CAFE_PRICE_EUR = 3.70; // Price of a café in Warsaw
 
 // === Warsaw timezone helpers ===
@@ -714,6 +714,16 @@ function connect() {
             const d = JSON.parse(e.data);
             if (!d) return;
             dot.classList.add('connected');
+            // Out-of-band events: server notifies when self-learning was retrained
+            // so the UI reflects the fresh calibration immediately.
+            if (d.type === 'recalibrated') {
+                _refreshCalibration().then(() => {
+                    try { buildAccuracyTrend(); } catch (_) {}
+                    try { buildMlStatsAndCalibration(); } catch (_) {}
+                    try { buildAuxInsights(); } catch (_) {}
+                });
+                return;
+            }
             // Always update ticker/heartbeat (shows system is alive)
             addTicker(d);
             // Only full UI update when data actually changed
@@ -1218,13 +1228,14 @@ function getDailyData() {
 const PANEL_KWP = 0.40;        // 2 × 200 W flexible panels
 const PANEL_EFFICIENCY = 0.85;
 
-// 30° bracket + 30° panel bend → tilt sweeps 60°..90° from horizontal
+// Top vertical on railing (90°), bottom pulled out by 30° bracket (60°),
+// middle sags between. Each strip = 20% of panel area.
 const CURVE_STRIPS = [
-    { tilt: 63, weight: 1/5 },
-    { tilt: 69, weight: 1/5 },
+    { tilt: 60, weight: 1/5 },
+    { tilt: 68, weight: 1/5 },
     { tilt: 75, weight: 1/5 },
-    { tilt: 81, weight: 1/5 },
-    { tilt: 87, weight: 1/5 },
+    { tilt: 83, weight: 1/5 },
+    { tilt: 90, weight: 1/5 },
 ];
 // Open-Meteo azimuth convention: 0=south, -90=east, +90=west, ±180=north
 // Panel compass heading is 240° (SW) → Open-Meteo = 240 - 180 = 60
@@ -1603,17 +1614,25 @@ async function buildHourlyForecastToday(dateStr) {
             }
         }
 
-        // Sum forecast + actual.
-        // Today: sum ALL hours up to current hour (fair partial-day comparison).
-        // Past days: sum all hours of the day (full day).
+        // Display totals: always sum full day (for today: what's expected,
+        // for past days: the actual full day). Keeps the summary informative
+        // even pre-sunrise when currentHour is still 0-5.
         let totalFc = 0, totalAct = 0;
-        const isTodayView = (dateStr === today);
-        const endH = isTodayView ? currentHour : 23;
-        for (let h = 0; h <= endH; h++) {
+        for (let h = 0; h < 24; h++) {
             totalFc += forecastByHour[h] || 0;
             totalAct += actualByHour[h] || 0;
         }
-        console.log('[hourlyFC]', dateStr, 'fc=' + totalFc.toFixed(3), 'act=' + totalAct.toFixed(3),
+        // Progressive sums for the accuracy badge — fair partial-day comparison
+        // for today (forecast capped at current hour vs. actual so far).
+        const isTodayView = (dateStr === today);
+        let accFc = 0, accAct = 0;
+        const accEndH = isTodayView ? currentHour : 23;
+        for (let h = 0; h <= accEndH; h++) {
+            accFc += forecastByHour[h] || 0;
+            accAct += actualByHour[h] || 0;
+        }
+        console.log('[hourlyFC]', dateStr, 'fcDay=' + totalFc.toFixed(3), 'actDay=' + totalAct.toFixed(3),
+                    'accFc=' + accFc.toFixed(3), 'accAct=' + accAct.toFixed(3),
                     'fcHours=' + Object.keys(forecastByHour).length,
                     'actHours=' + Object.keys(actualByHour).filter(h => actualByHour[h] > 0).length);
 
@@ -1636,10 +1655,10 @@ async function buildHourlyForecastToday(dateStr) {
                 : '--';
             const isToday = (dateStr === today);
             const hadSolar = totalAct >= 0.1;
-            // Always compute for today; for past days only when solar was connected
-            const showAccuracy = (isToday || hadSolar) && totalFc > 0.01;
+            // Accuracy uses the progressive (fair) sums, not the full-day display.
+            const showAccuracy = (isToday || hadSolar) && accFc > 0.01 && accAct > 0.01;
             const accuracy = showAccuracy
-                ? Math.round((1 - Math.abs(totalFc - totalAct) / Math.max(totalFc, totalAct)) * 100)
+                ? Math.round((1 - Math.abs(accFc - accAct) / Math.max(accFc, accAct)) * 100)
                 : null;
             const accBadge = accuracy != null
                 ? '<span style="color:' + (accuracy >= 80 ? 'var(--green)' : accuracy >= 60 ? 'var(--solar)' : 'var(--red)') + '">'
@@ -1758,12 +1777,17 @@ async function buildAccuracyTrend() {
             ));
             if (strips[0] && strips[0].time) {
                 for (let i = 0; i < strips[0].time.length; i++) {
-                    const day = strips[0].time[i].slice(0, 10);
+                    const ts = strips[0].time[i];
+                    const day = ts.slice(0, 10);
+                    const hour = parseInt(ts.slice(11, 13), 10);
                     let wgti = 0;
                     for (let s = 0; s < CURVE_STRIPS.length; s++) {
                         wgti += (strips[s].global_tilted_irradiance[i] || 0) * CURVE_STRIPS[s].weight;
                     }
-                    fcByDay[day] = (fcByDay[day] || 0) + wgti / 1000 * PANEL_KWP * PANEL_EFFICIENCY;
+                    const rawKwh = wgti / 1000 * PANEL_KWP * PANEL_EFFICIENCY;
+                    // Apply current calibration so historical accuracy reflects
+                    // the live self-learning state (auto-"retroactive recalibrate").
+                    fcByDay[day] = (fcByDay[day] || 0) + applyHourCalibration(rawKwh, hour);
                 }
             }
         }
@@ -1976,17 +2000,23 @@ async function buildMlStatsAndCalibration() {
             const details = [];
             if (mlRes && mlRes.available) {
                 const m = mlRes.metrics || {};
-                details.push('🧠 ' + (mlRes.type === 'sklearn_gbr' ? 'GradientBoosting' : 'LinearRegression'));
-                details.push('n=' + (mlRes.n_train || 0));
+                const name = mlRes.type === 'sklearn_gbr' ? 'GradientBoosting' : 'LinearRegression';
+                details.push('🧠 ML-Tagesprognose aktiv: ' + name + ' (n=' + (mlRes.n_train || 0) + ' Tage)');
                 if (m.r2 != null) details.push('R²: ' + m.r2);
-                if (m.mae_kwh != null) details.push('MAE: ' + fmtKwh.format(m.mae_kwh) + ' kWh');
+                if (m.mae_kwh != null) details.push('Ø Fehler: ±' + fmtKwh.format(m.mae_kwh) + ' kWh');
                 if (m.mape_pct != null) details.push('MAPE: ' + m.mape_pct + '%');
             } else {
-                details.push('🧠 ML: noch nicht trainiert');
+                const haveN = (mlRes && mlRes.n_available) || 0;
+                const needN = (mlRes && mlRes.min_to_train) || 5;
+                const gbrN = (mlRes && mlRes.gbr_from) || 20;
+                details.push('🧠 ML-Tagesprognose: sammelt Daten (' + haveN + '/' + needN + ' Tage, GBR ab ' + gbrN + ')');
             }
             if (calRes && calRes.available) {
-                details.push('Kalibrierung: ' + (calRes.sample_days || 0) + ' Tage · '
-                    + (calRes.sample_hours || 0) + ' Stunden');
+                details.push('📚 Selbstlernende Stunden-Kalibrierung aktiv: aus '
+                    + (calRes.sample_days || 0) + ' Tagen / '
+                    + (calRes.sample_hours || 0) + ' Stunden gelernt');
+            } else {
+                details.push('📚 Stunden-Kalibrierung: noch zu wenig Daten');
             }
             parts.push('<span style="width:100%;font-size:0.68rem">'
                 + details.map(d => '<span style="margin-right:10px">' + d + '</span>').join('')
@@ -2055,6 +2085,230 @@ async function buildMlStatsAndCalibration() {
 
 setTimeout(buildMlStatsAndCalibration, 8000);
 setInterval(buildMlStatsAndCalibration, 1800000);  // every 30 min
+
+
+// === 🌑 Schattenwurf-Analyse ===
+// Interprets the existing hour_factors from calibration: a hour whose
+// residual is persistently well below 1.0 with enough samples is likely
+// being shaded by something fixed (house across the street, railing, etc).
+function buildShadingInsights() {
+    const el = $('shadingInsights');
+    if (!el) return;
+    const cal = window._solarCalibration;
+    if (!cal || !cal.available || !cal.hour_factors) {
+        el.innerHTML = '<span>Noch zu wenig Daten - benötigt mindestens 3 Samples pro Stunde.</span>';
+        return;
+    }
+    const SHADE_THRESHOLD = 0.75;  // residual below = systematic loss
+    const OVERPRODUCE_THRESHOLD = 1.25;  // way above average = reflection / edge
+    const MIN_SAMPLES = 3;
+
+    const suspects = [];
+    const reflectors = [];
+    for (let h = 0; h < 24; h++) {
+        const hf = cal.hour_factors[String(h)];
+        if (!hf || (hf.samples || 0) < MIN_SAMPLES) continue;
+        const residual = hf.residual != null ? hf.residual : hf.factor;
+        if (residual < SHADE_THRESHOLD) {
+            suspects.push({ hour: h, residual, samples: hf.samples, loss: Math.round((1 - residual) * 100) });
+        } else if (residual > OVERPRODUCE_THRESHOLD) {
+            reflectors.push({ hour: h, residual, samples: hf.samples, gain: Math.round((residual - 1) * 100) });
+        }
+    }
+
+    const parts = [];
+    if (suspects.length) {
+        suspects.sort((a, b) => a.residual - b.residual);
+        const list = suspects.map(s =>
+            '<span style="color:var(--red)">' + String(s.hour).padStart(2, '0') + ':00 (−' + s.loss + '%, n=' + s.samples + ')</span>'
+        ).join(', ');
+        parts.push('<div>⚠️ <strong>Verdacht auf Schatten:</strong> ' + list + '</div>');
+        parts.push('<div style="opacity:0.7;margin-top:2px">Konstanter Verlust zur gleichen Uhrzeit → fester Schattenwurf (Gebäude, Geländer, Baum).</div>');
+    }
+    if (reflectors.length) {
+        const list = reflectors.map(s =>
+            '<span style="color:var(--green)">' + String(s.hour).padStart(2, '0') + ':00 (+' + s.gain + '%, n=' + s.samples + ')</span>'
+        ).join(', ');
+        parts.push('<div style="margin-top:4px">✨ <strong>Mehr als erwartet:</strong> ' + list + '</div>');
+        parts.push('<div style="opacity:0.7;margin-top:2px">Reflexionen von Fassade/Boden oder Modell unterschätzt diese Stunde.</div>');
+    }
+    if (!suspects.length && !reflectors.length) {
+        parts.push('<div>✅ Kein systematischer Schatten erkannt - alle Stunden bewegen sich im Erwartungsbereich (0.75-1.25x).</div>');
+    }
+
+    // Bias-by-time-of-day summary
+    const morning = [], midday = [], evening = [];
+    for (let h = 0; h < 24; h++) {
+        const hf = cal.hour_factors[String(h)];
+        if (!hf || (hf.samples || 0) < MIN_SAMPLES) continue;
+        const residual = hf.residual != null ? hf.residual : hf.factor;
+        if (h >= 6 && h <= 10) morning.push(residual);
+        else if (h >= 11 && h <= 15) midday.push(residual);
+        else if (h >= 16 && h <= 20) evening.push(residual);
+    }
+    const avg = (arr) => arr.length ? (arr.reduce((a, b) => a + b, 0) / arr.length) : null;
+    const fmtPct = (v) => v == null ? '–' : ((v - 1) * 100 >= 0 ? '+' : '') + Math.round((v - 1) * 100) + '%';
+    parts.push('<div style="margin-top:6px;opacity:0.85">'
+        + 'Morgen (6-10): <strong>' + fmtPct(avg(morning)) + '</strong> · '
+        + 'Mittag (11-15): <strong>' + fmtPct(avg(midday)) + '</strong> · '
+        + 'Abend (16-20): <strong>' + fmtPct(avg(evening)) + '</strong>'
+        + '</div>');
+
+    el.innerHTML = parts.join('');
+}
+
+
+// === ☁️ Wetter-konditionierte Accuracy ===
+// Uses cloud_factors from calibration (buckets 0-25%, 25-50%, 50-75%, 75-100%).
+// Shows how accurate our forecast is under different cloud conditions.
+let _weatherAccChart = null;
+function buildWeatherAccuracy() {
+    const row = $('weatherAccuracyRow');
+    const cal = window._solarCalibration;
+    if (!cal || !cal.available || !cal.cloud_factors) {
+        if (row) row.innerHTML = '<span>Noch keine Cloud-Daten - Kalibrierung braucht mehr Samples.</span>';
+        if (_weatherAccChart) { _weatherAccChart.destroy(); _weatherAccChart = null; }
+        return;
+    }
+
+    const buckets = ['0-25% Wolken', '25-50% Wolken', '50-75% Wolken', '75-100% Wolken'];
+    const icons = ['☀️', '⛅', '🌥️', '☁️'];
+    const factors = [];
+    const samples = [];
+    for (let i = 0; i < 4; i++) {
+        const cf = cal.cloud_factors[String(i)];
+        factors.push(cf ? cf.factor : 1.0);
+        samples.push(cf ? (cf.samples || 0) : 0);
+    }
+
+    if (row) {
+        const parts = [];
+        for (let i = 0; i < 4; i++) {
+            const f = factors[i];
+            const dev = Math.round((f - 1) * 100);
+            const devStr = (dev >= 0 ? '+' : '') + dev + '%';
+            const col = Math.abs(dev) <= 15 ? 'var(--green)' : Math.abs(dev) <= 30 ? 'var(--solar)' : 'var(--red)';
+            const sampleLabel = samples[i] < 3 ? ' <span style="opacity:0.5">(zu wenig Daten)</span>' : '';
+            parts.push('<div style="display:inline-block;margin-right:14px">'
+                + icons[i] + ' ' + buckets[i] + ': <strong style="color:' + col + '">' + devStr + '</strong> '
+                + '<span style="opacity:0.6">n=' + samples[i] + '</span>'
+                + sampleLabel + '</div>');
+        }
+        row.innerHTML = parts.join('');
+    }
+
+    const canvas = $('chart_weather_accuracy');
+    if (!canvas) return;
+    if (_weatherAccChart) _weatherAccChart.destroy();
+    _weatherAccChart = new Chart(canvas, {
+        type: 'bar',
+        data: {
+            labels: buckets.map((b, i) => icons[i] + ' ' + b),
+            datasets: [{
+                label: 'Faktor (1.0 = exakte Prognose)',
+                data: factors,
+                backgroundColor: factors.map(f => Math.abs(f - 1) <= 0.15 ? 'rgba(34,197,94,0.5)'
+                    : Math.abs(f - 1) <= 0.3 ? 'rgba(245,158,11,0.5)' : 'rgba(239,68,68,0.5)'),
+                borderColor: factors.map(f => Math.abs(f - 1) <= 0.15 ? '#22c55e'
+                    : Math.abs(f - 1) <= 0.3 ? '#f59e0b' : '#ef4444'),
+                borderWidth: 1, borderRadius: 2,
+            }]
+        },
+        options: {
+            responsive: true, maintainAspectRatio: false, animation: false,
+            plugins: {
+                legend: { display: false },
+                tooltip: { callbacks: { label: ctx => {
+                    const s = samples[ctx.dataIndex];
+                    return 'Faktor: ' + ctx.parsed.y.toFixed(2) + 'x (n=' + s + ')';
+                } } }
+            },
+            scales: {
+                x: { grid: { display: false }, ticks: { font: { size: 9 } } },
+                y: { beginAtZero: true, suggestedMax: 1.5, grid: { color: chartGridColor() },
+                     ticks: { maxTicksLimit: 4, font: { size: 9 }, callback: v => v.toFixed(1) + 'x' } }
+            }
+        }
+    });
+}
+
+
+// === 🔌 Verbraucher-Fingerprint ===
+let _deviceFpChart = null;
+async function buildDeviceFingerprint() {
+    const row = $('deviceFpRow');
+    try {
+        const res = await fetch('/api/device-fingerprint?days=7');
+        if (!res.ok) throw new Error('HTTP ' + res.status);
+        const data = await res.json();
+
+        if (!data.available || !data.steps || !data.steps.length) {
+            if (row) row.innerHTML = '<span>Noch keine Daten - sammelt aus MQTT-Archiv.</span>';
+            if (_deviceFpChart) { _deviceFpChart.destroy(); _deviceFpChart = null; }
+            return;
+        }
+
+        if (row) {
+            const identified = data.steps.filter(s => s.label).length;
+            row.innerHTML = '<span>' + data.days_analyzed + ' Tage analysiert · '
+                + data.total_steps + ' Sprünge erkannt · '
+                + identified + ' bekannt zugeordnet · '
+                + (data.unknown_count || 0) + ' unbekannt</span>';
+        }
+
+        // Show top 15 (data may have up to 30)
+        const top = data.steps.slice(0, 15);
+        const labels = top.map(s => s.watts.toFixed(1) + ' W' + (s.label ? ' · ' + s.label : ''));
+        const counts = top.map(s => s.count);
+        const colors = top.map(s => s.label ? 'rgba(96,165,250,0.7)' : 'rgba(156,163,175,0.4)');
+
+        const canvas = $('chart_device_fingerprint');
+        if (!canvas) return;
+        if (_deviceFpChart) _deviceFpChart.destroy();
+        _deviceFpChart = new Chart(canvas, {
+            type: 'bar',
+            data: {
+                labels,
+                datasets: [{
+                    label: 'Schaltvorgänge (An+Aus)',
+                    data: counts,
+                    backgroundColor: colors,
+                    borderColor: colors.map(c => c.replace('0.7', '1.0').replace('0.4', '0.8')),
+                    borderWidth: 1, borderRadius: 2,
+                }]
+            },
+            options: {
+                indexAxis: 'y',
+                responsive: true, maintainAspectRatio: false, animation: false,
+                plugins: {
+                    legend: { display: false },
+                    tooltip: { callbacks: { label: ctx => {
+                        const s = top[ctx.dataIndex];
+                        return 'An: ' + s.on_count + ' · Aus: ' + s.off_count + (s.label ? ' · ' + s.label : '');
+                    } } }
+                },
+                scales: {
+                    x: { beginAtZero: true, grid: { color: chartGridColor() }, ticks: { font: { size: 9 } } },
+                    y: { grid: { display: false }, ticks: { font: { size: 9 }, autoSkip: false } }
+                }
+            }
+        });
+    } catch (e) {
+        console.warn('Device fingerprint error:', e);
+        if (row) row.innerHTML = '<span style="color:var(--red)">Fehler beim Laden.</span>';
+    }
+}
+
+// Render all three new cards together. Called after calibration refresh
+// so they use the fresh data.
+function buildAuxInsights() {
+    buildShadingInsights();
+    buildWeatherAccuracy();
+    buildDeviceFingerprint();
+}
+
+setTimeout(buildAuxInsights, 9500);
+setInterval(buildAuxInsights, 1800000);  // every 30 min
 
 // Date picker wiring - prev/next skip days without solar input (past days only).
 // List of days WITH solar input cached globally after /api/solar-dates fetch.

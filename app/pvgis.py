@@ -41,15 +41,15 @@ PVGIS_CACHE_PATH = DATA_DIR / "pvgis_benchmark.json"
 # Our panel 240° compass => 240 - 180 = +60 (WSW)
 PVGIS_ASPECT = PANEL_AZIMUTH_DEG - 180
 
-# Curve strips matching the panel's bend (top fixed at ~90°, bottom pulled
-# out to ~60° by the 30° bracket, middle sags 30° from the straight line).
-# Each strip covers 20% of the panel area.
+# Curve strips matching the panel's bend: top fixed vertical on the railing
+# (90°), bottom pulled out by the 30° bracket (60° from horizontal), middle
+# sags smoothly in between. Each strip covers 20% of the panel area.
 PVGIS_CURVE_STRIPS = [
-    {"tilt": 63, "weight": 0.20, "label": "unten"},
-    {"tilt": 69, "weight": 0.20, "label": "mitte-unten"},
+    {"tilt": 60, "weight": 0.20, "label": "unten"},
+    {"tilt": 68, "weight": 0.20, "label": "mitte-unten"},
     {"tilt": 75, "weight": 0.20, "label": "mitte"},
-    {"tilt": 81, "weight": 0.20, "label": "mitte-oben"},
-    {"tilt": 87, "weight": 0.20, "label": "oben"},
+    {"tilt": 83, "weight": 0.20, "label": "mitte-oben"},
+    {"tilt": 90, "weight": 0.20, "label": "oben"},
 ]
 
 # System loss % - higher than PVGIS default (14%) to account for curved-panel
@@ -81,7 +81,7 @@ async def _fetch_pvgis_one(tilt: int, kwp: float) -> dict | None:
 async def fetch_pvgis_benchmark(force: bool = False) -> dict | None:
     """Fetch PVGIS yield for each curve strip + weighted-sum for curved panels.
 
-    Sends 5 parallel requests (one per strip at 63/69/75/81/87°), weighted
+    Sends 5 parallel requests (one per strip at 60/68/75/83/90°), weighted
     by their 20% area share. Result is stored in one cached JSON.
     """
     if httpx is None:
