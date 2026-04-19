@@ -1166,14 +1166,6 @@ async def api_pvgis_refresh():
     return result or {"available": False}
 
 
-@app.get("/api/device-fingerprint")
-async def api_device_fingerprint(days: int = Query(7, ge=1, le=30)):
-    """Histogram of AC output step sizes over the last N days, with known-device
-    labels applied. Helps identify which consumers are drawing power when."""
-    from app.devices import analyze_device_steps
-    return await analyze_device_steps(days=days)
-
-
 @app.get("/api/ml-stats")
 async def api_ml_stats():
     """Current ML model metrics + training metadata. Always reports the

@@ -2233,78 +2233,11 @@ function buildWeatherAccuracy() {
 }
 
 
-// === 🔌 Verbraucher-Fingerprint ===
-let _deviceFpChart = null;
-async function buildDeviceFingerprint() {
-    const row = $('deviceFpRow');
-    try {
-        const res = await fetch('/api/device-fingerprint?days=7');
-        if (!res.ok) throw new Error('HTTP ' + res.status);
-        const data = await res.json();
-
-        if (!data.available || !data.steps || !data.steps.length) {
-            if (row) row.innerHTML = '<span>Noch keine Daten - sammelt aus MQTT-Archiv.</span>';
-            if (_deviceFpChart) { _deviceFpChart.destroy(); _deviceFpChart = null; }
-            return;
-        }
-
-        if (row) {
-            const identified = data.steps.filter(s => s.label).length;
-            row.innerHTML = '<span>' + data.days_analyzed + ' Tage analysiert · '
-                + data.total_steps + ' Sprünge erkannt · '
-                + identified + ' bekannt zugeordnet · '
-                + (data.unknown_count || 0) + ' unbekannt</span>';
-        }
-
-        // Show top 15 (data may have up to 30)
-        const top = data.steps.slice(0, 15);
-        const labels = top.map(s => s.watts.toFixed(1) + ' W' + (s.label ? ' · ' + s.label : ''));
-        const counts = top.map(s => s.count);
-        const colors = top.map(s => s.label ? 'rgba(96,165,250,0.7)' : 'rgba(156,163,175,0.4)');
-
-        const canvas = $('chart_device_fingerprint');
-        if (!canvas) return;
-        if (_deviceFpChart) _deviceFpChart.destroy();
-        _deviceFpChart = new Chart(canvas, {
-            type: 'bar',
-            data: {
-                labels,
-                datasets: [{
-                    label: 'Schaltvorgänge (An+Aus)',
-                    data: counts,
-                    backgroundColor: colors,
-                    borderColor: colors.map(c => c.replace('0.7', '1.0').replace('0.4', '0.8')),
-                    borderWidth: 1, borderRadius: 2,
-                }]
-            },
-            options: {
-                indexAxis: 'y',
-                responsive: true, maintainAspectRatio: false, animation: false,
-                plugins: {
-                    legend: { display: false },
-                    tooltip: { callbacks: { label: ctx => {
-                        const s = top[ctx.dataIndex];
-                        return 'An: ' + s.on_count + ' · Aus: ' + s.off_count + (s.label ? ' · ' + s.label : '');
-                    } } }
-                },
-                scales: {
-                    x: { beginAtZero: true, grid: { color: chartGridColor() }, ticks: { font: { size: 9 } } },
-                    y: { grid: { display: false }, ticks: { font: { size: 9 }, autoSkip: false } }
-                }
-            }
-        });
-    } catch (e) {
-        console.warn('Device fingerprint error:', e);
-        if (row) row.innerHTML = '<span style="color:var(--red)">Fehler beim Laden.</span>';
-    }
-}
-
-// Render all three new cards together. Called after calibration refresh
+// Render the insight cards together. Called after calibration refresh
 // so they use the fresh data.
 function buildAuxInsights() {
     buildShadingInsights();
     buildWeatherAccuracy();
-    buildDeviceFingerprint();
 }
 
 setTimeout(buildAuxInsights, 9500);
