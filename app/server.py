@@ -770,11 +770,15 @@ async def auth_login_submit(request: Request):
     password = form.get("password", "")
     if not hmac.compare_digest(password, DASHBOARD_PASSWORD):
         return JSONResponse({"error": "wrong_password"}, status_code=401)
+    # Mark cookie Secure only when the request actually came over HTTPS,
+    # so direct HTTP access to the port (http://ip:8420) still works.
+    fwd_proto = request.headers.get("x-forwarded-proto", "").lower()
+    is_https = fwd_proto == "https" or request.url.scheme == "https"
     resp = JSONResponse({"ok": True})
     resp.set_cookie(
         SESSION_COOKIE, _sign_session(),
         max_age=SESSION_TTL_S, httponly=True, samesite="lax",
-        secure=True, path="/",
+        secure=is_https, path="/",
     )
     return resp
 
