@@ -130,11 +130,30 @@
     border-radius: 10px;
     padding: 12px 14px;
     display: grid;
-    grid-template-columns: 64px 1fr auto;
-    gap: 12px;
+    grid-template-columns: 28px 64px 1fr auto;
+    gap: 10px;
     align-items: center;
     transition: border-color 0.15s;
   }
+  .match.starred {
+    background: #fff8ef;
+    border-color: #f6c27a;
+  }
+  .star {
+    background: none;
+    border: none;
+    cursor: pointer;
+    padding: 4px;
+    font-size: 20px;
+    line-height: 1;
+    color: #cbd0d9;
+    transition: color 0.15s, transform 0.15s;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+  }
+  .star:hover { color: var(--accent-2); transform: scale(1.15); }
+  .star.on { color: #f5a623; }
   .match:hover { border-color: var(--accent); }
   .match.live {
     border-color: var(--red);
@@ -229,7 +248,7 @@
   }
   @media (max-width: 600px) {
     .matches { grid-template-columns: 1fr; }
-    .match { grid-template-columns: 55px 1fr auto; padding: 10px 12px; }
+    .match { grid-template-columns: 24px 55px 1fr auto; padding: 10px 12px; gap: 8px; }
     .team-row { font-size: 13px; }
   }
 </style>
@@ -250,6 +269,7 @@
   <span class="filter-label">Phase</span>
   <div class="filter-group" id="phaseFilters">
     <button class="btn chip active" data-phase="all">Alle</button>
+    <button class="btn chip" data-phase="watchlist">⭐ Watchlist</button>
     <button class="btn chip" data-phase="upcoming">Kommend</button>
     <button class="btn chip" data-phase="group">Gruppe</button>
     <button class="btn chip" data-phase="r32">Sechzehntelfinale</button>
@@ -481,6 +501,18 @@ function countdown(d, now) {
 
 let filterPhase = "all";
 let filterSearch = "";
+let starred = new Set(JSON.parse(localStorage.getItem("wm2026-stars") || "[]"));
+
+function saveStars() {
+  localStorage.setItem("wm2026-stars", JSON.stringify([...starred]));
+}
+
+function toggleStar(n) {
+  if (starred.has(n)) starred.delete(n);
+  else starred.add(n);
+  saveStars();
+  render();
+}
 
 function render() {
   const app = document.getElementById("app");
@@ -494,6 +526,8 @@ function render() {
   let filtered = enriched;
   if (filterPhase === "upcoming") {
     filtered = filtered.filter(m => m.ts > now);
+  } else if (filterPhase === "watchlist") {
+    filtered = filtered.filter(m => starred.has(m.n));
   } else if (filterPhase !== "all") {
     filtered = filtered.filter(m => m.p === filterPhase);
   }
@@ -519,7 +553,7 @@ function render() {
 
   const totalUpcoming = enriched.filter(m => m.ts > now).length;
   document.getElementById("stats").textContent =
-    `${filtered.length} Spiele · ${totalUpcoming} ausstehend`;
+    `${filtered.length} Spiele · ${totalUpcoming} ausstehend · ⭐ ${starred.size}`;
 
   if (filtered.length === 0) {
     app.innerHTML = '<div class="empty">Keine Spiele gefunden</div>';
@@ -534,10 +568,12 @@ function render() {
       const isDone = m.ts < now && (now - m.ts) > 2 * 3600000;
       const isLive = m.ts < now && (now - m.ts) <= 2 * 3600000;
       const isNext = m.n === nextMatchN;
+      const isStarred = starred.has(m.n);
       const cls = ["match", `group-${m.g}`];
       if (isDone) cls.push("done");
       if (isLive) cls.push("live");
       if (isNext) cls.push("upcoming-next");
+      if (isStarred) cls.push("starred");
 
       const roundLabel = m.p === "group" ? `Gruppe ${m.g}` : phaseLabel(m.p);
       const cd = countdown(m.ts, now);
@@ -548,6 +584,7 @@ function render() {
       const aFlag = F[m.a] || "";
 
       return `<div class="${cls.join(" ")}">
+        <button class="star ${isStarred ? "on" : ""}" data-star="${m.n}" title="${isStarred ? "Aus Watchlist entfernen" : "Zu Watchlist hinzufügen"}">${isStarred ? "★" : "☆"}</button>
         <div class="time">
           <div class="time-main">${warsaw}</div>
           <div class="time-local">${local} lokal</div>
@@ -578,6 +615,13 @@ function render() {
   }).join("");
 
   app.innerHTML = html;
+
+  app.querySelectorAll(".star").forEach(btn => {
+    btn.addEventListener("click", e => {
+      e.stopPropagation();
+      toggleStar(parseInt(btn.dataset.star, 10));
+    });
+  });
 }
 
 document.getElementById("phaseFilters").addEventListener("click", e => {
