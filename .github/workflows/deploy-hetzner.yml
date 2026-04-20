@@ -34,3 +34,10 @@ jobs:
               anker-solix
             sleep 5
             curl -sf http://localhost:8420/api/health || echo "HEALTH CHECK FAILED"
+
+            # Sync wm26 static page into separate nginx container (localhost:8081)
+            mkdir -p /opt/wm26
+            cp /opt/anker-solix/app/static/wm2026.html /opt/wm26/index.html
+            docker restart wm26 || echo "wm26 container not running"
+            sleep 2
+            curl -sf http://localhost:8081/ >/dev/null && echo "wm26 OK" || echo "wm26 FAILED"
