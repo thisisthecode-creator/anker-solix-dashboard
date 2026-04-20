@@ -246,6 +246,27 @@
     color: var(--muted);
     margin-left: auto;
   }
+  .toast {
+    position: fixed;
+    bottom: 20px;
+    left: 50%;
+    transform: translateX(-50%) translateY(100px);
+    background: #1a1d24;
+    color: #fff;
+    padding: 10px 20px;
+    border-radius: 8px;
+    font-size: 13px;
+    font-weight: 500;
+    box-shadow: 0 4px 16px rgba(0,0,0,0.2);
+    opacity: 0;
+    transition: all 0.25s;
+    pointer-events: none;
+    z-index: 100;
+  }
+  .toast.show {
+    opacity: 1;
+    transform: translateX(-50%) translateY(0);
+  }
   @media (max-width: 600px) {
     .matches { grid-template-columns: 1fr; }
     .match { grid-template-columns: 24px 55px 1fr auto; padding: 10px 12px; gap: 8px; }
@@ -262,6 +283,8 @@
     </div>
     <div class="spacer"></div>
     <input type="text" class="search" id="search" placeholder="Team/Stadt suchen...">
+    <button class="btn" id="exportBtn" title="Favoriten exportieren (in Zwischenablage)">Export ⭐</button>
+    <button class="btn" id="importBtn" title="Favoriten importieren">Import ⭐</button>
   </div>
 </header>
 
@@ -283,6 +306,7 @@
 </div>
 
 <main id="app"></main>
+<div class="toast" id="toast"></div>
 
 <script>
 const VENUES = {
@@ -501,16 +525,55 @@ function countdown(d, now) {
 
 let filterPhase = "all";
 let filterSearch = "";
-let starred = new Set(JSON.parse(localStorage.getItem("wm2026-stars") || "[]"));
+
+// Favoriten in localStorage UND URL-Hash (robust gegen Cache-Löschung)
+function loadStars() {
+  const s = new Set();
+  try {
+    const stored = JSON.parse(localStorage.getItem("wm2026-stars") || "[]");
+    stored.forEach(n => s.add(n));
+  } catch (e) {}
+  if (location.hash.startsWith("#s=")) {
+    location.hash.slice(3).split(",").filter(Boolean).forEach(n => {
+      const v = parseInt(n, 10);
+      if (v >= 1 && v <= 104) s.add(v);
+    });
+  }
+  return s;
+}
+
+let starred = loadStars();
 
 function saveStars() {
-  localStorage.setItem("wm2026-stars", JSON.stringify([...starred]));
+  const arr = [...starred].sort((a,b) => a-b);
+  try {
+    localStorage.setItem("wm2026-stars", JSON.stringify(arr));
+  } catch (e) {}
+  if (arr.length) {
+    history.replaceState(null, "", "#s=" + arr.join(","));
+  } else {
+    history.replaceState(null, "", location.pathname);
+  }
+}
+
+function toast(msg) {
+  const el = document.getElementById("toast");
+  el.textContent = msg;
+  el.classList.add("show");
+  clearTimeout(toast._t);
+  toast._t = setTimeout(() => el.classList.remove("show"), 1500);
 }
 
 function toggleStar(n) {
-  if (starred.has(n)) starred.delete(n);
-  else starred.add(n);
-  saveStars();
+  if (starred.has(n)) {
+    starred.delete(n);
+    saveStars();
+    toast("Aus Watchlist entfernt");
+  } else {
+    starred.add(n);
+    saveStars();
+    toast("✓ Zur Watchlist hinzugefügt · gespeichert");
+  }
   render();
 }
 
@@ -635,6 +698,29 @@ document.getElementById("phaseFilters").addEventListener("click", e => {
 
 document.getElementById("search").addEventListener("input", e => {
   filterSearch = e.target.value.trim();
+  render();
+});
+
+document.getElementById("exportBtn").addEventListener("click", async () => {
+  const arr = [...starred].sort((a,b) => a-b);
+  if (!arr.length) { toast("Keine Favoriten zum Exportieren"); return; }
+  const code = arr.join(",");
+  try {
+    await navigator.clipboard.writeText(code);
+    toast(`✓ ${arr.length} Favoriten in Zwischenablage kopiert`);
+  } catch (e) {
+    prompt("Favoriten-Code (kopieren):", code);
+  }
+});
+
+document.getElementById("importBtn").addEventListener("click", () => {
+  const input = prompt("Favoriten-Code einfügen (z.B. 1,5,12,28):");
+  if (!input) return;
+  const nums = input.split(",").map(s => parseInt(s.trim(), 10)).filter(n => n >= 1 && n <= 104);
+  if (!nums.length) { toast("Kein gültiger Code"); return; }
+  nums.forEach(n => starred.add(n));
+  saveStars();
+  toast(`✓ ${nums.length} Favoriten importiert`);
   render();
 });
 
