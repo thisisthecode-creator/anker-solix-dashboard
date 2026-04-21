@@ -3376,6 +3376,8 @@ function updateAmortisation(energyData) {
         const remaining = Math.max(0, SYSTEM_COST_EUR - totalSavedEur);
         const pct = Math.min(100, totalSavedEur / SYSTEM_COST_EUR * 100);
 
+        const costEl = $('amortCost');
+        if (costEl) costEl.textContent = Math.round(SYSTEM_COST_EUR).toLocaleString(locale) + ' €';
         const savedEl = $('amortSaved');
         if (savedEl) savedEl.textContent = Math.round(totalSavedEur).toLocaleString(locale) + ' €';
         const remEl = $('amortRemaining');
