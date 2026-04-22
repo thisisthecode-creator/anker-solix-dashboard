@@ -166,19 +166,18 @@ async def retrain_and_save():
                 model = LinearRegression()
                 model_type = "sklearn_linreg"
 
-            # Compute holdout metrics via k-fold CV for models with enough data
-            if len(pairs) >= 10:
+            # Compute holdout metrics via k-fold CV when we have enough data,
+            # otherwise fall back to simple leave-one-out for small sample sizes.
+            if len(pairs) >= 6:
                 from sklearn.model_selection import cross_val_predict
-                k = min(5, max(2, len(pairs) // 4))
+                k = min(5, max(2, len(pairs) // 2)) if len(pairs) < 10 else min(5, max(2, len(pairs) // 4))
                 preds = cross_val_predict(model, X, y, cv=k)
                 errors = y - preds
                 mae = float(np.mean(np.abs(errors)))
                 rmse = float(np.sqrt(np.mean(errors ** 2)))
-                # R² = 1 - SSR/SST
                 ss_res = float(np.sum(errors ** 2))
                 ss_tot = float(np.sum((y - np.mean(y)) ** 2))
                 r2 = 1 - (ss_res / ss_tot) if ss_tot > 0 else 0.0
-                # MAPE, skip zero actuals
                 mape_items = [abs(e / a) * 100 for e, a in zip(errors, y) if a > 0.05]
                 mape = float(np.mean(mape_items)) if mape_items else 0.0
                 solar_metrics = {
