@@ -4474,7 +4474,7 @@ async function loadFlowVariants(days) {
                 + '<div class="eb2-section-label">Wohin? - Verwendung</div>'
                 + '<div class="eb2-dist">'
                 +   row('Verbraucht', load, 'var(--text-dim)', totalIn)
-                +   (netBat > 0.02 ? row('Im Akku gespeichert', netBat, '#22c55e', totalIn) : '')
+                +   (netBat > 0.02 ? row('Akku', netBat, '#22c55e', totalIn) : '')
                 +   (netBat < -0.02 ? row('Aus Akku entnommen', Math.abs(netBat), '#c084fc', totalIn) : '')
                 + '</div>'
                 + '</div>';
