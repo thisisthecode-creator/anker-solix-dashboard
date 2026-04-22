@@ -1388,13 +1388,14 @@ function applyHourCalibration(rawKwh, hourOfDay) {
     const cal = window._solarCalibration;
     if (!cal || !cal.available) return rawKwh;
 
-    // Base correction: overall system efficiency (learned from all data)
+    // Base correction: overall system efficiency (learned from all data).
+    // Confidence now uses SEM (shrinks with 1/sqrt(n)) so it naturally
+    // improves with every new data point - true self-learning.
     const overallF = cal.overall_factor || 1.0;
     const overallConf = cal.overall_confidence || 0;
     const overallSamples = cal.overall_samples || 0;
-    // Only apply overall factor when we have enough evidence
-    const base = overallSamples >= 20
-        ? 1 + (overallF - 1) * Math.max(0.5, overallConf)  // min 50% application
+    const base = overallSamples >= 10
+        ? 1 + (overallF - 1) * Math.max(0.7, overallConf)
         : 1.0;
 
     // Per-hour residual (on top of overall baseline)
