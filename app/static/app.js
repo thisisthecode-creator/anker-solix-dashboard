@@ -4401,6 +4401,9 @@ async function loadFlowVariants(days) {
         const batOut = t.battery_out_kwh || 0;
         const load = t.load_kwh || 0;
         const directUse = (flows.find(f => f.from === 'solar' && f.to === 'load') || {}).kwh || 0;
+        const gridToLoad = (flows.find(f => f.from === 'grid' && f.to === 'load') || {}).kwh || 0;
+        const gridToBat = (flows.find(f => f.from === 'grid' && f.to === 'battery') || {}).kwh || 0;
+        const solarToBat = (flows.find(f => f.from === 'solar' && f.to === 'battery') || {}).kwh || 0;
 
         const animEl = $('flowAnimatedContent');
         if (animEl) {
@@ -4410,7 +4413,10 @@ async function loadFlowVariants(days) {
             const totalIn = solar + grid;
             const solarPct = totalIn > 0.01 ? Math.round(solar / totalIn * 100) : 0;
             const gridPct = totalIn > 0.01 ? Math.round(grid / totalIn * 100) : 0;
-            const autarkie = load > 0.01 ? Math.max(0, Math.round((1 - grid / load) * 100)) : 0;
+            const solarShare = batIn > 0.01 ? solarToBat / batIn : 0;
+            const solarViaBat = batOut * solarShare;
+            const solarToLoad = directUse + solarViaBat;
+            const autarkie = load > 0.01 ? Math.max(0, Math.min(100, Math.round(solarToLoad / load * 100))) : 0;
             const node = (icon, name, sub, val, color, pctVal) =>
                 `<div class="eb-node" style="--eb-pct:${pctVal}%;--eb-color:${color}">`
                 + `<span class="eb-node-icon">${icon}</span>`
@@ -4435,7 +4441,10 @@ async function loadFlowVariants(days) {
                 + node('🔋', 'Aus Akku entnommen', '', batOut, '#c084fc', pct(batOut))
                 + arrow('')
                 + node('🏠', 'Verbraucht gesamt', '', load, 'var(--text)', pct(load))
-                + `<div class="eb-total">Autarkie: <strong>${autarkie}%</strong></div>`;
+                + `<div class="eb-total">`
+                + `Solar-Autarkie: <strong style="color:var(--solar)">${autarkie}%</strong>`
+                + ` · Solar an Verbrauch: <strong>${fmtKwh.format(solarToLoad)} kWh</strong>`
+                + `</div>`;
         }
     } catch (e) { console.warn('Flow variants error:', e); }
 }
