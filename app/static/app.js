@@ -2720,9 +2720,9 @@ async function loadSelfConsumptionOpt() {
                     + '<div class="mfc-kpi-sub">' + fmtKwh.format(totalCharge) + ' kWh ' + (LANG === 'de' ? 'vom Netz' : 'from grid') + '</div>'
                 + '</div>'
                 + '<div class="mfc-kpi">'
-                    + '<div class="mfc-kpi-label">' + (LANG === 'de' ? 'Batterie-Effizienz' : 'Battery RTE') + '</div>'
-                    + '<div class="mfc-kpi-value' + (rte >= 85 ? ' green' : ' amber') + '">' + rte + '%</div>'
-                    + '<div class="mfc-kpi-sub">' + fmtKwh.format(totalBatteryIn) + ' rein / ' + fmtKwh.format(totalBatteryOut) + ' raus</div>'
+                    + '<div class="mfc-kpi-label">' + (LANG === 'de' ? 'Akku-Durchsatz' : 'Battery throughput') + '</div>'
+                    + '<div class="mfc-kpi-value">' + fmtKwh.format(totalBatteryOut) + '</div>'
+                    + '<div class="mfc-kpi-sub">' + fmtKwh.format(totalBatteryIn) + ' rein · kWh entnommen</div>'
                 + '</div>';
         }
 
@@ -4407,7 +4407,7 @@ async function loadFlowVariants(days) {
 
         const animEl = $('flowAnimatedContent');
         if (animEl) {
-            const rte = t.rte_pct != null ? Math.round(t.rte_pct) : (batIn > 0.01 ? Math.round(batOut / batIn * 100) : 0);
+            // RTE removed (user's decision): not actionable, noisy for small periods
             const solarShareRatio = batIn > 0.01 ? solarToBat / batIn : 0;
             const solarViaBat = batOut * solarShareRatio;
             const solarToLoad = directUse + solarViaBat;
@@ -4444,12 +4444,11 @@ async function loadFlowVariants(days) {
                 +       '<div class="pf-bat-label">Akku</div>'
                 +       '<div class="pf-bat-visual">'
                 +         '<div class="pf-bat-body">'
-                +           '<div class="pf-bat-fill" style="width:' + (batIn > 0.01 ? Math.min(100, rte) : 0) + '%;background:#60a5fa"></div>'
+                +           '<div class="pf-bat-fill" style="width:' + (batIn > 0.01 ? 100 : 0) + '%;background:#60a5fa"></div>'
                 +           '<div class="pf-bat-pct" style="font-size:0.65rem">' + f(batIn) + '</div>'
                 +         '</div>'
                 +         '<div class="pf-bat-tip"></div>'
                 +       '</div>'
-                +       '<div class="pf-bat-sub" style="font-size:0.6rem;color:var(--text-dim)">RTE ' + rte + '%</div>'
                 +     '</div>'
                 +   '</div>'
                 + '</div>'
