@@ -4382,6 +4382,190 @@ checkWeeklyReport();
 // All share the same /api/sankey?days=N data source.
 // ============================================================================
 let _flowVarDays = 1;
+let _flowVariant = 'A';
+
+function renderEbVariantA(el, d) {
+    const autoColor = d.autarkie >= 70 ? '#22c55e' : d.autarkie >= 30 ? 'var(--solar)' : '#f97316';
+    const row = (label, val, color, shareVal) => {
+        const p = d.pct(shareVal);
+        return '<div class="eb2-dist-row">'
+            + '<div class="eb2-dist-label">' + label + '</div>'
+            + '<div class="eb2-dist-bar"><div class="eb2-dist-fill" style="width:' + p.toFixed(1) + '%;background:' + color + '"></div></div>'
+            + '<div class="eb2-dist-val">' + d.f(val) + '<span class="eb2-dist-unit"> kWh</span></div>'
+            + '<div class="eb2-dist-pct">' + Math.round(p) + '%</div>'
+            + '</div>';
+    };
+    el.innerHTML =
+        '<div class="eb2">'
+        + '<div class="eb2-hero">'
+        +   '<div class="eb2-hero-row">'
+        +     '<div class="eb2-hero-label">Verbraucht</div>'
+        +     '<div class="eb2-hero-val">' + d.f(d.load) + '<span class="eb2-hero-unit"> kWh</span></div>'
+        +   '</div>'
+        +   '<div class="eb2-auto-row">'
+        +     '<div class="eb2-auto-label">Solar-Autarkie</div>'
+        +     '<div class="eb2-auto-pct" style="color:' + autoColor + '">' + d.autarkie + '%</div>'
+        +   '</div>'
+        +   '<div class="eb2-auto-bar"><div class="eb2-auto-fill" style="width:' + d.autarkie + '%;background:linear-gradient(90deg,' + autoColor + ',' + autoColor + ')"></div></div>'
+        +   '<div class="eb2-auto-sub">' + d.f(d.solarToLoad) + ' kWh Solar von ' + d.f(d.load) + ' kWh</div>'
+        + '</div>'
+        + '<div class="eb2-section-label">Quellen</div>'
+        + '<div class="eb2-2col">'
+        +   '<div class="eb2-src eb2-src-solar' + (d.solar > 0.01 ? '' : ' eb2-inactive') + '">'
+        +     '<div class="eb2-src-ico">' + d.iconSolar + '</div>'
+        +     '<div class="eb2-src-body">'
+        +       '<div class="eb2-src-name">Solar</div>'
+        +       '<div class="eb2-src-val">' + d.f(d.solar) + '<span class="eb2-src-unit"> kWh</span></div>'
+        +     '</div>'
+        +   '</div>'
+        +   '<div class="eb2-src eb2-src-grid' + (d.grid > 0.01 ? '' : ' eb2-inactive') + '">'
+        +     '<div class="eb2-src-ico">' + d.iconGrid + '</div>'
+        +     '<div class="eb2-src-body">'
+        +       '<div class="eb2-src-name">Netz</div>'
+        +       '<div class="eb2-src-val">' + d.f(d.grid) + '<span class="eb2-src-unit"> kWh</span></div>'
+        +     '</div>'
+        +   '</div>'
+        + '</div>'
+        + '<div class="eb2-section-label">Akku</div>'
+        + '<div class="eb2-bat">'
+        +   '<div class="eb2-bat-side">'
+        +     '<div class="eb2-bat-kicker"><span class="eb2-bat-arrow eb2-bat-in">↓</span> Geladen</div>'
+        +     '<div class="eb2-bat-val eb2-bat-val-in">' + d.f(d.batIn) + '<span class="eb2-bat-unit"> kWh</span></div>'
+        +   '</div>'
+        +   '<div class="eb2-bat-ico">' + d.iconBattery + '</div>'
+        +   '<div class="eb2-bat-side eb2-bat-side-r">'
+        +     '<div class="eb2-bat-kicker">Entladen <span class="eb2-bat-arrow eb2-bat-out">↑</span></div>'
+        +     '<div class="eb2-bat-val eb2-bat-val-out">' + d.f(d.batOut) + '<span class="eb2-bat-unit"> kWh</span></div>'
+        +   '</div>'
+        + '</div>'
+        + '<div class="eb2-section-label">Verbrauch nach Quelle</div>'
+        + '<div class="eb2-dist">'
+        +   row('Solar direkt', d.distDirect, 'var(--solar)', d.distDirect)
+        +   row('Aus Akku',     d.distBat,    '#c084fc',      d.distBat)
+        +   row('Aus Netz',     d.distGrid,   'var(--blue)',   d.distGrid)
+        + '</div>'
+        + '</div>';
+}
+
+function renderEbVariantB(el, d) {
+    const W = 380, H = 260;
+    const maxKwh = Math.max(d.solar + d.grid, d.load, 0.01);
+    const flowW = (v) => Math.max(2, Math.min(22, (v / maxKwh) * 28));
+
+    const srcX = 55, batX = 190, loadX = 325;
+    const solarY = 55, gridY = 200, batY = 128, loadY = 128;
+
+    let paths = '', nodes = '';
+
+    const flowPath = (x1, y1, x2, y2, val, color) => {
+        if (val < 0.01) return '';
+        const w = flowW(val);
+        const cpx = (x1 + x2) / 2;
+        return '<path d="M' + x1 + ',' + y1 + ' C' + cpx + ',' + y1 + ' ' + cpx + ',' + y2 + ' ' + x2 + ',' + y2 + '"'
+            + ' fill="none" stroke="' + color + '" stroke-width="' + w + '" opacity="0.2" stroke-linecap="round"/>'
+            + '<path d="M' + x1 + ',' + y1 + ' C' + cpx + ',' + y1 + ' ' + cpx + ',' + y2 + ' ' + x2 + ',' + y2 + '"'
+            + ' fill="none" stroke="' + color + '" stroke-width="' + Math.max(1.5, w * 0.4) + '" opacity="0.7"'
+            + ' stroke-dasharray="6 10" stroke-linecap="round" class="ebf-flow-anim"/>';
+    };
+
+    paths += flowPath(srcX + 42, solarY - 5, loadX - 42, loadY - 28, d.directUse, '#f59e0b');
+    paths += flowPath(srcX + 42, solarY + 8, batX - 38, batY - 12, d.solarToBat, '#f59e0b');
+    paths += flowPath(srcX + 42, gridY - 8, batX - 38, batY + 12, d.gridToBat, '#3b82f6');
+    paths += flowPath(srcX + 42, gridY + 5, loadX - 42, loadY + 28, d.distGrid, '#3b82f6');
+    paths += flowPath(batX + 38, batY, loadX - 42, loadY, d.batOut, '#c084fc');
+
+    const nodeBox = (cx, cy, w, h, fill, stroke) =>
+        '<rect x="' + (cx-w/2) + '" y="' + (cy-h/2) + '" width="' + w + '" height="' + h + '" rx="10" fill="' + fill + '" stroke="' + stroke + '" stroke-width="1.5"/>';
+
+    nodes += nodeBox(srcX, solarY, 88, 54, 'rgba(245,158,11,0.12)', '#f59e0b');
+    nodes += '<text x="' + srcX + '" y="' + (solarY - 7) + '" text-anchor="middle" font-size="11" font-weight="600" fill="#f59e0b">Solar</text>';
+    nodes += '<text x="' + srcX + '" y="' + (solarY + 12) + '" text-anchor="middle" font-size="13" font-weight="800" fill="var(--text,#fff)">' + d.f(d.solar) + ' kWh</text>';
+
+    nodes += nodeBox(srcX, gridY, 88, 54, 'rgba(59,130,246,0.12)', '#3b82f6');
+    nodes += '<text x="' + srcX + '" y="' + (gridY - 7) + '" text-anchor="middle" font-size="11" font-weight="600" fill="#3b82f6">Netz</text>';
+    nodes += '<text x="' + srcX + '" y="' + (gridY + 12) + '" text-anchor="middle" font-size="13" font-weight="800" fill="var(--text,#fff)">' + d.f(d.grid) + ' kWh</text>';
+
+    nodes += nodeBox(batX, batY, 82, 68, 'rgba(34,197,94,0.12)', '#22c55e');
+    nodes += '<text x="' + batX + '" y="' + (batY - 16) + '" text-anchor="middle" font-size="11" font-weight="600" fill="#22c55e">Akku</text>';
+    nodes += '<text x="' + batX + '" y="' + (batY + 2) + '" text-anchor="middle" font-size="10" fill="#60a5fa">↓ ' + d.f(d.batIn) + '</text>';
+    nodes += '<text x="' + batX + '" y="' + (batY + 16) + '" text-anchor="middle" font-size="10" fill="#c084fc">↑ ' + d.f(d.batOut) + '</text>';
+
+    nodes += nodeBox(loadX, loadY, 92, 78, 'rgba(107,114,128,0.12)', 'var(--text-dim,#888)');
+    nodes += '<text x="' + loadX + '" y="' + (loadY - 20) + '" text-anchor="middle" font-size="11" font-weight="600" fill="var(--text-dim,#888)">Verbrauch</text>';
+    nodes += '<text x="' + loadX + '" y="' + (loadY + 2) + '" text-anchor="middle" font-size="16" font-weight="800" fill="var(--text,#fff)">' + d.f(d.load) + '</text>';
+    nodes += '<text x="' + loadX + '" y="' + (loadY + 16) + '" text-anchor="middle" font-size="10" fill="var(--text-dim,#888)">kWh</text>';
+
+    const autoColor = d.autarkie >= 70 ? '#22c55e' : d.autarkie >= 30 ? '#f59e0b' : '#f97316';
+    nodes += '<text x="' + loadX + '" y="' + (loadY + 34) + '" text-anchor="middle" font-size="11" font-weight="700" fill="' + autoColor + '">' + d.autarkie + '% Solar</text>';
+
+    el.innerHTML = '<div class="ebf"><svg viewBox="0 0 ' + W + ' ' + H + '" width="100%" style="max-width:440px;margin:0 auto;display:block" class="ebf-svg">'
+        + '<style>.ebf-flow-anim{animation:ebf-dash 1.5s linear infinite}@keyframes ebf-dash{to{stroke-dashoffset:-32}}</style>'
+        + paths + nodes + '</svg></div>';
+}
+
+function renderEbVariantC(el, d) {
+    const size = 180, cx = size / 2, cy = size / 2, r = 68, sw = 18;
+    const circ = 2 * Math.PI * r;
+    const total = d.distDirect + d.distBat + d.distGrid;
+    if (total < 0.01) { el.innerHTML = '<div class="ebd"><p style="color:var(--text-dim)">Keine Daten</p></div>'; return; }
+
+    const segments = [
+        { val: d.distDirect, color: '#f59e0b', label: 'Solar direkt' },
+        { val: d.distBat,    color: '#c084fc', label: 'Aus Akku' },
+        { val: d.distGrid,   color: '#3b82f6', label: 'Aus Netz' },
+    ];
+
+    let arcs = '', offset = 0;
+    const gap = 4;
+    segments.forEach(seg => {
+        if (seg.val < 0.01) return;
+        const pct = seg.val / total;
+        const dash = Math.max(0, pct * circ - gap);
+        arcs += '<circle cx="' + cx + '" cy="' + cy + '" r="' + r + '" fill="none"'
+            + ' stroke="' + seg.color + '" stroke-width="' + sw + '"'
+            + ' stroke-dasharray="' + dash.toFixed(2) + ' ' + (circ - dash).toFixed(2) + '"'
+            + ' stroke-dashoffset="' + (-offset - gap / 2).toFixed(2) + '"'
+            + ' transform="rotate(-90 ' + cx + ' ' + cy + ')"/>';
+        offset += pct * circ;
+    });
+
+    const svg = '<svg viewBox="0 0 ' + size + ' ' + size + '" width="' + size + '" height="' + size + '" style="display:block;margin:0 auto">'
+        + arcs
+        + '<text x="' + cx + '" y="' + (cy - 6) + '" text-anchor="middle" font-size="22" font-weight="800" fill="var(--text,#fff)">' + d.f(d.load) + '</text>'
+        + '<text x="' + cx + '" y="' + (cy + 12) + '" text-anchor="middle" font-size="10" fill="var(--text-dim,#888)">kWh</text>'
+        + '</svg>';
+
+    let legend = '<div class="ebd-legend">';
+    segments.forEach(seg => {
+        const pct = total > 0 ? Math.round((seg.val / total) * 100) : 0;
+        legend += '<div class="ebd-leg-item">'
+            + '<span class="ebd-leg-dot" style="background:' + seg.color + '"></span>'
+            + '<span class="ebd-leg-label">' + seg.label + '</span>'
+            + '<span class="ebd-leg-val">' + d.f(seg.val) + ' kWh</span>'
+            + '<span class="ebd-leg-pct">' + pct + '%</span>'
+            + '</div>';
+    });
+    legend += '</div>';
+
+    const autoColor = d.autarkie >= 70 ? '#22c55e' : d.autarkie >= 30 ? '#f59e0b' : '#f97316';
+    const autarkie = '<div class="ebd-autarkie">'
+        + '<div class="ebd-auto-header">'
+        + '<span class="ebd-auto-label">Solar-Autarkie</span>'
+        + '<span class="ebd-auto-pct" style="color:' + autoColor + '">' + d.autarkie + '%</span>'
+        + '</div>'
+        + '<div class="ebd-auto-bar"><div class="ebd-auto-fill" style="width:' + d.autarkie + '%;background:' + autoColor + '"></div></div>'
+        + '<div class="ebd-auto-sub">' + d.f(d.solarToLoad) + ' kWh Solar von ' + d.f(d.load) + ' kWh</div>'
+        + '</div>';
+
+    const battery = '<div class="ebd-bat-summary">'
+        + '<span class="ebd-bat-label">Akku</span>'
+        + '<span class="ebd-bat-in">↓ ' + d.f(d.batIn) + ' geladen</span>'
+        + '<span class="ebd-bat-sep">·</span>'
+        + '<span class="ebd-bat-out">↑ ' + d.f(d.batOut) + ' entladen</span>'
+        + '</div>';
+
+    el.innerHTML = '<div class="ebd">' + svg + legend + autarkie + battery + '</div>';
+}
 
 async function loadFlowVariants(days) {
     _flowVarDays = days || _flowVarDays;
@@ -4407,73 +4591,25 @@ async function loadFlowVariants(days) {
 
         const animEl = $('flowAnimatedContent');
         if (animEl) {
-            // RTE removed (user's decision): not actionable, noisy for small periods
             const solarShareRatio = batIn > 0.01 ? solarToBat / batIn : 0;
             const solarViaBat = batOut * solarShareRatio;
             const solarToLoad = directUse + solarViaBat;
             const autarkie = load > 0.01 ? Math.max(0, Math.min(100, Math.round(solarToLoad / load * 100))) : 0;
             const f = (v) => fmtKwh.format(v);
+            const pct = (v) => load > 0.01 ? Math.max(0, Math.min(100, (v / load) * 100)) : 0;
+            const distDirect = directUse;
+            const distBat = batOut;
+            const distGrid = Math.max(0, load - directUse - batOut);
 
-            // Reuse Energiefluss visual style (pf-v) with kWh values
-            animEl.innerHTML =
-                '<div class="pf-v">'
-                // Row 1: Inputs
-                + '<div class="pf-v-inputs">'
-                +   '<div class="pf-node' + (solar > 0.01 ? ' active' : '') + '">'
-                +     '<div class="pf-emoji">☀️</div>'
-                +     '<div class="pf-name">Solar</div>'
-                +     '<div class="pf-watt" style="color:var(--solar)">' + f(solar) + ' kWh</div>'
-                +   '</div>'
-                +   '<div class="pf-node' + (grid > 0.01 ? ' active' : '') + '">'
-                +     '<div class="pf-emoji">🏠</div>'
-                +     '<div class="pf-name">Netz</div>'
-                +     '<div class="pf-watt">' + f(grid) + ' kWh</div>'
-                +   '</div>'
-                + '</div>'
-                // Arrow
-                + '<div class="pf-v-arrow pf-line' + (solar > 0.01 || grid > 0.01 ? ' pf-line-active pf-line-in' : '') + '"><span class="pf-dots">▼</span></div>'
-                // Row 2: Battery center
-                + '<div style="display:flex;justify-content:center;gap:20px;align-items:center;margin:4px 0">'
-                +   '<div class="pf-node' + (directUse > 0.01 ? ' active' : '') + '" style="min-width:100px">'
-                +     '<div class="pf-emoji">⚡</div>'
-                +     '<div class="pf-name">Direkt</div>'
-                +     '<div class="pf-watt" style="color:#22c55e">' + f(directUse) + ' kWh</div>'
-                +   '</div>'
-                +   '<div style="display:flex;flex-direction:column;align-items:center;gap:2px">'
-                +     '<div class="pf-bat-unit">'
-                +       '<div class="pf-bat-label">Akku</div>'
-                +       '<div class="pf-bat-visual">'
-                +         '<div class="pf-bat-body">'
-                +           '<div class="pf-bat-fill" style="width:' + (batIn > 0.01 ? 100 : 0) + '%;background:#60a5fa"></div>'
-                +           '<div class="pf-bat-pct" style="font-size:0.65rem">' + f(batIn) + '</div>'
-                +         '</div>'
-                +         '<div class="pf-bat-tip"></div>'
-                +       '</div>'
-                +     '</div>'
-                +   '</div>'
-                + '</div>'
-                // Arrow
-                + '<div class="pf-v-arrow pf-line' + (batOut > 0.01 ? ' pf-line-active pf-line-out' : '') + '"><span class="pf-dots">▼</span></div>'
-                // Row 3: Battery out
-                + '<div style="text-align:center;margin:2px 0">'
-                +   '<div class="pf-v-load-header">'
-                +     '<span class="pf-v-load-label">Aus Akku</span>'
-                +     '<span class="pf-v-load-total" style="color:#c084fc">' + f(batOut) + ' kWh</span>'
-                +   '</div>'
-                + '</div>'
-                // Arrow
-                + '<div class="pf-v-arrow pf-line' + (load > 0.01 ? ' pf-line-active pf-line-out' : '') + '"><span class="pf-dots">▼</span></div>'
-                // Row 4: Total consumption
-                + '<div class="pf-v-load-header" style="margin-bottom:8px">'
-                +   '<span class="pf-v-load-label">Verbraucht</span>'
-                +   '<span class="pf-v-load-total">' + f(load) + ' kWh</span>'
-                + '</div>'
-                // Autarkie footer
-                + '<div style="text-align:center;font-size:0.75rem;color:var(--text-dim);padding:4px 0">'
-                +   'Solar-Autarkie: <strong style="color:var(--solar)">' + autarkie + '%</strong>'
-                +   ' · Solar: <strong>' + f(solarToLoad) + ' kWh</strong> von ' + f(load) + ' kWh'
-                + '</div>'
-                + '</div>';
+            const iconSolar = '<svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="4"/><path d="M12 2v2M12 20v2M4.93 4.93l1.41 1.41M17.66 17.66l1.41 1.41M2 12h2M20 12h2M4.93 19.07l1.41-1.41M17.66 6.34l1.41-1.41"/></svg>';
+            const iconGrid = '<svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M9 2 7 8h10L15 2"/><path d="M7 8v14M17 8v14M4 12h16M4 18h16"/></svg>';
+            const iconBattery = '<svg viewBox="0 0 28 16" width="44" height="26" fill="none" stroke="currentColor" stroke-width="1.6"><rect x="1" y="2" width="22" height="12" rx="2"/><rect x="24" y="6" width="3" height="4" rx="0.5" fill="currentColor" stroke="none"/></svg>';
+
+            const dd = { solar, grid, batIn, batOut, load, directUse, gridToLoad, solarToBat, gridToBat,
+                solarShareRatio, solarViaBat, solarToLoad, autarkie, f, pct,
+                distDirect, distBat, distGrid, iconSolar, iconGrid, iconBattery };
+            const renderer = { A: renderEbVariantA, B: renderEbVariantB, C: renderEbVariantC }[_flowVariant] || renderEbVariantA;
+            renderer(animEl, dd);
         }
     } catch (e) { console.warn('Flow variants error:', e); }
 }
@@ -4488,6 +4624,26 @@ document.querySelectorAll('#flowAnimTabs .tab').forEach(btn => {
 });
 
 loadFlowVariants(1);
+
+(function initVariantToggle() {
+    const tabs = document.getElementById('flowAnimTabs');
+    if (!tabs) return;
+    const toggle = document.createElement('div');
+    toggle.className = 'eb-variant-toggle';
+    toggle.innerHTML =
+        '<button class="eb-var-btn active" data-variant="A">A - Cards</button>' +
+        '<button class="eb-var-btn" data-variant="B">B - Flow</button>' +
+        '<button class="eb-var-btn" data-variant="C">C - Donut</button>';
+    tabs.after(toggle);
+    toggle.querySelectorAll('.eb-var-btn').forEach(btn => {
+        btn.addEventListener('click', () => {
+            toggle.querySelectorAll('.eb-var-btn').forEach(b => b.classList.remove('active'));
+            btn.classList.add('active');
+            _flowVariant = btn.dataset.variant;
+            loadFlowVariants();
+        });
+    });
+})();
 
 document.addEventListener('keydown', (e) => {
     // Ignore when typing in an input / textarea / contenteditable
