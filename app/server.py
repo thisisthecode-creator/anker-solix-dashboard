@@ -538,6 +538,10 @@ async def cleanup_loop():
             fc = await cleanup_old_forecasts()
             if fc:
                 logger.info("DB cleanup: removed %d old forecast_log rows", fc)
+            # Checkpoint WAL to keep DB file compact
+            db = await get_pool()
+            await db.execute("PRAGMA wal_checkpoint(TRUNCATE)")
+            logger.info("DB cleanup: WAL checkpoint completed")
         except Exception as e:
             logger.error("Cleanup error: %s", e)
 
@@ -554,8 +558,8 @@ async def daily_forecast_loop():
     tz = ZoneInfo(TIMEZONE)
     while True:
         now = datetime.now(tz)
-        # Schedule next run at 01:07 local (off-minute to avoid fleet collisions)
-        next_run = now.replace(hour=1, minute=7, second=0, microsecond=0)
+        # Schedule next run at 08:00 local so forecast is fresh for the day.
+        next_run = now.replace(hour=8, minute=0, second=0, microsecond=0)
         if next_run <= now:
             next_run += timedelta(days=1)
         sleep_s = (next_run - now).total_seconds()
@@ -655,28 +659,42 @@ async def lifespan(app: FastAPI):
     cleanup_task = asyncio.create_task(cleanup_loop())
     forecast_task = asyncio.create_task(daily_forecast_loop())
 
-    # Initial calibration retrain on startup (non-blocking) so the frontend
-    # sees self-learning results immediately rather than waiting until midnight.
-    async def _initial_calibration():
+    # Continuous calibration loop: retrains every 2 hours so the self-learning
+    # model stays fresh throughout the day (not just at startup/rollover).
+    async def _calibration_loop():
+        from app.calibration import retrain_calibration
+        from app.ml_models import retrain_and_save
+        from app.pvgis import fetch_pvgis_benchmark, load_pvgis_benchmark
+        # Initial run on startup
         try:
-            from app.calibration import retrain_calibration
-            from app.ml_models import retrain_and_save
-            from app.pvgis import fetch_pvgis_benchmark, load_pvgis_benchmark
             await retrain_calibration()
             await retrain_and_save()
-            # PVGIS: fetch once if cache empty, otherwise skip (long-term data)
             if load_pvgis_benchmark() is None:
                 await fetch_pvgis_benchmark()
             logger.info("Initial calibration + ML + PVGIS completed on startup")
             await broadcast_event({"type": "recalibrated", "source": "startup"})
         except Exception as e:
             logger.warning("Initial calibration/ML retrain failed: %s", e)
-    asyncio.create_task(_initial_calibration())
+        # Then retrain every 2 hours
+        while True:
+            try:
+                await asyncio.sleep(2 * 3600)
+            except asyncio.CancelledError:
+                return
+            try:
+                await retrain_calibration()
+                await retrain_and_save()
+                logger.info("Periodic calibration retrain completed")
+                await broadcast_event({"type": "recalibrated", "source": "periodic"})
+            except Exception as e:
+                logger.warning("Periodic calibration retrain failed: %s", e)
+    calibration_task = asyncio.create_task(_calibration_loop())
 
     yield
     task.cancel()
     cleanup_task.cancel()
     forecast_task.cancel()
+    calibration_task.cancel()
     # Final snapshot: persist today's stats so a deploy doesn't lose live state
     try:
         today = accumulator.get_today()
