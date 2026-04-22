@@ -4493,12 +4493,22 @@ async function loadFlowVariants(days) {
                 +     '<div class="eb2-bat-val eb2-bat-val-out">' + f(batOut) + '<span class="eb2-bat-unit"> kWh</span></div>'
                 +   '</div>'
                 + '</div>'
+                + (Math.abs(batIn - batOut) > 0.02
+                    ? '<div class="eb2-bat-net">'
+                    +   (batIn > batOut
+                        ? '↓ ' + f(batIn - batOut) + ' kWh netto gespeichert'
+                        : '↑ ' + f(batOut - batIn) + ' kWh netto entnommen')
+                    + '</div>'
+                    : '')
                 + '<div class="eb2-section-label">Verbrauch nach Quelle</div>'
                 + '<div class="eb2-dist">'
                 +   row('Solar direkt', distDirect, 'var(--solar)', distDirect)
                 +   row('Aus Akku',     distBat,    '#c084fc',      distBat)
                 +   row('Aus Netz',     distGrid,   'var(--blue)',   distGrid)
                 + '</div>'
+                + (batIn - batOut > 0.02
+                    ? '<div class="eb2-bilanz-hint">Solar + Netz (' + f(solar + grid) + ') &gt; Verbrauch (' + f(load) + ') weil ' + f(batIn - batOut) + ' kWh noch im Akku sind</div>'
+                    : '')
                 + '</div>';
         }
     } catch (e) { console.warn('Flow variants error:', e); }

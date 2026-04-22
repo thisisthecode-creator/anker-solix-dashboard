@@ -4115,6 +4115,23 @@ body.light-mode .eb2-dist-bar {
 }
 
 /* Narrow screens: keep things readable */
+.eb2-bat-net {
+    text-align: center;
+    font-size: 0.72rem;
+    color: var(--text-dim);
+    font-weight: 500;
+    margin-top: -8px;
+    font-variant-numeric: tabular-nums;
+}
+.eb2-bilanz-hint {
+    font-size: 0.68rem;
+    color: var(--text-dim);
+    text-align: center;
+    padding: 6px 8px;
+    opacity: 0.7;
+    line-height: 1.4;
+}
+
 @media (max-width: 400px) {
     .eb2-dist-row {
         grid-template-columns: 90px 1fr auto;
