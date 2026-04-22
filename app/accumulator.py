@@ -11,7 +11,7 @@ import time
 from datetime import datetime
 from zoneinfo import ZoneInfo
 
-from app.config import TIMEZONE, GAP_THRESHOLD
+from app.config import TIMEZONE, GAP_THRESHOLD, BATTERY_CAPACITY_WH
 
 
 class SolarAccumulator:
@@ -59,6 +59,8 @@ class SolarAccumulator:
         self.max_temp: float = -9999.0
         self.min_soc: int = 101
         self.max_soc: int = -1
+        self.first_soc: int = -1    # SOC of first reading (for RTE correction)
+        self.last_soc: int = -1     # SOC of latest reading
 
         self._pending_day: dict | None = None
 
@@ -151,6 +153,9 @@ class SolarAccumulator:
             self.count_soh += 1
 
         if soc is not None and 0 <= soc <= 100:
+            if self.first_soc < 0:
+                self.first_soc = soc
+            self.last_soc = soc
             if soc < self.min_soc:
                 self.min_soc = soc
             if soc > self.max_soc:
@@ -197,12 +202,21 @@ class SolarAccumulator:
             solar_to_load / self.output_wh * 100
             if self.output_wh > 0.01 else 0.0
         )
-        # Round-trip efficiency (of the battery):  out / in
-        # Only meaningful after a day with meaningful battery cycling
-        rte_pct = (
-            self.battery_out_wh / self.battery_in_wh * 100
-            if self.battery_in_wh > 10 else 0.0  # at least 10 Wh cycled
-        )
+        # Round-trip efficiency: corrected for SOC change.
+        # Naive out/in is wrong when battery still holds energy from this
+        # period. We subtract the delta-stored energy from battery_in so
+        # only the energy that completed a full round-trip counts.
+        rte_pct = 0.0
+        if self.battery_in_wh > 10:
+            delta_soc = 0
+            if self.first_soc >= 0 and self.last_soc >= 0:
+                delta_soc = self.last_soc - self.first_soc
+            delta_stored_wh = delta_soc / 100.0 * BATTERY_CAPACITY_WH
+            completed_in = self.battery_in_wh - max(0, delta_stored_wh)
+            if completed_in > 10:
+                rte_pct = min(100.0, self.battery_out_wh / completed_in * 100)
+            else:
+                rte_pct = self.battery_out_wh / self.battery_in_wh * 100
 
         return {
             "date": self.current_date,
@@ -267,3 +281,5 @@ class SolarAccumulator:
         self.max_temp = -9999.0
         self.min_soc = 101
         self.max_soc = -1
+        self.first_soc = -1
+        self.last_soc = -1
