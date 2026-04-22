@@ -1031,11 +1031,27 @@ async def get_sankey_flows(days: int = 1) -> dict:
     if not r:
         return {"days": 0, "nodes": [], "flows": []}
     solar, direct, bat_in, bat_out, grid_in, output, n = r
-    # Conservation check (not enforced, just for debugging)
-    # solar + grid_in = output + (bat_in - bat_out); residual goes into "verlust"
     solar_to_battery = max(0.0, solar - direct)
     grid_to_load = max(0.0, output - direct - bat_out)
     grid_to_battery = max(0.0, grid_in - grid_to_load)
+
+    # SOC-corrected RTE: get first and last SOC for the period
+    from app.config import BATTERY_CAPACITY_WH
+    soc_cur = await db.execute(
+        "SELECT max_soc FROM daily_solar WHERE date = ? LIMIT 1", (cutoff,))
+    first_row = await soc_cur.fetchone()
+    soc_first = first_row[0] if first_row and first_row[0] else 50
+    soc_cur2 = await db.execute(
+        "SELECT min_soc, max_soc FROM daily_solar WHERE date = ("
+        "SELECT MAX(date) FROM daily_solar WHERE date >= ?) LIMIT 1", (cutoff,))
+    last_row = await soc_cur2.fetchone()
+    soc_last = last_row[0] if last_row and last_row[0] else 50
+    delta_stored_kwh = (soc_last - soc_first) / 100.0 * BATTERY_CAPACITY_WH / 1000.0
+    completed_in = bat_in - max(0.0, delta_stored_kwh)
+    rte = (bat_out / completed_in * 100) if completed_in > 0.01 else (
+        bat_out / bat_in * 100 if bat_in > 0.01 else 0.0)
+    rte = min(100.0, max(0.0, rte))
+
     return {
         "days": n,
         "totals": {
@@ -1044,6 +1060,9 @@ async def get_sankey_flows(days: int = 1) -> dict:
             "load_kwh": round(output, 3),
             "battery_in_kwh": round(bat_in, 3),
             "battery_out_kwh": round(bat_out, 3),
+            "rte_pct": round(rte, 1),
+            "soc_start": soc_first,
+            "soc_end": soc_last,
         },
         "flows": [
             {"from": "solar", "to": "load", "kwh": round(direct, 3)},

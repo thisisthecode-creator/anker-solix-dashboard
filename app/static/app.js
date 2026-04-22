@@ -4407,7 +4407,7 @@ async function loadFlowVariants(days) {
 
         const animEl = $('flowAnimatedContent');
         if (animEl) {
-            const rte = batIn > 0.01 ? Math.round(batOut / batIn * 100) : 0;
+            const rte = t.rte_pct != null ? Math.round(t.rte_pct) : (batIn > 0.01 ? Math.round(batOut / batIn * 100) : 0);
             const solarShareRatio = batIn > 0.01 ? solarToBat / batIn : 0;
             const solarViaBat = batOut * solarShareRatio;
             const solarToLoad = directUse + solarViaBat;
