@@ -1049,15 +1049,12 @@ async def get_sankey_flows(days: int = 1) -> dict:
     # delta_stored > 0: SOC rose (charged more than discharged, energy still in battery)
     # delta_stored < 0: SOC dropped (discharged pre-existing charge too)
     # Both cases: completed_in = bat_in - delta_stored
-    #   - SOC up: completed_in < bat_in (less energy completed round-trip)
-    #   - SOC down: completed_in > bat_in (pre-existing charge also cycled)
     delta_stored_kwh = (soc_last - soc_first) / 100.0 * BATTERY_CAPACITY_WH / 1000.0
     completed_in = bat_in - delta_stored_kwh
-    # Require at least 50 Wh of meaningful round-trip energy for reliable measurement
     if completed_in > 0.05 and bat_out > 0.001:
         rte = min(100.0, max(0.0, bat_out / completed_in * 100))
     elif bat_in > 0.05:
-        rte = min(100.0, max(0.0, bat_out / bat_in * 100))  # fallback to naive
+        rte = min(100.0, max(0.0, bat_out / bat_in * 100))
     else:
         rte = 0.0
 
