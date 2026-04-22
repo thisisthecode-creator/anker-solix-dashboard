@@ -212,11 +212,11 @@ class SolarAccumulator:
             if self.first_soc >= 0 and self.last_soc >= 0:
                 delta_soc = self.last_soc - self.first_soc
             delta_stored_wh = delta_soc / 100.0 * BATTERY_CAPACITY_WH
-            completed_in = self.battery_in_wh - max(0, delta_stored_wh)
-            if completed_in > 10:
-                rte_pct = min(100.0, self.battery_out_wh / completed_in * 100)
+            completed_in = self.battery_in_wh - delta_stored_wh
+            if completed_in > 50 and self.battery_out_wh > 1:
+                rte_pct = min(100.0, max(0.0, self.battery_out_wh / completed_in * 100))
             else:
-                rte_pct = self.battery_out_wh / self.battery_in_wh * 100
+                rte_pct = min(100.0, self.battery_out_wh / self.battery_in_wh * 100)
 
         return {
             "date": self.current_date,

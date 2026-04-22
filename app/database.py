@@ -1046,11 +1046,17 @@ async def get_sankey_flows(days: int = 1) -> dict:
         "SELECT MAX(date) FROM daily_solar WHERE date >= ?) LIMIT 1", (cutoff,))
     last_row = await soc_cur2.fetchone()
     soc_last = last_row[0] if last_row and last_row[0] else 50
+    # delta_stored > 0: SOC rose (charged more than discharged, energy still in battery)
+    # delta_stored < 0: SOC dropped (discharged pre-existing charge too)
+    # Both cases: completed_in = bat_in - delta_stored
     delta_stored_kwh = (soc_last - soc_first) / 100.0 * BATTERY_CAPACITY_WH / 1000.0
-    completed_in = bat_in - max(0.0, delta_stored_kwh)
-    rte = (bat_out / completed_in * 100) if completed_in > 0.01 else (
-        bat_out / bat_in * 100 if bat_in > 0.01 else 0.0)
-    rte = min(100.0, max(0.0, rte))
+    completed_in = bat_in - delta_stored_kwh
+    if completed_in > 0.05 and bat_out > 0.001:
+        rte = min(100.0, max(0.0, bat_out / completed_in * 100))
+    elif bat_in > 0.05:
+        rte = min(100.0, max(0.0, bat_out / bat_in * 100))
+    else:
+        rte = 0.0
 
     return {
         "days": n,
