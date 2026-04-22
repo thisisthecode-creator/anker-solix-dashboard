@@ -4413,7 +4413,6 @@ async function loadFlowVariants(days) {
             const totalIn = solar + grid;
             const solarPct = totalIn > 0.01 ? Math.round(solar / totalIn * 100) : 0;
             const gridPct = totalIn > 0.01 ? Math.round(grid / totalIn * 100) : 0;
-            // Autarkie = how much of load was covered by solar (direct + via battery)
             const solarShare = batIn > 0.01 ? solarToBat / batIn : 0;
             const solarViaBat = batOut * solarShare;
             const solarToLoad = directUse + solarViaBat;
