@@ -4422,22 +4422,18 @@ async function loadFlowVariants(days) {
                 + (label ? `<span class="eb-arrow-label">${label}</span>` : '') + `</div>`;
 
             animEl.innerHTML =
-                // Inputs: Solar + Netz nebeneinander
                 `<div class="eb-split">`
                 + node('☀️', 'Solar', solarPct + '% der Energie', solar, 'var(--solar)', pct(solar))
                 + node('🔌', 'Netz', gridPct + '% der Energie', grid, '#888', pct(grid))
                 + `</div>`
                 + arrow('')
-                // Nutzung: Direkt + Akku-Speicherung
                 + `<div class="eb-split">`
                 + node('⚡', 'Direkt verbraucht', '', directUse, '#22c55e', pct(directUse))
                 + node('🔋', 'In Akku geladen', '', batIn, '#60a5fa', pct(batIn))
                 + `</div>`
                 + arrow(rte > 0 ? 'RTE ' + rte + '%' : '')
-                // Akku-Entnahme
                 + node('🔋', 'Aus Akku entnommen', '', batOut, '#c084fc', pct(batOut))
                 + arrow('')
-                // Gesamtverbrauch
                 + node('🏠', 'Verbraucht gesamt', '', load, 'var(--text)', pct(load))
                 + `<div class="eb-total">Autarkie: <strong>${autarkie}%</strong></div>`;
         }
