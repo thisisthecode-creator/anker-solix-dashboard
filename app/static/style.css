@@ -2884,7 +2884,69 @@ body.light-mode .log-table td {
     stroke-dasharray: 2 2;
 }
 
-/* === Flow Variant 5: Animated Flow === */
+/* === Energie-Bilanz: vertical flow (matching Energiefluss visual style) === */
+.eb-flow {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 0;
+    padding: 12px 0 4px;
+}
+.eb-node {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    padding: 10px 16px;
+    background: var(--card-bg);
+    border: 1px solid var(--card-border);
+    border-radius: 12px;
+    width: 100%;
+    max-width: 340px;
+    position: relative;
+    overflow: hidden;
+}
+.eb-node::before {
+    content: '';
+    position: absolute;
+    left: 0; top: 0; bottom: 0;
+    width: var(--eb-pct, 0%);
+    background: var(--eb-color, var(--solar));
+    opacity: 0.12;
+    transition: width 0.6s ease;
+}
+.eb-node-icon { font-size: 1.2rem; z-index: 1; flex-shrink: 0; }
+.eb-node-info { flex: 1; z-index: 1; }
+.eb-node-name { font-size: 0.7rem; font-weight: 600; color: var(--text); }
+.eb-node-sub { font-size: 0.6rem; color: var(--text-dim); margin-top: 1px; }
+.eb-node-val { font-size: 0.9rem; font-weight: 700; z-index: 1; font-variant-numeric: tabular-nums; }
+.eb-arrow {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    color: var(--text-dim);
+    font-size: 0.6rem;
+    line-height: 1;
+    padding: 2px 0;
+}
+.eb-arrow-dots { font-size: 0.7rem; opacity: 0.5; }
+.eb-arrow-label { font-size: 0.6rem; opacity: 0.7; }
+.eb-split {
+    display: flex;
+    gap: 8px;
+    width: 100%;
+    max-width: 340px;
+}
+.eb-split .eb-node { flex: 1; padding: 8px 10px; }
+.eb-split .eb-node-val { font-size: 0.8rem; }
+.eb-total {
+    text-align: center;
+    padding: 8px 0 0;
+    font-size: 0.75rem;
+    color: var(--text-dim);
+}
+.eb-total strong { color: var(--text); }
+
+/* === Flow Variant 5: Animated Flow (legacy) === */
 .flow-anim-grid {
     display: flex;
     flex-direction: column;
