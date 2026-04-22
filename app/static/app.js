@@ -4419,13 +4419,11 @@ async function loadFlowVariants(days) {
             const sc = (v) => Math.max(2, Math.min(30, v / maxV * 30));
             const f = (v) => fmtKwh.format(v);
             const cSolar = '#f59e0b', cGrid = '#9ca3af', cDirect = '#22c55e';
-            const cBatIn = '#60a5fa', cBatOut = '#c084fc', cLoad = '#e0e0e0';
+            const cBatIn = '#60a5fa', cBatOut = '#c084fc';
 
-            // Node positions (x, y)
             const sX = 80, gX = 240, bX = 160, lX = 160;
             const y1 = 30, y2 = 120, y3 = 220, y4 = 300;
 
-            // Flow paths (cubic bezier curves with width = proportional)
             const flow = (x1, y1_, x2, y2_, val, color) => {
                 if (val < 0.005) return '';
                 const w = sc(val);
@@ -4434,7 +4432,6 @@ async function loadFlowVariants(days) {
                     + `stroke="${color}" stroke-width="${w}" fill="none" opacity="0.35"/>`;
             };
 
-            // Node box
             const nbox = (x, y, icon, label, val, color) =>
                 `<g transform="translate(${x},${y})">`
                 + `<rect x="-48" y="-18" width="96" height="36" rx="8" fill="var(--card-bg)" stroke="${color}" stroke-width="1.5"/>`
@@ -4445,26 +4442,17 @@ async function loadFlowVariants(days) {
 
             animEl.innerHTML =
                 `<svg viewBox="0 0 ${W} ${H}" class="eb-svg" style="width:100%;max-width:340px;height:auto;display:block;margin:10px auto">`
-                // Flows: Solar → Direct use
                 + flow(sX, y1 + 18, bX - 30, y2 - 18, directUse, cDirect)
-                // Solar → Battery
-                + flow(sX, y1 + 18, bX, y2 - 18, solarToBat, cBatIn)
-                // Grid → Battery
-                + flow(gX, y1 + 18, bX, y2 - 18, gridToBat, cGrid)
-                // Grid → Load direct
+                + flow(sX, y1 + 18, bX + 40, y2 - 18, solarToBat, cBatIn)
+                + flow(gX, y1 + 18, bX + 40, y2 - 18, gridToBat, cGrid)
                 + flow(gX, y1 + 18, lX + 30, y4 - 18, gridToLoad, cGrid)
-                // Battery → Load
-                + flow(bX, y2 + 18, lX, y3 - 18, batOut, cBatOut)
-                // Direct → Load
+                + flow(bX + 40, y2 + 18, bX, y3 - 18, batOut, cBatOut)
                 + flow(bX - 30, y2 + 18, lX - 30, y4 - 18, directUse, cDirect)
-                // Battery out → Load
                 + flow(bX, y3 + 18, lX, y4 - 18, batOut, cBatOut)
-                // Nodes
                 + nbox(sX, y1, '☀️', 'Solar', solar, cSolar)
                 + nbox(gX, y1, '🔌', 'Netz', grid, cGrid)
                 + nbox(bX - 40, y2, '⚡', 'Direkt', directUse, cDirect)
                 + nbox(bX + 40, y2, '🔋', 'Akku', batIn, cBatIn)
-                // RTE label
                 + `<text x="${bX + 40}" y="${(y2 + y3) / 2 + 4}" text-anchor="middle" font-size="8" fill="var(--text-dim)">RTE ${rte}%</text>`
                 + nbox(bX, y3, '🔋', 'Entnommen', batOut, cBatOut)
                 + nbox(lX, y4, '🏠', 'Verbrauch', load, '#e0e0e0')
