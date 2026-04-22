@@ -22,7 +22,7 @@ from app.database import upsert_daily
 logger = logging.getLogger(__name__)
 
 ARCHIVE_DIR = Path(__file__).resolve().parent.parent / "data" / "archive"
-MARKER = Path(__file__).resolve().parent.parent / "data" / ".daily_solar_backfill_v1"
+MARKER = Path(__file__).resolve().parent.parent / "data" / ".daily_solar_backfill_v2"
 
 
 def _iter_archive_rows(path: Path):

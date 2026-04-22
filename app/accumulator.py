@@ -183,9 +183,18 @@ class SolarAccumulator:
             self.direct_use_wh / self.energy_wh * 100
             if self.energy_wh > 0.01 else 0.0
         )
-        # Autarkie = fraction of load NOT covered by grid
+        # Autarkie = fraction of load covered by solar (direct + via battery).
+        # solar_to_battery = all solar not used directly.
+        # solar's share of battery_in determines how much battery_out is solar.
+        solar_to_bat = max(0.0, self.energy_wh - self.direct_use_wh)
+        solar_share = (
+            solar_to_bat / self.battery_in_wh
+            if self.battery_in_wh > 0.01 else 0.0
+        )
+        solar_via_bat = self.battery_out_wh * solar_share
+        solar_to_load = self.direct_use_wh + solar_via_bat
         autarkie_pct = (
-            max(0.0, self.output_wh - self.charge_wh) / self.output_wh * 100
+            solar_to_load / self.output_wh * 100
             if self.output_wh > 0.01 else 0.0
         )
         # Round-trip efficiency (of the battery):  out / in
