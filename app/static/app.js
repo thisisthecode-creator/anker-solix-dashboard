@@ -4409,6 +4409,10 @@ async function loadFlowVariants(days) {
         if (animEl) {
             const selfSupplied = directUse + batOut;
             const autarkie = load > 0.01 ? Math.max(0, Math.min(100, Math.round(selfSupplied / load * 100))) : 0;
+            const solarShareRatio = batIn > 0.01 ? solarToBat / batIn : 0;
+            const solarViaBat = batOut * solarShareRatio;
+            const solarToLoad = directUse + solarViaBat;
+            const echteAutarkie = load > 0.01 ? Math.max(0, Math.min(100, Math.round(solarToLoad / load * 100))) : 0;
             const f = (v) => fmtKwh.format(v);
             const pct = (v) => load > 0.01 ? Math.max(0, Math.min(100, (v / load) * 100)) : 0;
             const distDirect = directUse;
@@ -4437,11 +4441,17 @@ async function loadFlowVariants(days) {
                 +     '<div class="eb2-hero-val">' + f(load) + '<span class="eb2-hero-unit"> kWh</span></div>'
                 +   '</div>'
                 +   '<div class="eb2-auto-row">'
-                +     '<div class="eb2-auto-label">Solar-Autarkie</div>'
+                +     '<div class="eb2-auto-label">Autarkie (Standard)</div>'
                 +     '<div class="eb2-auto-pct" style="color:' + autoColor + '">' + autarkie + '%</div>'
                 +   '</div>'
                 +   '<div class="eb2-auto-bar"><div class="eb2-auto-fill" style="width:' + autarkie + '%;background:linear-gradient(90deg,' + autoColor + ',' + autoColor + ')"></div></div>'
-                +   '<div class="eb2-auto-sub">Solar: ' + f(directUse) + ' direkt + ' + f(batOut) + ' via Akku · Netz: ' + f(gridToLoad) + ' kWh</div>'
+                +   '<div class="eb2-auto-sub">' + f(selfSupplied) + ' kWh ohne Netz von ' + f(load) + ' kWh</div>'
+                +   '<div class="eb2-auto-row" style="margin-top:8px">'
+                +     '<div class="eb2-auto-label">Echte Solar-Autarkie</div>'
+                +     '<div class="eb2-auto-pct" style="color:' + (echteAutarkie >= 70 ? '#22c55e' : echteAutarkie >= 30 ? 'var(--solar)' : '#f97316') + '">' + echteAutarkie + '%</div>'
+                +   '</div>'
+                +   '<div class="eb2-auto-bar"><div class="eb2-auto-fill" style="width:' + echteAutarkie + '%;background:linear-gradient(90deg,' + (echteAutarkie >= 70 ? '#22c55e' : echteAutarkie >= 30 ? 'var(--solar)' : '#f97316') + ',' + (echteAutarkie >= 70 ? '#22c55e' : echteAutarkie >= 30 ? 'var(--solar)' : '#f97316') + ')"></div></div>'
+                +   '<div class="eb2-auto-sub">' + f(solarToLoad) + ' kWh rein Solar von ' + f(load) + ' kWh</div>'
                 + '</div>'
                 + '<div class="eb2-section-label">Quellen</div>'
                 + '<div class="eb2-2col">'
