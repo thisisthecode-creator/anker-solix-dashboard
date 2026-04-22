@@ -4407,10 +4407,8 @@ async function loadFlowVariants(days) {
 
         const animEl = $('flowAnimatedContent');
         if (animEl) {
-            const solarShareRatio = batIn > 0.01 ? solarToBat / batIn : 0;
-            const solarViaBat = batOut * solarShareRatio;
-            const solarToLoad = directUse + solarViaBat;
-            const autarkie = load > 0.01 ? Math.max(0, Math.min(100, Math.round(solarToLoad / load * 100))) : 0;
+            const selfSupplied = directUse + batOut;
+            const autarkie = load > 0.01 ? Math.max(0, Math.min(100, Math.round(selfSupplied / load * 100))) : 0;
             const f = (v) => fmtKwh.format(v);
             const pct = (v) => load > 0.01 ? Math.max(0, Math.min(100, (v / load) * 100)) : 0;
             const distDirect = directUse;
@@ -4443,7 +4441,7 @@ async function loadFlowVariants(days) {
                 +     '<div class="eb2-auto-pct" style="color:' + autoColor + '">' + autarkie + '%</div>'
                 +   '</div>'
                 +   '<div class="eb2-auto-bar"><div class="eb2-auto-fill" style="width:' + autarkie + '%;background:linear-gradient(90deg,' + autoColor + ',' + autoColor + ')"></div></div>'
-                +   '<div class="eb2-auto-sub">' + f(solarToLoad) + ' kWh Solar von ' + f(load) + ' kWh</div>'
+                +   '<div class="eb2-auto-sub">Solar: ' + f(directUse) + ' direkt + ' + f(batOut) + ' via Akku · Netz: ' + f(gridToLoad) + ' kWh</div>'
                 + '</div>'
                 + '<div class="eb2-section-label">Quellen</div>'
                 + '<div class="eb2-2col">'
