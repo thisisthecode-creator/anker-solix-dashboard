@@ -4407,8 +4407,10 @@ async function loadFlowVariants(days) {
             const maxFlow = Math.max(0.001, solar, grid, batIn, batOut, load, directUse);
             const pct = (v) => Math.min(100, v / maxFlow * 100).toFixed(1);
             const rte = batIn > 0.01 ? Math.round(batOut / batIn * 100) : 0;
-            const directPct = solar > 0.01 ? Math.round(directUse / solar * 100) : 0;
-            const storePct = solar > 0.01 ? Math.round(batIn / solar * 100) : 0;
+            const totalIn = solar + grid;
+            const solarPct = totalIn > 0.01 ? Math.round(solar / totalIn * 100) : 0;
+            const gridPct = totalIn > 0.01 ? Math.round(grid / totalIn * 100) : 0;
+            const autarkie = load > 0.01 ? Math.max(0, Math.round((1 - grid / load) * 100)) : 0;
             const node = (icon, name, sub, val, color, pctVal) =>
                 `<div class="eb-node" style="--eb-pct:${pctVal}%;--eb-color:${color}">`
                 + `<span class="eb-node-icon">${icon}</span>`
@@ -4420,18 +4422,24 @@ async function loadFlowVariants(days) {
                 + (label ? `<span class="eb-arrow-label">${label}</span>` : '') + `</div>`;
 
             animEl.innerHTML =
-                node('☀️', 'Solar erzeugt', '', solar, 'var(--solar)', pct(solar))
+                // Inputs: Solar + Netz nebeneinander
+                `<div class="eb-split">`
+                + node('☀️', 'Solar', solarPct + '% der Energie', solar, 'var(--solar)', pct(solar))
+                + node('🔌', 'Netz', gridPct + '% der Energie', grid, '#888', pct(grid))
+                + `</div>`
                 + arrow('')
+                // Nutzung: Direkt + Akku-Speicherung
                 + `<div class="eb-split">`
-                + node('⚡', 'Direkt', directPct + '% vom Solar', directUse, '#22c55e', pct(directUse))
-                + node('🔋', 'Gespeichert', storePct + '% vom Solar', batIn, '#60a5fa', pct(batIn))
+                + node('⚡', 'Direkt verbraucht', '', directUse, '#22c55e', pct(directUse))
+                + node('🔋', 'In Akku geladen', '', batIn, '#60a5fa', pct(batIn))
                 + `</div>`
                 + arrow(rte > 0 ? 'RTE ' + rte + '%' : '')
+                // Akku-Entnahme
                 + node('🔋', 'Aus Akku entnommen', '', batOut, '#c084fc', pct(batOut))
                 + arrow('')
+                // Gesamtverbrauch
                 + node('🏠', 'Verbraucht gesamt', '', load, 'var(--text)', pct(load))
-                + (grid > 0.01 ? arrow('') + node('🔌', 'Aus Netz', '', grid, '#888', pct(grid)) : '')
-                + `<div class="eb-total">Autarkie: <strong>${solar > 0.01 ? Math.round((1 - grid / Math.max(0.01, load)) * 100) : 0}%</strong></div>`;
+                + `<div class="eb-total">Autarkie: <strong>${autarkie}%</strong></div>`;
         }
     } catch (e) { console.warn('Flow variants error:', e); }
 }
