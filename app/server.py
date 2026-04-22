@@ -388,6 +388,15 @@ async def on_mqtt_data(raw: dict):
                         continue
                 except (ValueError, TypeError):
                     pass
+            # Power fields: ignore ±2W sensor noise to cut archive size ~40%
+            if field in ("solar_watts", "ac_output_watts", "dc_output_watts",
+                         "dc_12v_watts", "total_output_watts", "ac_input_watts",
+                         "usbc_1_watts", "usbc_2_watts", "usbc_3_watts", "usba_1_watts"):
+                try:
+                    if abs(float(cur) - float(prev)) <= 2.0:
+                        continue
+                except (ValueError, TypeError):
+                    pass
             # Config spike filter: ignore when value drops to 0 briefly
             if field in ("min_soc", "ac_input_limit", "display_mode"):
                 try:
@@ -955,34 +964,31 @@ async def api_daily_stats(days: int = Query(30, ge=1, le=9999)):
 
 @app.get("/api/backup")
 async def api_backup():
-    """Full backup: all archived 3s data + today's live data as one big CSV."""
+    """Full backup: all archived 3s data + today's live data as gzip CSV."""
     import io
 
-    output = io.StringIO()
-    output.write(ARCHIVE_HEADER)
-
-    # 1. Read all gzipped archives (oldest first)
-    ARCHIVE_DIR.mkdir(parents=True, exist_ok=True)
-    for gz_path in sorted(ARCHIVE_DIR.glob("*.csv.gz")):
-        with gzip.open(gz_path, "rt") as f:
-            for i, line in enumerate(f):
-                if i == 0:
-                    continue  # Skip header
-                output.write(line)
-
-    # 2. Read today's open CSV (not yet gzipped)
-    for csv_path in sorted(ARCHIVE_DIR.glob("*.csv")):
-        with open(csv_path, "r") as f:
-            for i, line in enumerate(f):
-                if i == 0:
-                    continue  # Skip header
-                output.write(line)
-
+    buf = io.BytesIO()
     ts = datetime.now(ZoneInfo(TIMEZONE)).strftime("%Y%m%d_%H%M")
+    with gzip.open(buf, "wt", compresslevel=9) as gz:
+        gz.write(ARCHIVE_HEADER)
+        ARCHIVE_DIR.mkdir(parents=True, exist_ok=True)
+        for gz_path in sorted(ARCHIVE_DIR.glob("*.csv.gz")):
+            with gzip.open(gz_path, "rt") as f:
+                for i, line in enumerate(f):
+                    if i == 0:
+                        continue
+                    gz.write(line)
+        for csv_path in sorted(ARCHIVE_DIR.glob("*.csv")):
+            with open(csv_path, "r") as f:
+                for i, line in enumerate(f):
+                    if i == 0:
+                        continue
+                    gz.write(line)
+
     return Response(
-        content=output.getvalue(),
-        media_type="text/csv",
-        headers={"Content-Disposition": f"attachment; filename=solar-backup-{ts}.csv"}
+        content=buf.getvalue(),
+        media_type="application/gzip",
+        headers={"Content-Disposition": f"attachment; filename=solar-backup-{ts}.csv.gz"}
     )
 
 
