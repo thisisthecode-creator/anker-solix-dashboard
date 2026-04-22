@@ -462,7 +462,7 @@ async def broadcast_loop():
                 await ws.send_text(msg)
             except Exception:
                 dead.add(ws)
-        ws_clients -= dead
+        ws_clients.difference_update(dead)
 
 
 async def broadcast_event(event: dict):
@@ -479,7 +479,7 @@ async def broadcast_event(event: dict):
             await ws.send_text(msg)
         except Exception:
             dead.add(ws)
-    ws_clients -= dead
+    ws_clients.difference_update(dead)
 
 
 async def restore_accumulator():
