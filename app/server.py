@@ -817,9 +817,15 @@ async def auth_logout():
     return resp
 
 
+_CACHE_V = str(int(time.time()))
+_index_html: str | None = None
+
 @app.get("/")
 async def index():
-    return FileResponse(STATIC / "index.html")
+    global _index_html
+    if _index_html is None:
+        _index_html = (STATIC / "index.html").read_text().replace("__CACHE_V__", _CACHE_V)
+    return Response(content=_index_html, media_type="text/html")
 
 
 app.mount("/static", StaticFiles(directory=str(STATIC)), name="static")
