@@ -227,8 +227,15 @@ async def retrain_calibration() -> dict:
     if overall_samples >= 10:
         _mean = sum(_all_ratios) / overall_samples
         _var = sum((v - _mean) ** 2 for v in _all_ratios) / overall_samples
-        _cv = math.sqrt(_var) / _mean if _mean > 0.01 else 1.0
-        overall_confidence = max(0.0, min(1.0, 1.0 - _cv))
+        _stddev = math.sqrt(_var)
+        # Standard Error of the Mean: shrinks as 1/sqrt(n), so confidence
+        # naturally improves with every new sample (self-learning).
+        _sem = _stddev / math.sqrt(overall_samples)
+        sem_confidence = max(0.0, min(1.0, 1.0 - _sem / _mean)) if _mean > 0.01 else 0.0
+        # Legacy CV-based confidence (kept as lower bound for very noisy data)
+        _cv = _stddev / _mean if _mean > 0.01 else 1.0
+        cv_confidence = max(0.0, min(1.0, 1.0 - _cv))
+        overall_confidence = max(sem_confidence, cv_confidence)
 
     # Build per-hour factors as RESIDUALS vs the overall factor
     hour_factors: dict[str, dict] = {}
@@ -242,12 +249,15 @@ async def retrain_calibration() -> dict:
             continue
         tm = _trimmed_mean(values)
         residual = tm / _overall_tm if _overall_tm > 0.01 else 1.0
-        # Confidence: 1 - coefficient_of_variation
         mean = sum(values) / len(values)
         variance = sum((v - mean) ** 2 for v in values) / len(values) if len(values) > 1 else 0
         stddev = math.sqrt(variance)
+        # SEM-based confidence: improves with every new sample (1/sqrt(n))
+        sem = stddev / math.sqrt(len(values))
+        sem_conf = max(0.0, min(1.0, 1.0 - sem / mean)) if mean > 0.01 else 0.0
         cv = stddev / mean if mean > 0.01 else 1.0
-        confidence = max(0.0, min(1.0, 1.0 - cv))
+        cv_conf = max(0.0, min(1.0, 1.0 - cv))
+        confidence = max(sem_conf, cv_conf)
         hour_factors[str(h)] = {
             "factor": round(tm, 3),           # absolute factor (actual/forecast)
             "residual": round(residual, 3),   # after removing overall bias
