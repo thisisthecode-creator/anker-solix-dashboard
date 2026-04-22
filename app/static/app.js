@@ -4407,43 +4407,59 @@ async function loadFlowVariants(days) {
 
         const animEl = $('flowAnimatedContent');
         if (animEl) {
-            const maxFlow = Math.max(0.001, solar, grid, batIn, batOut, load, directUse);
-            const pct = (v) => Math.min(100, v / maxFlow * 100).toFixed(1);
             const rte = batIn > 0.01 ? Math.round(batOut / batIn * 100) : 0;
-            const totalIn = solar + grid;
-            const solarPct = totalIn > 0.01 ? Math.round(solar / totalIn * 100) : 0;
-            const gridPct = totalIn > 0.01 ? Math.round(grid / totalIn * 100) : 0;
-            const solarShare = batIn > 0.01 ? solarToBat / batIn : 0;
-            const solarViaBat = batOut * solarShare;
+            const solarShareRatio = batIn > 0.01 ? solarToBat / batIn : 0;
+            const solarViaBat = batOut * solarShareRatio;
             const solarToLoad = directUse + solarViaBat;
             const autarkie = load > 0.01 ? Math.max(0, Math.min(100, Math.round(solarToLoad / load * 100))) : 0;
-            const node = (icon, name, sub, val, color, pctVal) =>
-                `<div class="eb-node" style="--eb-pct:${pctVal}%;--eb-color:${color}">`
-                + `<span class="eb-node-icon">${icon}</span>`
-                + `<div class="eb-node-info"><div class="eb-node-name">${name}</div>`
-                + (sub ? `<div class="eb-node-sub">${sub}</div>` : '')
-                + `</div><span class="eb-node-val" style="color:${color}">${fmtKwh.format(val)} kWh</span></div>`;
-            const arrow = (label) =>
-                `<div class="eb-arrow"><span class="eb-arrow-dots">▼</span>`
-                + (label ? `<span class="eb-arrow-label">${label}</span>` : '') + `</div>`;
+
+            // SVG Sankey-style flow diagram
+            const W = 320, H = 340;
+            const maxV = Math.max(0.001, solar, grid, batIn, batOut, load);
+            const sc = (v) => Math.max(2, Math.min(30, v / maxV * 30));
+            const f = (v) => fmtKwh.format(v);
+            const cSolar = '#f59e0b', cGrid = '#9ca3af', cDirect = '#22c55e';
+            const cBatIn = '#60a5fa', cBatOut = '#c084fc';
+
+            const sX = 80, gX = 240, bX = 160, lX = 160;
+            const y1 = 30, y2 = 120, y3 = 220, y4 = 300;
+
+            const flow = (x1, y1_, x2, y2_, val, color) => {
+                if (val < 0.005) return '';
+                const w = sc(val);
+                const my = (y1_ + y2_) / 2;
+                return `<path d="M${x1},${y1_} C${x1},${my} ${x2},${my} ${x2},${y2_}" `
+                    + `stroke="${color}" stroke-width="${w}" fill="none" opacity="0.35"/>`;
+            };
+
+            const nbox = (x, y, icon, label, val, color) =>
+                `<g transform="translate(${x},${y})">`
+                + `<rect x="-48" y="-18" width="96" height="36" rx="8" fill="var(--card-bg)" stroke="${color}" stroke-width="1.5"/>`
+                + `<text x="0" y="-3" text-anchor="middle" font-size="12">${icon}</text>`
+                + `<text x="0" y="10" text-anchor="middle" font-size="9" font-weight="700" fill="${color}">${f(val)} kWh</text>`
+                + `<text x="0" y="-28" text-anchor="middle" font-size="8" fill="var(--text-dim)">${label}</text>`
+                + `</g>`;
 
             animEl.innerHTML =
-                `<div class="eb-split">`
-                + node('☀️', 'Solar', solarPct + '% der Energie', solar, 'var(--solar)', pct(solar))
-                + node('🔌', 'Netz', gridPct + '% der Energie', grid, '#888', pct(grid))
-                + `</div>`
-                + arrow('')
-                + `<div class="eb-split">`
-                + node('⚡', 'Direkt verbraucht', '', directUse, '#22c55e', pct(directUse))
-                + node('🔋', 'In Akku geladen', '', batIn, '#60a5fa', pct(batIn))
-                + `</div>`
-                + arrow(rte > 0 ? 'RTE ' + rte + '%' : '')
-                + node('🔋', 'Aus Akku entnommen', '', batOut, '#c084fc', pct(batOut))
-                + arrow('')
-                + node('🏠', 'Verbraucht gesamt', '', load, 'var(--text)', pct(load))
+                `<svg viewBox="0 0 ${W} ${H}" class="eb-svg" style="width:100%;max-width:340px;height:auto;display:block;margin:10px auto">`
+                + flow(sX, y1 + 18, bX - 30, y2 - 18, directUse, cDirect)
+                + flow(sX, y1 + 18, bX + 40, y2 - 18, solarToBat, cBatIn)
+                + flow(gX, y1 + 18, bX + 40, y2 - 18, gridToBat, cGrid)
+                + flow(gX, y1 + 18, lX + 30, y4 - 18, gridToLoad, cGrid)
+                + flow(bX + 40, y2 + 18, bX, y3 - 18, batOut, cBatOut)
+                + flow(bX - 30, y2 + 18, lX - 30, y4 - 18, directUse, cDirect)
+                + flow(bX, y3 + 18, lX, y4 - 18, batOut, cBatOut)
+                + nbox(sX, y1, '☀️', 'Solar', solar, cSolar)
+                + nbox(gX, y1, '🔌', 'Netz', grid, cGrid)
+                + nbox(bX - 40, y2, '⚡', 'Direkt', directUse, cDirect)
+                + nbox(bX + 40, y2, '🔋', 'Akku', batIn, cBatIn)
+                + `<text x="${bX + 40}" y="${(y2 + y3) / 2 + 4}" text-anchor="middle" font-size="8" fill="var(--text-dim)">RTE ${rte}%</text>`
+                + nbox(bX, y3, '🔋', 'Entnommen', batOut, cBatOut)
+                + nbox(lX, y4, '🏠', 'Verbrauch', load, '#e0e0e0')
+                + `</svg>`
                 + `<div class="eb-total">`
-                + `Solar-Autarkie: <strong style="color:var(--solar)">${autarkie}%</strong>`
-                + ` · Solar an Verbrauch: <strong>${fmtKwh.format(solarToLoad)} kWh</strong>`
+                + `Solar-Autarkie: <strong style="color:${cSolar}">${autarkie}%</strong>`
+                + ` · Solar: <strong>${f(solarToLoad)} kWh</strong> von ${f(load)} kWh`
                 + `</div>`;
         }
     } catch (e) { console.warn('Flow variants error:', e); }
