@@ -4418,12 +4418,8 @@ async function loadFlowVariants(days) {
 
         const animEl = $('flowAnimatedContent');
         if (animEl) {
-            const selfSupplied = directUse + batOut;
-            const autarkie = load > 0.01 ? Math.max(0, Math.min(100, Math.round(selfSupplied / load * 100))) : 0;
-            const solarShareRatio = batIn > 0.01 ? solarToBat / batIn : 0;
-            const solarViaBat = batOut * solarShareRatio;
-            const solarToLoad = directUse + solarViaBat;
-            const echteAutarkie = load > 0.01 ? Math.max(0, Math.min(100, Math.round(solarToLoad / load * 100))) : 0;
+            const autarkie = load > 0.01 ? Math.max(0, Math.min(100, Math.round((1 - gridToLoad / load) * 100))) : 0;
+            const solarDeckung = load > 0.01 ? Math.round(solar / load * 100) : 0;
             const f = (v) => fmtKwh.format(v);
             const pct = (v) => load > 0.01 ? Math.max(0, Math.min(100, (v / load) * 100)) : 0;
             const distDirect = directUse;
@@ -4435,7 +4431,7 @@ async function loadFlowVariants(days) {
             const iconBattery = '<svg viewBox="0 0 28 16" width="44" height="26" fill="none" stroke="currentColor" stroke-width="1.6"><rect x="1" y="2" width="22" height="12" rx="2"/><rect x="24" y="6" width="3" height="4" rx="0.5" fill="currentColor" stroke="none"/></svg>';
 
             const autoColor = autarkie >= 70 ? '#22c55e' : autarkie >= 30 ? 'var(--solar)' : '#f97316';
-            const echteColor = echteAutarkie >= 70 ? '#22c55e' : echteAutarkie >= 30 ? 'var(--solar)' : '#f97316';
+            const deckungColor = solarDeckung >= 100 ? '#22c55e' : solarDeckung >= 50 ? 'var(--solar)' : '#f97316';
             const totalIn = solar + grid;
             const netBat = batIn - batOut;
             const row = (label, val, color, total) => {
@@ -4459,12 +4455,14 @@ async function loadFlowVariants(days) {
                 +     '<div class="eb2-auto-label">Autarkie</div>'
                 +     '<div class="eb2-auto-pct" style="color:' + autoColor + '">' + autarkie + '%</div>'
                 +   '</div>'
-                +   '<div class="eb2-auto-bar"><div class="eb2-auto-fill" style="width:' + autarkie + '%;background:' + autoColor + '"></div></div>'
+                +   '<div class="eb2-auto-bar"><div class="eb2-auto-fill" style="width:' + Math.min(100, autarkie) + '%;background:' + autoColor + '"></div></div>'
+                +   '<div class="eb2-auto-sub">' + f(gridToLoad) + ' kWh vom Netz verbraucht</div>'
                 +   '<div class="eb2-auto-row" style="margin-top:8px">'
-                +     '<div class="eb2-auto-label">Solar-Autarkie</div>'
-                +     '<div class="eb2-auto-pct" style="color:' + echteColor + '">' + echteAutarkie + '%</div>'
+                +     '<div class="eb2-auto-label">Solar-Deckung</div>'
+                +     '<div class="eb2-auto-pct" style="color:' + deckungColor + '">' + solarDeckung + '%</div>'
                 +   '</div>'
-                +   '<div class="eb2-auto-bar"><div class="eb2-auto-fill" style="width:' + echteAutarkie + '%;background:' + echteColor + '"></div></div>'
+                +   '<div class="eb2-auto-bar"><div class="eb2-auto-fill" style="width:' + Math.min(100, solarDeckung) + '%;background:' + deckungColor + '"></div></div>'
+                +   '<div class="eb2-auto-sub">' + f(solar) + ' kWh erzeugt von ' + f(load) + ' kWh verbraucht</div>'
                 + '</div>'
                 // Woher: Quellen
                 + '<div class="eb2-section-label">Woher? - Quellen</div>'
