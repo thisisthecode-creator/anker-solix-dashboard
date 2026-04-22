@@ -4382,17 +4382,28 @@ checkWeeklyReport();
 // All share the same /api/sankey?days=N data source.
 // ============================================================================
 let _flowVarDays = 1;
+const _sankeyCache = {};
+
+// Prefetch all time periods on load
+[1, 7, 30, 365].forEach(d => {
+    fetch('/api/sankey?days=' + d).then(r => r.ok ? r.json() : null).then(data => {
+        if (data) _sankeyCache[d] = data;
+    }).catch(() => {});
+});
 
 async function loadFlowVariants(days) {
     _flowVarDays = days || _flowVarDays;
-    // Update tab active state
     document.querySelectorAll('#flowAnimTabs .tab').forEach(t => {
         t.classList.toggle('active', parseInt(t.dataset.flowvar, 10) === _flowVarDays);
     });
     try {
-        const res = await fetch('/api/sankey?days=' + _flowVarDays);
-        if (!res.ok) return;
-        const data = await res.json();
+        let data = _sankeyCache[_flowVarDays];
+        if (!data) {
+            const res = await fetch('/api/sankey?days=' + _flowVarDays);
+            if (!res.ok) return;
+            data = await res.json();
+            _sankeyCache[_flowVarDays] = data;
+        }
         const t = data.totals || {};
         const flows = data.flows || [];
         const solar = t.solar_kwh || 0;

@@ -1306,7 +1306,7 @@ async def api_cumulative_production():
 @app.get("/api/sankey")
 async def api_sankey(days: int = Query(1, ge=1, le=365)):
     """Energy flows (solar→direct, solar→battery, battery→load, grid→…)."""
-    return await get_sankey_flows(days)
+    return await _cached_endpoint(f"sankey:{days}", _ENDPOINT_CACHE_TTL, lambda: get_sankey_flows(days))
 
 
 @app.get("/api/charging-sessions")
