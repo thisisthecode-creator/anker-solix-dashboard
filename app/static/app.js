@@ -4435,8 +4435,11 @@ async function loadFlowVariants(days) {
             const iconBattery = '<svg viewBox="0 0 28 16" width="44" height="26" fill="none" stroke="currentColor" stroke-width="1.6"><rect x="1" y="2" width="22" height="12" rx="2"/><rect x="24" y="6" width="3" height="4" rx="0.5" fill="currentColor" stroke="none"/></svg>';
 
             const autoColor = autarkie >= 70 ? '#22c55e' : autarkie >= 30 ? 'var(--solar)' : '#f97316';
-            const row = (label, val, color, shareVal) => {
-                const p = pct(shareVal);
+            const echteColor = echteAutarkie >= 70 ? '#22c55e' : echteAutarkie >= 30 ? 'var(--solar)' : '#f97316';
+            const totalIn = solar + grid;
+            const netBat = batIn - batOut;
+            const row = (label, val, color, total) => {
+                const p = total > 0.01 ? Math.max(0, Math.min(100, (val / total) * 100)) : 0;
                 return '<div class="eb2-dist-row">'
                     + '<div class="eb2-dist-label">' + label + '</div>'
                     + '<div class="eb2-dist-bar"><div class="eb2-dist-fill" style="width:' + p.toFixed(1) + '%;background:' + color + '"></div></div>'
@@ -4446,6 +4449,7 @@ async function loadFlowVariants(days) {
             };
             animEl.innerHTML =
                 '<div class="eb2">'
+                // Hero: Verbrauch + Autarkie
                 + '<div class="eb2-hero">'
                 +   '<div class="eb2-hero-row">'
                 +     '<div class="eb2-hero-label">Verbraucht</div>'
@@ -4455,60 +4459,26 @@ async function loadFlowVariants(days) {
                 +     '<div class="eb2-auto-label">Autarkie</div>'
                 +     '<div class="eb2-auto-pct" style="color:' + autoColor + '">' + autarkie + '%</div>'
                 +   '</div>'
-                +   '<div class="eb2-auto-bar"><div class="eb2-auto-fill" style="width:' + autarkie + '%;background:linear-gradient(90deg,' + autoColor + ',' + autoColor + ')"></div></div>'
-                +   '<div class="eb2-auto-sub">' + f(selfSupplied) + ' kWh ohne Netz von ' + f(load) + ' kWh</div>'
+                +   '<div class="eb2-auto-bar"><div class="eb2-auto-fill" style="width:' + autarkie + '%;background:' + autoColor + '"></div></div>'
                 +   '<div class="eb2-auto-row" style="margin-top:8px">'
                 +     '<div class="eb2-auto-label">Solar-Autarkie</div>'
-                +     '<div class="eb2-auto-pct" style="color:' + (echteAutarkie >= 70 ? '#22c55e' : echteAutarkie >= 30 ? 'var(--solar)' : '#f97316') + '">' + echteAutarkie + '%</div>'
+                +     '<div class="eb2-auto-pct" style="color:' + echteColor + '">' + echteAutarkie + '%</div>'
                 +   '</div>'
-                +   '<div class="eb2-auto-bar"><div class="eb2-auto-fill" style="width:' + echteAutarkie + '%;background:linear-gradient(90deg,' + (echteAutarkie >= 70 ? '#22c55e' : echteAutarkie >= 30 ? 'var(--solar)' : '#f97316') + ',' + (echteAutarkie >= 70 ? '#22c55e' : echteAutarkie >= 30 ? 'var(--solar)' : '#f97316') + ')"></div></div>'
-                +   '<div class="eb2-auto-sub">' + f(solarToLoad) + ' kWh rein Solar von ' + f(load) + ' kWh</div>'
+                +   '<div class="eb2-auto-bar"><div class="eb2-auto-fill" style="width:' + echteAutarkie + '%;background:' + echteColor + '"></div></div>'
                 + '</div>'
-                + '<div class="eb2-section-label">Quellen</div>'
-                + '<div class="eb2-2col">'
-                +   '<div class="eb2-src eb2-src-solar' + (solar > 0.01 ? '' : ' eb2-inactive') + '">'
-                +     '<div class="eb2-src-ico">' + iconSolar + '</div>'
-                +     '<div class="eb2-src-body">'
-                +       '<div class="eb2-src-name">Solar</div>'
-                +       '<div class="eb2-src-val">' + f(solar) + '<span class="eb2-src-unit"> kWh</span></div>'
-                +     '</div>'
-                +   '</div>'
-                +   '<div class="eb2-src eb2-src-grid' + (grid > 0.01 ? '' : ' eb2-inactive') + '">'
-                +     '<div class="eb2-src-ico">' + iconGrid + '</div>'
-                +     '<div class="eb2-src-body">'
-                +       '<div class="eb2-src-name">Netz</div>'
-                +       '<div class="eb2-src-val">' + f(grid) + '<span class="eb2-src-unit"> kWh</span></div>'
-                +     '</div>'
-                +   '</div>'
-                + '</div>'
-                + '<div class="eb2-section-label">Akku</div>'
-                + '<div class="eb2-bat">'
-                +   '<div class="eb2-bat-side">'
-                +     '<div class="eb2-bat-kicker"><span class="eb2-bat-arrow eb2-bat-in">↓</span> Geladen</div>'
-                +     '<div class="eb2-bat-val eb2-bat-val-in">' + f(batIn) + '<span class="eb2-bat-unit"> kWh</span></div>'
-                +   '</div>'
-                +   '<div class="eb2-bat-ico">' + iconBattery + '</div>'
-                +   '<div class="eb2-bat-side eb2-bat-side-r">'
-                +     '<div class="eb2-bat-kicker">Entladen <span class="eb2-bat-arrow eb2-bat-out">↑</span></div>'
-                +     '<div class="eb2-bat-val eb2-bat-val-out">' + f(batOut) + '<span class="eb2-bat-unit"> kWh</span></div>'
-                +   '</div>'
-                + '</div>'
-                + (Math.abs(batIn - batOut) > 0.02
-                    ? '<div class="eb2-bat-net">'
-                    +   (batIn > batOut
-                        ? '↓ ' + f(batIn - batOut) + ' kWh netto gespeichert'
-                        : '↑ ' + f(batOut - batIn) + ' kWh netto entnommen')
-                    + '</div>'
-                    : '')
-                + '<div class="eb2-section-label">Verbrauch nach Quelle</div>'
+                // Woher: Quellen
+                + '<div class="eb2-section-label">Woher? - Quellen</div>'
                 + '<div class="eb2-dist">'
-                +   row('Solar direkt', distDirect, 'var(--solar)', distDirect)
-                +   row('Aus Akku',     distBat,    '#c084fc',      distBat)
-                +   row('Aus Netz',     distGrid,   'var(--blue)',   distGrid)
+                +   row('Solar', solar, 'var(--solar)', totalIn)
+                +   row('Netz', grid, 'var(--blue)', totalIn)
                 + '</div>'
-                + (batIn - batOut > 0.02
-                    ? '<div class="eb2-bilanz-hint">Solar + Netz (' + f(solar + grid) + ') &gt; Verbrauch (' + f(load) + ') weil ' + f(batIn - batOut) + ' kWh noch im Akku sind</div>'
-                    : '')
+                // Wohin: Verwendung
+                + '<div class="eb2-section-label">Wohin? - Verwendung</div>'
+                + '<div class="eb2-dist">'
+                +   row('Verbraucht', load, 'var(--text-dim)', totalIn)
+                +   (netBat > 0.02 ? row('Im Akku gespeichert', netBat, '#22c55e', totalIn) : '')
+                +   (netBat < -0.02 ? row('Aus Akku entnommen', Math.abs(netBat), '#c084fc', totalIn) : '')
+                + '</div>'
                 + '</div>';
         }
     } catch (e) { console.warn('Flow variants error:', e); }
