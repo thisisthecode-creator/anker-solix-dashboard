@@ -878,8 +878,18 @@ function updateUI(d) {
         solarWArc.setAttribute('stroke-dashoffset', (RING_CIRC - RING_CIRC * pct / 100).toFixed(1));
     }
 
-    // Ring 2: Autarkie %
-    const aut = d.autarkie_pct || 0;
+    // Ring 2: Autarkie % (yearly from sankey cache)
+    let aut = d.autarkie_pct || 0;
+    const yearly = typeof _sankeyCache !== 'undefined' && _sankeyCache[365];
+    if (yearly) {
+        const yt = yearly.totals || {};
+        const yFlows = yearly.flows || [];
+        const yLoad = yt.load_kwh || 0;
+        const yDirect = (yFlows.find(fl => fl.from === 'solar' && fl.to === 'load') || {}).kwh || 0;
+        const yBatOut = yt.battery_out_kwh || 0;
+        const yGridToLoad = Math.max(0, yLoad - yDirect - yBatOut);
+        if (yLoad > 0.01) aut = (1 - yGridToLoad / yLoad) * 100;
+    }
     const autPct = $('autarkiePct');
     if (autPct) autPct.textContent = fmt.format(aut) + '%';
     const autArc = $('autarkieArc');
