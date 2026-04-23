@@ -2528,6 +2528,139 @@ document.querySelectorAll('#autarkieTabs .tab').forEach(btn => {
     });
 });
 
+// === Forecast-Accuracy ===
+let _fcAccChart = null;
+async function loadForecastAccuracy(days) {
+    try {
+        const res = await fetch('/api/forecast-accuracy?days=' + days);
+        if (!res.ok) return;
+        const data = await res.json();
+        const series = data.series || [];
+        if (series.length === 0) return;
+
+        const labels = series.map(d => {
+            const dt = new Date(d.date);
+            return dt.getDate() + '.' + (dt.getMonth() + 1) + '.';
+        });
+        const actualSolar = series.map(d => d.actual_solar || 0);
+        const predOpenmeteo = series.map(d => d.pred_openmeteo != null ? d.pred_openmeteo : null);
+        const predMlSolar = series.map(d => d.pred_ml_solar != null ? d.pred_ml_solar : null);
+        const actualLoad = series.map(d => d.actual_load || 0);
+        const predMlLoad = series.map(d => d.pred_ml_load != null ? d.pred_ml_load : null);
+
+        // KPI cards: MAE for each model
+        const m = data.metrics || {};
+        const omM = m.openmeteo_solar || {};
+        const mlSM = m.ml_solar || {};
+        const mlLM = m.ml_load || {};
+
+        const fmtKwhSign = (v) => (v >= 0 ? '+' : '') + fmtKwh.format(v);
+        const winner = (omM.mae > 0 && mlSM.mae > 0)
+            ? (mlSM.mae < omM.mae ? 'ml' : 'om') : null;
+
+        const kpiEl = $('fcAccKpis');
+        if (kpiEl) {
+            kpiEl.innerHTML =
+                '<div class="mfc-kpi">'
+                    + '<div class="mfc-kpi-label">Open-Meteo Solar</div>'
+                    + '<div class="mfc-kpi-value' + (winner === 'om' ? ' green' : '') + '">±' + fmtKwh.format(omM.mae || 0) + '</div>'
+                    + '<div class="mfc-kpi-sub">MAE kWh · ' + (omM.n || 0) + ' Tage · Bias ' + fmtKwhSign(omM.bias || 0) + '</div>'
+                + '</div>'
+                + '<div class="mfc-kpi">'
+                    + '<div class="mfc-kpi-label">ML Solar (eigen)</div>'
+                    + '<div class="mfc-kpi-value' + (winner === 'ml' ? ' green' : '') + '">±' + fmtKwh.format(mlSM.mae || 0) + '</div>'
+                    + '<div class="mfc-kpi-sub">MAE kWh · ' + (mlSM.n || 0) + ' Tage · Bias ' + fmtKwhSign(mlSM.bias || 0) + '</div>'
+                + '</div>'
+                + '<div class="mfc-kpi">'
+                    + '<div class="mfc-kpi-label">ML Load</div>'
+                    + '<div class="mfc-kpi-value">±' + fmtKwh.format(mlLM.mae || 0) + '</div>'
+                    + '<div class="mfc-kpi-sub">MAE kWh · ' + (mlLM.n || 0) + ' Tage · Bias ' + fmtKwhSign(mlLM.bias || 0) + '</div>'
+                + '</div>';
+        }
+
+        const legendEl = $('fcAccLegend');
+        if (legendEl) {
+            const winnerTxt = winner === 'ml'
+                ? 'ML-Modell ist um ' + fmtKwh.format(omM.mae - mlSM.mae) + ' kWh genauer als Open-Meteo'
+                : winner === 'om'
+                    ? 'Open-Meteo ist um ' + fmtKwh.format(mlSM.mae - omM.mae) + ' kWh genauer als das ML-Modell'
+                    : 'Noch zu wenig Daten für Vergleich';
+            legendEl.innerHTML = '<div class="fc-acc-hint">' + winnerTxt + '</div>';
+        }
+
+        if (_fcAccChart) _fcAccChart.destroy();
+        const datasets = [
+            {
+                label: 'Solar Real',
+                data: actualSolar,
+                borderColor: '#f59e0b', backgroundColor: 'rgba(245,158,11,0.18)',
+                fill: true, tension: 0.3, borderWidth: 2.5,
+                pointRadius: days > 90 ? 0 : 2, pointHoverRadius: 4,
+            },
+            {
+                label: 'Open-Meteo',
+                data: predOpenmeteo,
+                borderColor: '#3b82f6', backgroundColor: 'transparent',
+                fill: false, tension: 0.3, borderWidth: 1.8, borderDash: [4, 4],
+                pointRadius: days > 90 ? 0 : 2, pointHoverRadius: 4, spanGaps: true,
+            },
+            {
+                label: 'ML Solar',
+                data: predMlSolar,
+                borderColor: '#22c55e', backgroundColor: 'transparent',
+                fill: false, tension: 0.3, borderWidth: 1.8, borderDash: [2, 4],
+                pointRadius: days > 90 ? 0 : 2, pointHoverRadius: 4, spanGaps: true,
+            },
+        ];
+        // Add load if we have any predictions
+        const hasLoadPreds = predMlLoad.some(v => v != null && v > 0);
+        if (hasLoadPreds) {
+            datasets.push({
+                label: 'Load Real',
+                data: actualLoad,
+                borderColor: '#9ca3af', backgroundColor: 'transparent',
+                fill: false, tension: 0.3, borderWidth: 1.5,
+                pointRadius: 0, hidden: true,
+            });
+            datasets.push({
+                label: 'ML Load',
+                data: predMlLoad,
+                borderColor: '#c084fc', backgroundColor: 'transparent',
+                fill: false, tension: 0.3, borderWidth: 1.5, borderDash: [2, 4],
+                pointRadius: 0, hidden: true, spanGaps: true,
+            });
+        }
+
+        _fcAccChart = new Chart($('chart_fc_accuracy'), {
+            type: 'line',
+            data: { labels, datasets },
+            options: {
+                responsive: true, maintainAspectRatio: false, animation: false,
+                interaction: { intersect: false, mode: 'index' },
+                plugins: {
+                    legend: { display: true, position: 'top', labels: { boxWidth: 10, font: { size: 9 } } },
+                    tooltip: { callbacks: { label: ctx => ctx.dataset.label + ': ' + (ctx.parsed.y == null ? '-' : fmtKwh.format(ctx.parsed.y) + ' kWh') } }
+                },
+                scales: {
+                    y: { beginAtZero: true, grid: { color: chartGridColor() }, ticks: { maxTicksLimit: 5, callback: v => v + ' kWh' } },
+                    x: { grid: { display: false }, ticks: { maxTicksLimit: days > 90 ? 8 : 10, maxRotation: 45, font: { size: 9 } } }
+                }
+            }
+        });
+        $('forecastAccuracySection').style.display = '';
+    } catch (e) { console.warn('Forecast accuracy error:', e); }
+}
+
+loadForecastAccuracy(30);
+
+document.querySelectorAll('#fcAccTabs .tab').forEach(btn => {
+    btn.addEventListener('click', () => {
+        document.querySelectorAll('#fcAccTabs .tab').forEach(b => b.classList.remove('active'));
+        btn.classList.add('active');
+        loadForecastAccuracy(parseInt(btn.dataset.fcdays));
+    });
+});
+
 // === Wetter-Korrelation ===
 let _weatherCorrChart = null;
 

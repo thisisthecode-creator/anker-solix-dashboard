@@ -354,6 +354,19 @@
             <div class="chart-wrap" style="height:200px"><canvas id="chart_autarkie_trend"></canvas></div>
         </section>
 
+        <!-- Forecast-Accuracy -->
+        <section class="today-box" id="forecastAccuracySection" style="display:none">
+            <h2>Vorhersage-Genauigkeit</h2>
+            <div class="mfc-kpi-row" id="fcAccKpis"></div>
+            <div class="tab-bar" id="fcAccTabs">
+                <button class="tab active" data-fcdays="30">30 Tage</button>
+                <button class="tab" data-fcdays="90">90 Tage</button>
+                <button class="tab" data-fcdays="180">180 Tage</button>
+            </div>
+            <div class="chart-wrap" style="height:220px"><canvas id="chart_fc_accuracy"></canvas></div>
+            <div id="fcAccLegend" class="fc-acc-legend"></div>
+        </section>
+
         <!-- Wetter-Korrelation -->
         <section class="today-box" id="weatherCorrelationSection" style="display:none">
             <h2>Wetter-Korrelation</h2>

@@ -30,7 +30,7 @@ from app.database import (
     get_cumulative_savings, insert_forecast,
     get_hourly_heatmap, get_monthly_distribution,
     get_cumulative_production, get_sankey_flows,
-    get_charging_sessions,
+    get_charging_sessions, get_forecast_accuracy,
 )
 from app.accumulator import SolarAccumulator
 from app.anker_client import AnkerClient
@@ -1307,6 +1307,15 @@ async def api_cumulative_production():
 async def api_sankey(days: int = Query(1, ge=1, le=365)):
     """Energy flows (solar→direct, solar→battery, battery→load, grid→…)."""
     return await _cached_endpoint(f"sankey:{days}", _ENDPOINT_CACHE_TTL, lambda: get_sankey_flows(days))
+
+
+@app.get("/api/forecast-accuracy")
+async def api_forecast_accuracy(days: int = Query(30, ge=7, le=180)):
+    """Forecast vs. actual: per-day predictions + aggregate metrics (MAE/RMSE/MAPE/bias)."""
+    return await _cached_endpoint(
+        f"fc-acc:{days}", _ENDPOINT_CACHE_TTL,
+        lambda: get_forecast_accuracy(days),
+    )
 
 
 @app.get("/api/charging-sessions")
