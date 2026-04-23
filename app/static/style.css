@@ -4115,17 +4115,6 @@ body.light-mode .eb2-dist-bar {
 }
 
 /* Narrow screens: keep things readable */
-.fc-acc-legend {
-    margin-top: 10px;
-}
-.fc-acc-hint {
-    font-size: 0.78rem;
-    color: var(--text-dim);
-    text-align: center;
-    padding: 6px 8px;
-    line-height: 1.4;
-}
-
 .eb2-bat-net {
     text-align: center;
     font-size: 0.72rem;
