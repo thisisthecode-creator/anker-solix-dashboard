@@ -717,9 +717,10 @@ async def get_hourly_solar_for_date(date_str: str) -> dict:
     elif gz_path.exists():
         opener = lambda: gzip.open(gz_path, "rt")
     else:
-        return {"date": date_str, "hourly_wh": [0.0] * 24, "total_kwh": 0.0, "samples": 0}
+        return {"date": date_str, "hourly_wh": [0.0] * 24, "hourly_max_soc": [0] * 24, "total_kwh": 0.0, "samples": 0}
 
     hour_wh = [0.0] * 24
+    hour_max_soc = [0] * 24
     last_ts: float | None = None
     last_w: float = 0.0
     samples = 0
@@ -736,8 +737,15 @@ async def get_hourly_solar_for_date(date_str: str) -> dict:
                     solar_w = float(parts[1] or 0)
                 except (ValueError, IndexError):
                     continue
+                try:
+                    soc = int(float(parts[2] or 0))
+                except (ValueError, IndexError):
+                    soc = 0
                 ts_sec = ts.timestamp()
                 samples += 1
+                h_now = ts.hour
+                if soc > hour_max_soc[h_now]:
+                    hour_max_soc[h_now] = soc
                 if last_ts is not None:
                     dt_s = ts_sec - last_ts
                     if 0 < dt_s < 7200:  # cap at 2h gap to avoid huge extrapolation
@@ -759,12 +767,13 @@ async def get_hourly_solar_for_date(date_str: str) -> dict:
                 last_w = solar_w
     except Exception as e:
         logger.warning("get_hourly_solar_for_date failed for %s: %s", date_str, e)
-        return {"date": date_str, "hourly_wh": [0.0] * 24, "total_kwh": 0.0, "samples": 0}
+        return {"date": date_str, "hourly_wh": [0.0] * 24, "hourly_max_soc": [0] * 24, "total_kwh": 0.0, "samples": 0}
 
     total_kwh = sum(hour_wh) / 1000
     return {
         "date": date_str,
         "hourly_wh": [round(w, 2) for w in hour_wh],
+        "hourly_max_soc": hour_max_soc,
         "total_kwh": round(total_kwh, 3),
         "samples": samples,
     }

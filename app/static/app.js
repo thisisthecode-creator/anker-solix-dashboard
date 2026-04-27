@@ -1584,6 +1584,7 @@ async function buildHourlyForecastToday(dateStr) {
 
     // Fetch actual hourly production from server (CSV archive)
     let actualByHour = {};
+    let socFullByHour = {};
     try {
         const res = await fetch('/api/hourly-solar?date=' + dateStr);
         if (res.ok) {
@@ -1591,6 +1592,12 @@ async function buildHourlyForecastToday(dateStr) {
             if (data.hourly_wh) {
                 for (let h = 0; h < 24; h++) {
                     actualByHour[h] = (data.hourly_wh[h] || 0) / 1000;  // Wh -> kWh
+                }
+            }
+            if (data.hourly_max_soc) {
+                for (let h = 0; h < 24; h++) {
+                    // SOC=100 means MPPT is curtailing - reported watts artificially low
+                    socFullByHour[h] = (data.hourly_max_soc[h] || 0) >= 99;
                 }
             }
         }
@@ -1614,6 +1621,7 @@ async function buildHourlyForecastToday(dateStr) {
         const hours = [];
         const fcData = [];
         const actData = [];
+        const actSocFull = [];
         for (let h = 0; h < 24; h++) {
             const fc = forecastByHour[h] || 0;
             const showAct = (dateStr === today) ? (h <= currentHour) : true;
@@ -1622,6 +1630,7 @@ async function buildHourlyForecastToday(dateStr) {
                 hours.push(String(h).padStart(2, '0') + ':00');
                 fcData.push(Math.round(fc * 1000) / 1000);
                 actData.push(act != null ? Math.round(act * 1000) / 1000 : null);
+                actSocFull.push(!!socFullByHour[h]);
             }
         }
 
@@ -1635,10 +1644,18 @@ async function buildHourlyForecastToday(dateStr) {
         }
         // Progressive sums for the accuracy badge — fair partial-day comparison
         // for today (forecast capped at current hour vs. actual so far).
+        // Hours where the battery was full are excluded: MPPT curtails the
+        // panels, so reported watts are artificially low and would tank the
+        // accuracy unfairly.
         const isTodayView = (dateStr === today);
         let accFc = 0, accAct = 0;
+        let clippedHours = 0;
         const accEndH = isTodayView ? currentHour : 23;
         for (let h = 0; h <= accEndH; h++) {
+            if (socFullByHour[h]) {
+                clippedHours++;
+                continue;
+            }
             accFc += forecastByHour[h] || 0;
             accAct += actualByHour[h] || 0;
         }
@@ -1677,10 +1694,14 @@ async function buildHourlyForecastToday(dateStr) {
                 : (totalFc > 0.1 && !hadSolar && !isToday
                     ? '<span style="color:var(--text-dim)">kein Solar-Eingang</span>'
                     : '');
+            const clipBadge = clippedHours > 0
+                ? '<span style="color:var(--text-dim)">🔋 ' + clippedHours + (LANG === 'de' ? ' Std. Akku voll' : ' h batt. full') + '</span>'
+                : '';
             sumEl.innerHTML = '<span>' + (LANG === 'de' ? 'Prognose' : 'Forecast') + ': ' + fmtKwh.format(totalFc) + ' kWh</span>'
                 + '<span>' + (LANG === 'de' ? 'Real' : 'Actual') + ': ' + fmtKwh.format(totalAct) + ' kWh</span>'
                 + '<span>' + (LANG === 'de' ? 'Aktiv' : 'Active') + ': ' + activeRange + '</span>'
-                + accBadge;
+                + accBadge
+                + clipBadge;
         }
 
         // Update nav button states
@@ -1727,8 +1748,8 @@ async function buildHourlyForecastToday(dateStr) {
                     {
                         label: t('actual'),
                         data: actData,
-                        backgroundColor: '#f59e0b',
-                        borderColor: '#f59e0b',
+                        backgroundColor: actData.map((_, i) => actSocFull[i] ? '#9ca3af' : '#f59e0b'),
+                        borderColor: actData.map((_, i) => actSocFull[i] ? '#9ca3af' : '#f59e0b'),
                         borderWidth: 1,
                         borderRadius: 3
                     }
@@ -1738,10 +1759,31 @@ async function buildHourlyForecastToday(dateStr) {
                 responsive: true, maintainAspectRatio: false, animation: false,
                 interaction: { intersect: false, mode: 'index' },
                 plugins: {
-                    legend: { display: true, position: 'top', labels: { boxWidth: 10, font: { size: 9 } } },
+                    legend: {
+                        display: true, position: 'top',
+                        labels: {
+                            boxWidth: 10, font: { size: 9 },
+                            generateLabels: (chart) => {
+                                const base = Chart.defaults.plugins.legend.labels.generateLabels(chart);
+                                if (actSocFull.some(Boolean)) {
+                                    base.push({
+                                        text: LANG === 'de' ? 'Real (Akku voll)' : 'Actual (batt. full)',
+                                        fillStyle: '#9ca3af',
+                                        strokeStyle: '#9ca3af',
+                                        lineWidth: 1,
+                                        hidden: false,
+                                    });
+                                }
+                                return base;
+                            },
+                        }
+                    },
                     tooltip: { callbacks: { label: ctx => {
                         if (ctx.parsed.y == null) return null;
-                        return ctx.dataset.label + ': ' + Math.round(ctx.parsed.y * 1000) + ' Wh';
+                        const suffix = (ctx.datasetIndex === 1 && actSocFull[ctx.dataIndex])
+                            ? (LANG === 'de' ? ' (Akku voll)' : ' (batt. full)')
+                            : '';
+                        return ctx.dataset.label + ': ' + Math.round(ctx.parsed.y * 1000) + ' Wh' + suffix;
                     } } }
                 },
                 scales: {

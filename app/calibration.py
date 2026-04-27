@@ -182,6 +182,10 @@ async def retrain_calibration() -> dict:
     cloud_ratios: dict[int, list[float]] = {0: [], 1: [], 2: [], 3: []}
     sample_days = 0
     sample_hours = 0
+    # Hours skipped because the battery was full -> MPPT curtails panels,
+    # so reported solar_watts is artificially low and would drag the
+    # calibration factor downward if used as training data.
+    clipped_hours_skipped = 0
 
     for date_str in eligible:
         archive = await _get_archive_gti_for_date(date_str)
@@ -191,6 +195,7 @@ async def retrain_calibration() -> dict:
         if not actual or not actual.get("hourly_wh"):
             continue
         act_wh = actual["hourly_wh"]
+        max_soc = actual.get("hourly_max_soc") or [0] * 24
         # Skip days with no production (unplugged)
         if sum(act_wh) < 100:  # <100 Wh total = basically nothing
             continue
@@ -208,6 +213,9 @@ async def retrain_calibration() -> dict:
                 continue  # both tiny, ratio noisy
             if raw_wh < 1.0:
                 continue  # avoid divide-by-near-zero
+            if max_soc[h] >= 99:
+                clipped_hours_skipped += 1
+                continue
             ratio = act / raw_wh
             # Sanity cap (reject extreme outliers that are likely data errors)
             if ratio <= 0 or ratio > 5:
@@ -347,6 +355,7 @@ async def retrain_calibration() -> dict:
         "overall_samples": overall_samples,
         "hour_factors": hour_factors,
         "cloud_factors": cloud_factors,
+        "clipped_hours_skipped": clipped_hours_skipped,
         "diagnosis": {
             "status": diagnosis,
             "nameplate_w": round(nameplate_w, 0),
@@ -356,6 +365,7 @@ async def retrain_calibration() -> dict:
             "observed_efficiency_pct": round(observed_efficiency * 100, 1),
             "effective_peak_w_avg": round(effective_peak_w_avg, 0),
             "deviation_pct": deviation_pct,
+            "clipped_hours_skipped": clipped_hours_skipped,
             "recommendation": recommendation,
         },
     }
