@@ -699,26 +699,11 @@ async def lifespan(app: FastAPI):
                 logger.warning("Periodic calibration retrain failed: %s", e)
     calibration_task = asyncio.create_task(_calibration_loop())
 
-    # Tapo plug controller (auto-charge when SOC drops below threshold).
-    # Module-level singleton; safe no-op if env vars are missing or disabled.
-    try:
-        from app.tapo_controller import init_controller
-        tapo_ctrl = init_controller(lambda: latest_data.get("battery_soc"))
-        tapo_ctrl.start()
-    except Exception as e:
-        logger.warning("Tapo controller init failed (non-fatal): %s", e)
-        tapo_ctrl = None
-
     yield
     task.cancel()
     cleanup_task.cancel()
     forecast_task.cancel()
     calibration_task.cancel()
-    if tapo_ctrl is not None:
-        try:
-            await tapo_ctrl.stop()
-        except Exception:
-            pass
     # Final snapshot: persist today's stats so a deploy doesn't lose live state
     try:
         today = accumulator.get_today()
@@ -1115,32 +1100,6 @@ async def api_mqtt_raw():
             "unknown_3": "v2.0.1",
         }
 
-    # Append Tapo controller state as synthetic fields so the raw monitor
-    # surfaces auto-charge decisions next to the live MQTT data.
-    try:
-        from app.tapo_controller import get_controller
-        ctrl = get_controller()
-        if ctrl is not None:
-            s = ctrl.status
-            clean["tapo_enabled"] = 1 if s.enabled else 0
-            clean["tapo_dry_run"] = 1 if s.dry_run else 0
-            clean["tapo_device_found"] = 1 if s.device_found else 0
-            clean["tapo_device_alias"] = s.device_alias or "—"
-            clean["tapo_plug_state"] = (
-                1 if s.plug_on is True else (0 if s.plug_on is False else "—")
-            )
-            clean["tapo_last_action"] = s.last_action or "—"
-            clean["tapo_last_soc"] = s.last_soc if s.last_soc is not None else "—"
-            clean["tapo_soc_low"] = s.soc_low
-            clean["tapo_soc_high"] = s.soc_high
-            if s.on_since_ts:
-                import time as _time
-                clean["tapo_charging_for_s"] = int(_time.time() - s.on_since_ts)
-            if s.last_error:
-                clean["tapo_last_error"] = s.last_error
-    except Exception:
-        pass  # Tapo state must never break the MQTT monitor
-
     is_live = bool(client.device_sn) or bool(os.environ.get("MOCK_MQTT"))
     return {
         "connected": is_live,
@@ -1371,16 +1330,6 @@ async def api_ml_forecast(target: str = Query("solar", pattern="^(solar|load)$")
     """Local ML forecast for tomorrow, returns both Open-Meteo + local prediction."""
     from app.ml_models import predict_tomorrow
     return await predict_tomorrow(target)
-
-
-@app.get("/api/tapo-status")
-async def api_tapo_status():
-    """Current Tapo controller state for dashboard display."""
-    from app.tapo_controller import get_controller
-    ctrl = get_controller()
-    if ctrl is None:
-        return {"available": False}
-    return {"available": True, **ctrl.status.as_dict()}
 
 
 @app.get("/api/health")
