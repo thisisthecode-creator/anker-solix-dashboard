@@ -699,11 +699,26 @@ async def lifespan(app: FastAPI):
                 logger.warning("Periodic calibration retrain failed: %s", e)
     calibration_task = asyncio.create_task(_calibration_loop())
 
+    # Tapo plug controller (auto-charge when SOC drops below threshold).
+    # Module-level singleton; safe no-op if env vars are missing or disabled.
+    try:
+        from app.tapo_controller import init_controller
+        tapo_ctrl = init_controller(lambda: latest_data.get("battery_soc"))
+        tapo_ctrl.start()
+    except Exception as e:
+        logger.warning("Tapo controller init failed (non-fatal): %s", e)
+        tapo_ctrl = None
+
     yield
     task.cancel()
     cleanup_task.cancel()
     forecast_task.cancel()
     calibration_task.cancel()
+    if tapo_ctrl is not None:
+        try:
+            await tapo_ctrl.stop()
+        except Exception:
+            pass
     # Final snapshot: persist today's stats so a deploy doesn't lose live state
     try:
         today = accumulator.get_today()
@@ -1330,6 +1345,16 @@ async def api_ml_forecast(target: str = Query("solar", pattern="^(solar|load)$")
     """Local ML forecast for tomorrow, returns both Open-Meteo + local prediction."""
     from app.ml_models import predict_tomorrow
     return await predict_tomorrow(target)
+
+
+@app.get("/api/tapo-status")
+async def api_tapo_status():
+    """Current Tapo controller state for dashboard display."""
+    from app.tapo_controller import get_controller
+    ctrl = get_controller()
+    if ctrl is None:
+        return {"available": False}
+    return {"available": True, **ctrl.status.as_dict()}
 
 
 @app.get("/api/health")
