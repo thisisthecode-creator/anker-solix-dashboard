@@ -24,6 +24,7 @@ logger = logging.getLogger(__name__)
 POLL_INTERVAL_S = 30
 COOLDOWN_S = 15 * 60          # 15 min between toggles
 MAX_ON_DURATION_S = 6 * 3600  # 6 h hard cap
+CONNECTIVITY_CHECK_S = 5 * 60  # Re-probe cloud reachability every 5 min
 
 
 @dataclass
@@ -75,6 +76,7 @@ class TapoController:
         self._client: TapoCloudClient | None = None
         self._device: TapoDevice | None = None
         self._task: asyncio.Task | None = None
+        self._last_connectivity_check_ts: float = 0.0
 
     # ------------------------------------------------------------------
     # Lifecycle
@@ -112,9 +114,15 @@ class TapoController:
     async def _run_loop(self) -> None:
         # Initial pause so the rest of the app finishes startup first.
         await asyncio.sleep(10)
+        # Proactive connectivity probe so the dashboard reflects cloud
+        # reachability even when no SOC trigger is pending. Runs in dry-run
+        # mode too because the value of "device_found" is purely diagnostic.
+        await self._connectivity_check()
         while True:
             try:
                 await self._tick()
+                if time.time() - self._last_connectivity_check_ts > CONNECTIVITY_CHECK_S:
+                    await self._connectivity_check()
             except asyncio.CancelledError:
                 return
             except Exception as e:
@@ -124,6 +132,22 @@ class TapoController:
                 await asyncio.sleep(POLL_INTERVAL_S)
             except asyncio.CancelledError:
                 return
+
+    async def _connectivity_check(self) -> None:
+        """Read the plug state via cloud to refresh device_found / plug_on."""
+        self._last_connectivity_check_ts = time.time()
+        connected = await self._ensure_client()
+        if not connected:
+            return
+        client, device = connected
+        try:
+            state = await client.get_state(device)
+            self.status.plug_on = state
+        except Exception as e:
+            self.status.device_found = False
+            self._record_error(f"get_state: {e}")
+            self._client = None
+            self._device = None
 
     async def _ensure_client(self) -> tuple[TapoCloudClient, TapoDevice] | None:
         if self._client and self._device:
