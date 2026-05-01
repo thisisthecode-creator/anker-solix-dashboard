@@ -14,6 +14,15 @@ on:
         description: "SOC % to feed into the controller (e.g. 15 to trigger ON intent)"
         required: false
         default: "15"
+      action:
+        description: "Optional plug action to perform after the probe"
+        required: false
+        default: "none"
+        type: choice
+        options:
+          - "none"
+          - "on"
+          - "off"
 
 jobs:
   test:
@@ -24,15 +33,16 @@ jobs:
         uses: appleboy/ssh-action@v1
         env:
           FAKE_SOC: ${{ inputs.fake_soc }}
+          PLUG_ACTION: ${{ inputs.action }}
         with:
           host: 65.108.90.243
           username: root
           key: ${{ secrets.HETZNER_SSH_KEY }}
-          envs: FAKE_SOC
+          envs: FAKE_SOC,PLUG_ACTION
           script: |
             set -e
-            echo "=== Tapo cloud probe (fake_soc=${FAKE_SOC}) ==="
-            docker exec -e FAKE_SOC="$FAKE_SOC" anker-solix python3 -c "
+            echo "=== Tapo cloud probe (fake_soc=${FAKE_SOC}, action=${PLUG_ACTION}) ==="
+            docker exec -e FAKE_SOC="$FAKE_SOC" -e PLUG_ACTION="$PLUG_ACTION" anker-solix python3 -c "
             import asyncio, os, sys, json, traceback
             sys.path.insert(0, '/app')
 
@@ -97,6 +107,21 @@ jobs:
                          last_error=ctrl.status.last_error)
                 except Exception as e:
                     step('controller_tick', False, error=str(e), tb=traceback.format_exc())
+
+                # Optional explicit toggle to verify securePassthrough end-to-end.
+                action = os.environ.get('PLUG_ACTION', 'none').lower().strip()
+                if action in ('on', 'off'):
+                    try:
+                        await client.set_on(device, action == 'on')
+                        step(f'set_on({action})', True)
+                        # Read back to confirm
+                        try:
+                            confirmed = await client.get_state(device)
+                            step('confirm_state', True, plug_on=confirmed)
+                        except Exception as e:
+                            step('confirm_state', False, error=str(e))
+                    except Exception as e:
+                        step(f'set_on({action})', False, error=str(e), tb=traceback.format_exc())
 
                 await client.aclose()
                 print(json.dumps(results, indent=2))
