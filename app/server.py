@@ -1115,6 +1115,32 @@ async def api_mqtt_raw():
             "unknown_3": "v2.0.1",
         }
 
+    # Append Tapo controller state as synthetic fields so the raw monitor
+    # surfaces auto-charge decisions next to the live MQTT data.
+    try:
+        from app.tapo_controller import get_controller
+        ctrl = get_controller()
+        if ctrl is not None:
+            s = ctrl.status
+            clean["tapo_enabled"] = 1 if s.enabled else 0
+            clean["tapo_dry_run"] = 1 if s.dry_run else 0
+            clean["tapo_device_found"] = 1 if s.device_found else 0
+            clean["tapo_device_alias"] = s.device_alias or "—"
+            clean["tapo_plug_state"] = (
+                1 if s.plug_on is True else (0 if s.plug_on is False else "—")
+            )
+            clean["tapo_last_action"] = s.last_action or "—"
+            clean["tapo_last_soc"] = s.last_soc if s.last_soc is not None else "—"
+            clean["tapo_soc_low"] = s.soc_low
+            clean["tapo_soc_high"] = s.soc_high
+            if s.on_since_ts:
+                import time as _time
+                clean["tapo_charging_for_s"] = int(_time.time() - s.on_since_ts)
+            if s.last_error:
+                clean["tapo_last_error"] = s.last_error
+    except Exception:
+        pass  # Tapo state must never break the MQTT monitor
+
     is_live = bool(client.device_sn) or bool(os.environ.get("MOCK_MQTT"))
     return {
         "connected": is_live,
