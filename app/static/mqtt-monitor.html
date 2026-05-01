@@ -252,17 +252,6 @@ const DESC = {
     msg_timestamp: 'Nachrichten-Zeit',
     unknown_2: 'Firmware (unbekannt)',
     unknown_3: 'Firmware (unbekannt)',
-    tapo_enabled: 'Tapo aktiv',
-    tapo_dry_run: 'Tapo Dry-Run',
-    tapo_device_found: 'Tapo erreichbar',
-    tapo_device_alias: 'Tapo Gerät',
-    tapo_plug_state: 'Tapo Steckdose',
-    tapo_last_action: 'Tapo letzte Aktion',
-    tapo_last_soc: 'SOC bei Entscheidung',
-    tapo_soc_low: 'SOC AN-Schwelle',
-    tapo_soc_high: 'SOC AUS-Schwelle',
-    tapo_charging_for_s: 'Lädt seit',
-    tapo_last_error: 'Tapo Fehler',
 };
 
 const UNITS = {
@@ -274,8 +263,6 @@ const UNITS = {
     temperature:'°C',
     ac_output_timeout_seconds:'s', dc_output_timeout_seconds:'s',
     display_timeout_seconds:'s', device_timeout_minutes:'min',
-    tapo_last_soc:'%', tapo_soc_low:'%', tapo_soc_high:'%',
-    tapo_charging_for_s:'s',
 };
 
 const ORDER = [
@@ -288,23 +275,10 @@ const ORDER = [
     'usbc_1_status','usbc_2_status','usbc_3_status','usba_1_status',
     'ac_input_power_a7','unknown_2','unknown_3',
     'device_sn','device_pn','utc_timestamp','msg_timestamp',
-    // Tapo plug controller (auto-charge below SOC threshold)
-    'tapo_enabled','tapo_dry_run','tapo_device_found','tapo_device_alias',
-    'tapo_plug_state','tapo_last_action','tapo_last_soc',
-    'tapo_soc_low','tapo_soc_high','tapo_charging_for_s','tapo_last_error',
 ];
-
-const TAPO_BOOL_KEYS = new Set([
-    'tapo_enabled','tapo_dry_run','tapo_device_found','tapo_plug_state'
-]);
 
 function colorClass(k, v) {
     if (k.endsWith('_switch') || k === 'port_memory_switch') return v == 1 ? 'c-on' : 'c-off';
-    if (TAPO_BOOL_KEYS.has(k)) {
-        if (v === '—') return 'c-zero';
-        return v == 1 ? 'c-on' : 'c-off';
-    }
-    if (k === 'tapo_last_error') return v && v !== '—' ? 'c-power' : 'c-zero';
     if (k === 'temperature') return 'c-temp';
     if (k.includes('soc') || k.includes('soh')) return 'c-pct';
     if (k.endsWith('_power') || k.endsWith('_power_total')) return v > 0 ? 'c-power' : 'c-zero';
@@ -322,14 +296,6 @@ function fmt(k, v) {
         } catch(e) {}
     }
     if (k.endsWith('_switch') || k === 'port_memory_switch') return v == 1 ? 'AN' : 'AUS';
-    if (TAPO_BOOL_KEYS.has(k)) {
-        if (v === '—' || v == null) return '—';
-        return v == 1 ? 'AN' : 'AUS';
-    }
-    if (k === 'tapo_charging_for_s' && typeof v === 'number') {
-        const m = Math.floor(v / 60), s = v % 60;
-        return m > 0 ? m + 'm ' + s + 's' : s + 's';
-    }
     if (typeof v === 'number') return (Number.isInteger(v) ? v : v.toFixed(1)) + (u ? ' '+u : '');
     return String(v ?? '—') + (u ? ' '+u : '');
 }
