@@ -1,0 +1,106 @@
+name: Test Tapo Cloud Connection
+
+# Manual one-shot diagnostic. Connects to TP-Link cloud using the
+# credentials stored in /opt/anker-solix/.env on the Hetzner box, finds
+# the configured device, reads its current state, then runs one
+# controller tick with a fake SOC value to verify the decision logic.
+# Does NOT toggle the plug unless TAPO_DRY_RUN is explicitly set to false
+# in .env (default is true).
+
+on:
+  workflow_dispatch:
+    inputs:
+      fake_soc:
+        description: "SOC % to feed into the controller (e.g. 15 to trigger ON intent)"
+        required: false
+        default: "15"
+
+jobs:
+  test:
+    name: Live Tapo cloud probe
+    runs-on: ubuntu-latest
+    steps:
+      - name: Run probe inside running container
+        uses: appleboy/ssh-action@v1
+        env:
+          FAKE_SOC: ${{ inputs.fake_soc }}
+        with:
+          host: 65.108.90.243
+          username: root
+          key: ${{ secrets.HETZNER_SSH_KEY }}
+          envs: FAKE_SOC
+          script: |
+            set -e
+            echo "=== Tapo cloud probe (fake_soc=${FAKE_SOC}) ==="
+            docker exec -e FAKE_SOC="$FAKE_SOC" anker-solix python3 -c "
+            import asyncio, os, sys, json, traceback
+            sys.path.insert(0, '/app')
+
+            async def main():
+                results = {'steps': []}
+                step = lambda name, ok, **kw: results['steps'].append({'step': name, 'ok': ok, **kw})
+                try:
+                    from app.tapo_cloud import TapoCloudClient
+                    from app.tapo_controller import init_controller, get_controller
+                except Exception as e:
+                    step('import', False, error=repr(e))
+                    print(json.dumps(results, indent=2))
+                    return
+
+                email = os.environ.get('TAPO_EMAIL', '').strip()
+                password = os.environ.get('TAPO_PASSWORD', '').strip()
+                alias = os.environ.get('TAPO_DEVICE_ALIAS', '').strip()
+                step('env_check', bool(email and password and alias),
+                     email_set=bool(email), pwd_set=bool(password), alias=alias)
+                if not (email and password and alias):
+                    print(json.dumps(results, indent=2))
+                    return
+
+                client = TapoCloudClient(email, password)
+                try:
+                    await client.login()
+                    step('cloud_login', True)
+                except Exception as e:
+                    step('cloud_login', False, error=str(e))
+                    await client.aclose(); print(json.dumps(results, indent=2)); return
+
+                try:
+                    device = await client.find_device(alias)
+                    step('find_device', True, device_id=device.device_id[:8]+'...',
+                         app_server=device.app_server_url, type=device.device_type)
+                except Exception as e:
+                    step('find_device', False, error=str(e))
+                    await client.aclose(); print(json.dumps(results, indent=2)); return
+
+                try:
+                    state = await client.get_state(device)
+                    step('get_state', True, plug_on=state)
+                except Exception as e:
+                    step('get_state', False, error=str(e))
+
+                # Trigger one controller tick with fake SOC
+                try:
+                    fake_soc = int(os.environ.get('FAKE_SOC', '15'))
+                    ctrl = get_controller()
+                    if ctrl is None:
+                        ctrl = init_controller(lambda: fake_soc)
+                    else:
+                        ctrl._get_soc = lambda: fake_soc
+                    # Force-clear cooldown so we always see a fresh decision
+                    ctrl.status.last_action_ts = None
+                    await ctrl._tick()
+                    step('controller_tick', True,
+                         fake_soc=fake_soc,
+                         dry_run=ctrl.status.dry_run,
+                         last_action=ctrl.status.last_action,
+                         plug_on=ctrl.status.plug_on,
+                         last_error=ctrl.status.last_error)
+                except Exception as e:
+                    step('controller_tick', False, error=str(e), tb=traceback.format_exc())
+
+                await client.aclose()
+                print(json.dumps(results, indent=2))
+
+            asyncio.run(main())
+            "
+            echo "=== Done ==="
